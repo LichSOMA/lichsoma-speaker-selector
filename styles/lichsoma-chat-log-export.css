@@ -1,0 +1,322 @@
+/* 채팅 로그 내보내기 HTML 스타일 */
+:root {
+    --export-bg-color: #1e1e1e;
+    --export-text-color: #ffffff;
+    --export-border-color: #4a90e2;
+    --export-secondary-text-color: #c9c9c9;
+}
+
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    margin: 20px;
+    background: var(--export-bg-color);
+    color: var(--export-text-color);
+}
+
+.chat-outer {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.chat-log {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.log-title {
+    margin-bottom: 10px;
+    font-size: 26px;
+}
+
+.timestamp {
+    color: var(--export-secondary-text-color);
+    font-size: 12px;
+    margin: 0px 0px 10px 0px !important;
+}
+
+/* 머지된 메시지: 포트레잇과 센더 감춤 */
+.chat-log .chat-message.lichsoma-merged .lichsoma-chat-portrait-container {
+    display: none !important;
+}
+
+.chat-log .chat-message.lichsoma-merged .message-sender {
+    display: none !important;
+}
+
+.message-header {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: var(--export-border-color);
+}
+
+.message-metadata {
+    display: none;
+}
+
+.lichsoma-delete-btn {
+    display: none !important;
+}
+
+.message-content {
+    color: var(--export-text-color);
+    font-size: 14px;
+}
+
+.lichsoma-chat-header {
+    display: flex;
+    flex-wrap: wrap;
+    min-height: 0px;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 0px;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 0px;
+}
+
+.lichsoma-chat-portrait-container {
+    flex-shrink: 0;
+    height: 36px;
+    width: 36px;
+    max-height: 36px;
+    max-width: 36px;
+    margin-top:4px;
+    margin-bottom: 2px;
+    background: rgba(115, 115, 115, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.lichsoma-chat-portrait {
+    height: 36px;
+    width: auto;
+    max-width: 36px;
+    border-radius: 0px;
+    object-fit: cover;
+    object-position: center;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
+    transform: scale(var(--portrait-scale-x, 1), var(--portrait-scale-y, 1));
+    transform-origin: center center;
+}
+
+.message-sender {
+  height: 36px;
+  line-height: 36px;
+  margin-top: 4px;
+  margin-top: 2px;
+  margin-bottom: 0px;
+    color: var(--export-text-color);
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.1)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.1)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.1));
+}
+
+.lichsoma-chat-header .flavor-text {
+    flex-basis: 100%;
+    width: 100%;
+    font-size: 14px;
+    font-weight: normal;
+    margin-top: 0px;
+    color: #ffffff;
+}
+
+
+.lichsoma-ruby {
+    white-space: nowrap;
+    ruby-position: over;
+    ruby-merge: separate;
+    ruby-align: center;
+}
+
+.lichsoma-ruby rt {
+    display: ruby-text;
+    font-size: 0.65em;
+    line-height: 1;
+    letter-spacing: 0;
+}
+
+/* 주사위 롤 스타일 */
+.dice-roll {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    max-width: 400px;
+    margin: 5px 0px;
+}
+
+.dice-formula {
+  background: rgba(115, 115, 115, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px;
+  text-align: center;
+  color: var(--export-text-color);
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.dice-tooltip {
+  display: none;
+}
+
+.dice-tooltip .wrapper {
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  font-size: 12px !important;
+  font-weight: bold;
+  overflow: hidden;
+}
+
+.dice-tooltip .part-header {
+  padding: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dice-tooltip .part-header .part-formula {
+  flex: 0 0 auto;
+  text-align: left;
+}
+
+.dice-tooltip .part-header .part-total {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.dice-tooltip .dice-rolls {
+  list-style: none;
+  padding: 4px;
+  overflow: hidden;
+}
+
+.dice-tooltip .dice-rolls .roll {
+  position: relative;
+  min-width: 24px;
+  line-height: 24px;
+  float: left;
+  margin-right: 1px;
+  background-repeat: no-repeat;
+  background-size: 24px 24px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.dice-tooltip .dice-rolls .roll.method {
+font-size: 10px;
+background: transparent;
+min-width: auto;
+vertical-align: super;
+}
+
+.dice-tooltip .dice-rolls .roll.clear {
+  clear: both;
+  float: none;
+  display: block;
+  width: 100%;
+}
+
+.dice-tooltip .dice-rolls .roll.clear hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dice-result {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.dice-total {
+    background: rgba(115, 115, 115, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: none;
+    padding: 4px;
+    text-align: center;
+    color: var(--export-text-color);
+    font-size: 14px;
+    font-weight: bold;
+    margin: 0;
+}
+
+/* 스마트폰 모듈 관련 CSS */
+
+/* 연락처 관련 CSS */
+.chat-log .contact-chat-card {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    gap: 10px;
+    max-height: 72px;
+    max-width: 400px;
+    margin: 4px 0px;
+  }
+  
+  .chat-log .contact-chat-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  .chat-log .contact-chat-avatar.contact-avatar-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .chat-log .contact-chat-avatar.contact-avatar-icon i {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 24px;
+  }
+  
+  .chat-log .contact-chat-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  
+  .chat-log .contact-chat-name {
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    margin: 0;
+    padding: 0;
+  }
+  
+  .chat-log .contact-chat-phone {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.2;
+    margin: 0;
+    padding: 0;
+    transition: color 0.2s ease;
+  }
+  
+  .chat-log .contact-chat-status {
+    font-size: 12px;
+    color: #ff4444;
+  }
+
+/* D&D 5e */
+
+.dnd5e2 .chat-card .description {
+  background: none !important;
+}

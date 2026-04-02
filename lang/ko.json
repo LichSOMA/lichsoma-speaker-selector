@@ -1,0 +1,203 @@
+{
+    "SPEAKERSELECTOR": {
+        "ModuleName": "LichSOMA의 스피커 셀렉터",
+        "ModuleDescription": "채팅 헤더 커스터마이징, 토큰 선택에 구애 받지 않는 스피커 선택, 채팅 로그의 HTML 출력을 지원하는 채팅 강화 모듈.",
+        "Settings": {
+            "ShowPortrait": {
+                "Name": "포트레잇 표시",
+                "Hint": "채팅 메시지에 액터 포트레잇을 표시합니다."
+            },
+            "PortraitSize": {
+                "Name": "포트레잇 크기",
+                "Hint": "포트레잇 이미지의 크기를 설정합니다."
+            },
+            "AlwaysUseCharacter": {
+                "Name": "항상 할당된 캐릭터로 말하기",
+                "Hint": "채팅 인풋으로 직접 입력한 메시지를 항상 할당된 캐릭터로 말하도록 설정합니다."
+            },
+            "AlwaysUseActor": {
+                "Name": "항상 액터로 말하기",
+                "Hint": "토큰을 선택해도 해당 토큰의 액터로 말합니다."
+            },
+            "PreventOtherUserCharacter": {
+                "Name": "플레이어 캐릭터로 말하기 방지",
+                "Hint": "GM이 플레이어 캐릭터로 말하는 것을 방지합니다."
+            },
+            "ApplyUserColor": {
+                "Name": "유저 색상 적용",
+                "Hint": "채팅 메시지 헤더의 발신자 이름에 유저 색상을 적용합니다."
+            },
+            "EnableChatMerge": {
+                "Name": "채팅 머지 기능 활성화",
+                "Hint": "같은 유저, 같은 포트레잇의 연속된 메시지에서 헤더를 숨깁니다."
+            },
+            "ChatHeaderFont": {
+                "Name": "채팅 헤더 폰트",
+                "Hint": "채팅 메시지 헤더의 발신자 폰트를 설정합니다."
+            },
+            "ChatMessageFont": {
+                "Name": "채팅 메시지 폰트",
+                "Hint": "채팅 메시지 내용의 폰트를 설정합니다."
+            },
+            "ChatHeaderChineseFont": {
+                "Name": "헤더 한자 전용 폰트",
+                "Hint": "채팅 헤더의 한자(漢字)에만 적용되는 폰트입니다."
+            },
+            "ChatMessageChineseFont": {
+                "Name": "메시지 한자 전용 폰트",
+                "Hint": "채팅 메시지 내용의 한자(漢字)에만 적용되는 폰트입니다."
+            },
+            "ChatHeaderFontSize": {
+                "Name": "헤더 폰트 크기",
+                "Hint": "채팅 헤더의 폰트 크기를 설정합니다."
+            },
+            "ChatHeaderFontWeight": {
+                "Name": "헤더 폰트 웨이트",
+                "Hint": "채팅 헤더의 발신자 이름 폰트 두께를 설정합니다. (100: 얇음, 400: 보통, 700: 굵음, 900: 매우 굵음)"
+            },
+            "ChatMessageFontSize": {
+                "Name": "메시지 폰트 크기",
+                "Hint": "채팅 메시지 내용의 폰트 크기를 설정합니다."
+            },
+            "NarratorFont": {
+                "Name": "나레이터 폰트",
+                "Hint": "나레이터 모드에서 표시되는 텍스트의 폰트를 설정합니다."
+            },
+            "NarratorFontSize": {
+                "Name": "나레이터 폰트 크기",
+                "Hint": "나레이터 모드에서 표시되는 텍스트의 폰트 크기를 설정합니다."
+            },
+            "NarratorFontWeight": {
+                "Name": "나레이터 폰트 굵기",
+                "Hint": "나레이터 모드에서 표시되는 텍스트의 폰트 두께를 설정합니다. (100: 얇음, 400: 보통, 700: 굵음, 900: 매우 굵음)"
+            },
+            "NarratorTypingSound": {
+                "Name": "나레이터 타이핑 사운드",
+                "Hint": "나레이터 모드에서 타이핑 효과 시 재생될 사운드 파일을 설정합니다. 공백을 제외한 문자 입력 시 재생됩니다."
+            },
+            "NarratorTypingSpeed": {
+                "Name": "나레이터 타이핑 속도",
+                "Hint": "나레이터 모드에서 텍스트가 한 글자씩 표시되는 속도를 설정합니다. 값이 작을수록 빠르게 표시됩니다. (10ms: 매우 빠름, 50ms: 보통, 200ms: 느림)"
+            },
+            "NarratorItalic": {
+                "Name": "나레이터 기울기 효과",
+                "Hint": "활성화하면 나레이터 바에서 이탤릭 효과가 적용됩니다."
+            },
+            "NarratorChatCard": {
+                "Name": "나레이터 채팅 카드",
+                "Hint": "활성화하면 나레이터로 말한 채팅의 컨텐츠를 narrator-card로 감싸고, 이탤릭 효과와 중앙 정렬이 적용됩니다. 또한 해당 메시지는 머지에서 제외되고 헤더가 숨겨집니다."
+            },
+            "ChatLogExportBasePath": {
+                "Name": "채팅 로그 내보내기 기본 경로",
+                "Hint": "HTML로 저장되는 채팅 로그에서 이미지 경로 앞에 붙일 기본 경로입니다. HTTP 서버: http://localhost:30000 또는 로컬 파일: file:///C:/Users/YourName/AppData/Local/FoundryVTT/Data"
+            },
+            "ChatLogExportUseBase64": {
+                "Name": "이미지를 Base64로 저장",
+                "Hint": "활성화하면 채팅 로그 내보내기 시 이미지를 링크 대신 Base64 Data URL로 저장합니다. 이렇게 하면 HTML 파일 하나만으로 이미지가 포함된 채팅 로그를 볼 수 있습니다. (주의: 이미지가 많으면 HTML 파일 크기가 매우 커질 수 있습니다)"
+            },
+            "ChatLogExportCustomCSS": {
+                "Name": "채팅 로그 내보내기 커스텀 CSS",
+                "Hint": "HTML로 저장되는 채팅 로그에 추가로 적용할 CSS입니다. 기본 CSS와 함께 적용됩니다.",
+                "EditButton": "CSS 편집",
+                "Save": "저장",
+                "Cancel": "취소",
+                "Saved": "CSS가 저장되었습니다."
+            },
+            "ChatLogExportShowDiceTooltip": {
+                "Name": "주사위 툴팁 표시",
+                "Hint": "활성화하면 채팅 로그 내보내기 시 주사위 툴팁(상세 롤 정보)을 표시합니다."
+            }
+        },
+        "DeleteButton": {
+            "AriaLabel": "메시지 삭제",
+            "Title": "메시지 삭제"
+        },
+        "Notifications": {
+            "DeleteOwnOnly": "자신의 메시지만 삭제할 수 있습니다."
+        },
+        "Selector": {
+            "Label": "스피커 선택",
+            "OOC": "OOC (Out of Character)"
+        },
+        "Narrator": {
+            "Button": {
+                "Title": "나레이터 모드",
+                "AriaLabel": "나레이터 모드 토글"
+            },
+            "Notifications": {
+                "GMOnly": "GM만 사용할 수 있습니다.",
+                "ModeOn": "나레이터 모드가 활성화되었습니다.",
+                "ModeOff": "나레이터 모드가 비활성화되었습니다."
+            }
+        },
+        "SpeakerSetting": {
+            "Button": {
+                "Title": "스피커 설정",
+                "AriaLabel": "스피커 설정 열기"
+            },
+            "Notifications": {
+                "GMOnly": "GM만 사용할 수 있습니다."
+            },
+            "Dialog": {
+                "Title": "스피커 액터 설정",
+                "AddRow": "행 추가",
+                "RemoveRow": "행 제거",
+                "Close": "닫기",
+                "DropHint": "액터를 드롭하세요",
+                "AvailableActors": "사용 가능한 액터",
+                "SearchPlaceholder": "이름으로 검색...",
+                "SearchPlaceholderWithTags": "이름 또는 태그로 검색..."
+            }
+        },
+        "Emotion": {
+            "Label": "감정",
+            "Manage": "감정 관리",
+            "Add": "감정 추가",
+            "Save": "저장",
+            "Cancel": "취소",
+            "Saved": "감정이 저장되었습니다.",
+            "SaveError": "감정 저장 중 오류가 발생했습니다."
+        },
+        "ChatLogExport": {
+            "Success": "채팅 로그 HTML이 저장되었습니다. ({count}개 메시지)",
+            "Loading": "채팅 로그 로딩 중... ({current}/{total})",
+            "Error": {
+                "NotFound": "채팅 로그를 찾을 수 없습니다.",
+                "ExportFailed": "채팅 로그 저장 중 오류가 발생했습니다."
+            },
+            "Warning": {
+                "Empty": "저장할 채팅 메시지가 없습니다.",
+                "PartialLoad": "일부 메시지만 로드되었습니다. ({rendered}/{total}개 메시지)",
+                "CountMismatch": "메시지 수가 일치하지 않습니다. ({rendered}/{total}개 메시지)"
+            }
+        },
+        "ChatLogArchive": {
+            "Button": {
+                "Title": "채팅 로그 아카이브",
+                "AriaLabel": "채팅 로그 아카이브 열기",
+                "OpenArchive": "아카이브 열기"
+            },
+            "Title": "채팅 로그 아카이브",
+            "Close": "닫기",
+            "Back": "뒤로가기",
+            "Loading": "로딩 중...",
+            "NoFiles": "파일이 없습니다.",
+            "Search": {
+                "Placeholder": "로그 검색...",
+                "PlaceholderInLog": "로그 내 검색...",
+                "NoResults": "검색 결과가 없습니다.",
+                "Next": "다음",
+                "Previous": "이전",
+                "Clear": "지우기"
+            },
+            "Error": {
+                "LoadFailed": "폴더 내용을 불러오는데 실패했습니다."
+            }
+        },
+        "Typing": {
+            "Single": "{name}님이 입력 중입니다",
+            "Multiple": "복수의 사용자가 입력 중입니다"
+        }
+    }
+}
+

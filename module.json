@@ -1,0 +1,57 @@
+{
+    "id": "lichsoma-speaker-selector",
+    "title": "SPEAKERSELECTOR.ModuleName",
+    "description": "SPEAKERSELECTOR.ModuleDescription",
+    "version": "1.2.0",
+    "compatibility": {
+      "minimum": "14",
+      "verified": "14"
+    },
+    "authors": [
+      {
+        "name": "LichSoma"
+      }
+    ],
+    "esmodules": [
+        "scripts/lichsoma-speaker-selector.js",
+        "scripts/lichsoma-chat-ui.js",
+        "scripts/lichsoma-actor-emotions.js",
+        "scripts/lichsoma-chat-merge.js",
+        "scripts/lichsoma-chat-notification.js",
+        "scripts/lichsoma-chat-log-export.js",
+        "scripts/lichsoma-chat-log-archive.js",
+        "scripts/lichsoma-chat-reviser.js",
+        "scripts/lichsoma-chat-handler.js"
+    ],
+    "styles": [
+        "styles/lichsoma-speaker-selector.css",
+        "styles/lichsoma-chat-ui.css",
+        "styles/lichsoma-chat-notification.css",
+        "styles/lichsoma-chat-log-archive.css",
+        "styles/lichsoma-chat-styles.css",
+        "styles/lichsoma-actor-emotions.css",
+        "styles/lichsoma-chat-reviser.css",
+        "styles/lichsoma-css-editor.css"
+    ],
+    "languages": [
+      {
+        "lang": "ko",
+        "name": "Korean",
+        "path": "lang/ko.json"
+      }
+    ],
+    "packs": [],
+    "relationships": {
+      "requires": [],
+      "recommends": []
+    },
+  
+    "socket": true,
+    "url": "https://github.com/LichSOMA/lichsoma-speaker-selector",
+    "manifest": "https://github.com/LichSOMA/lichsoma-speaker-selector/releases/latest/download/module.json",
+    "download": "https://github.com/LichSOMA/lichsoma-speaker-selector/releases/download/1.2.0/lichsoma-speaker-selector.zip",
+    "license": "https://github.com/LichSOMA/lichsoma-speaker-selector/blob/main/LICENSE.md",
+    "readme": "https://github.com/LichSOMA/lichsoma-speaker-selector/blob/main/README.md"
+  }
+  
+  

@@ -1,0 +1,71 @@
+/* chat-form을 relative로 설정 (인디케이터 위치 기준점) */
+.chat-form {
+    position: relative;
+}
+
+/* 타이핑 인디케이터 컨테이너 */
+.lichsoma-typing-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: var(--color-text-dark-secondary, rgba(255, 255, 255, 0.6));
+    opacity: 0.85;
+    pointer-events: none; /* 클릭 이벤트 무시 */
+    z-index: 10;
+    /* JavaScript에서 입력칸 위치 기준으로 동적으로 설정됨 */
+}
+
+/* 타이핑 텍스트 */
+.lichsoma-typing-indicator .typing-text {
+    white-space: nowrap;
+}
+
+/* 타이핑 도트 컨테이너 */
+.lichsoma-typing-indicator .typing-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    width: 18px;
+    height: 12px;
+    position: relative;
+}
+
+/* 개별 도트 */
+.lichsoma-typing-indicator .typing-dots .dot {
+    display: inline-block;
+    font-size: 16px;
+    line-height: 1;
+    animation: typing-dot-bounce 1.4s ease-in-out infinite;
+    opacity: 0.4;
+}
+
+/* 각 도트의 애니메이션 딜레이 */
+.lichsoma-typing-indicator .typing-dots .dot1 {
+    animation-delay: 0s;
+}
+
+.lichsoma-typing-indicator .typing-dots .dot2 {
+    animation-delay: 0.2s;
+}
+
+.lichsoma-typing-indicator .typing-dots .dot3 {
+    animation-delay: 0.4s;
+}
+
+/* 도트 애니메이션 (물결치는 효과) */
+@keyframes typing-dot-bounce {
+    0%, 60%, 100% {
+        opacity: 0.4;
+        transform: translateY(0);
+    }
+    30% {
+        opacity: 1;
+        transform: translateY(-4px);
+    }
+}
+

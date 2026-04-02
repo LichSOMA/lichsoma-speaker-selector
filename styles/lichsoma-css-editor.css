@@ -1,0 +1,49 @@
+/* CSS 편집기 스타일 */
+.lichsoma-css-editor .lichsoma-css-editor-form {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.lichsoma-css-editor .form-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.lichsoma-css-editor .form-group label {
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.lichsoma-css-editor .form-group textarea {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    resize: none;
+    min-height: 400px;
+}
+
+.lichsoma-css-editor .CodeMirror {
+    flex: 1;
+    height: auto;
+    min-height: 400px;
+    font-size: 13px;
+    border: 1px solid var(--color-border-light-2);
+    border-radius: 3px;
+}
+
+.lichsoma-css-editor .form-group:last-child {
+    flex: 0 0 auto;
+    flex-direction: row;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-border-light-2);
+}
+
+.lichsoma-css-editor .form-group button {
+    flex: 1;
+}
+

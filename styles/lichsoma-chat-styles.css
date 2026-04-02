@@ -1,0 +1,206 @@
+/* 기본 채팅(전체) 메시지 스타일 수정 */
+.chat-message .message-metadata{
+    display: none;
+}
+
+.chat-message .message-content {
+    color: #ffffff;
+}
+
+.chat-message .message-content p {
+    margin: 0 0;
+}
+
+.lichsoma-chat-header .message-sender {
+    align-self: center !important;
+    margin-top: 4px !important;
+    margin-bottom: 2px !important;
+    text-overflow: ellipsis !important;
+    color: #ffffff;
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.1)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.1)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.1)) !important;
+}
+
+/* 삭제 버튼 스타일 */
+.chat-message {
+    position: relative;
+}
+
+.chat-message .lichsoma-delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    color: #ffffff;
+    text-decoration: none;
+    opacity: 0;
+    transition: opacity 0.2s ease, color 0.2s ease;
+    z-index: 10;
+    cursor: pointer;
+}
+
+.chat-message:hover .lichsoma-delete-btn {
+    opacity: 1;
+}
+
+.chat-message .lichsoma-delete-btn:hover {
+    color: #ff4444;
+}
+
+.chat-message .lichsoma-delete-btn i {
+    font-size: 12px;
+}
+
+/* 기본 채팅(오버플로우) 메시지 스타일 수정 */
+.overflow .chat-message {
+    line-height: 25px !important;
+    font-size: 15px !important;
+    border: none !important;
+    background: var(--background-color, var(--color-cool-5)) !important;
+}
+
+/* 기본 채팅(챗 로그) 메시지 스타일 수정 */
+.chat-scroll .chat-message {
+    left: 5px !important;
+    margin: 0px 0px -16px 0px !important;
+    line-height: 25px !important;
+    font-size: 15px !important;
+    border: none !important;
+    background: none !important;
+  }
+
+/* 채팅 헤더 스타일 */
+.lichsoma-chat-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 0px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0;
+    margin: 0px;
+    background: none;
+}
+
+/* 포트레잇 컨테이너 스타일 */
+.lichsoma-chat-portrait-container {
+    flex-shrink: 0;
+    cursor: pointer;
+    height: var(--portrait-size, 36px);
+    width: var(--portrait-size, 36px);
+    max-height: var(--portrait-size, 36px);
+    max-width: var(--portrait-size, 36px);
+    margin-top: 4px;
+    margin-bottom: 2px;
+    background: rgba(115, 115, 115, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+/* 포트레잇 이미지 스타일 */
+.lichsoma-chat-portrait-container .lichsoma-chat-portrait {
+    height: var(--portrait-size, 36px);
+    width: auto;
+    max-width: var(--portrait-size, 36px);
+    border-radius: 0px;
+    object-fit: cover;
+    object-position: center;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+    transform: scale(var(--portrait-scale-x, 1), var(--portrait-scale-y, 1));
+    transform-origin: center center;
+}
+
+.lichsoma-chat-header .flavor-text {
+    margin-top: 0px;
+    color: rgb(255, 255, 255, 0.75);
+}
+
+/* 머지된 메시지: 포트레잇과 센더 감춤 */
+.chat-log .chat-message.lichsoma-merged .lichsoma-chat-portrait-container {
+    display: none !important;
+}
+
+.chat-log .chat-message.lichsoma-merged .message-sender {
+    display: none !important;
+}
+
+/* <hr> 뿐인 메시지: 헤더 감춤 */
+.chat-log .chat-message.lichsoma-hr-only .lichsoma-chat-header {
+    display: none !important;
+}
+
+/* narrator-card 메시지: 헤더 감춤 */
+.chat-log .chat-message.lichsoma-narrator-card .lichsoma-chat-header {
+    display: none !important;
+}
+
+
+
+/* narrator-card 스타일 */
+.chat-message .message-content .narrator-card {
+    font-style: italic;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* 루비 문자 스타일 */
+.lichsoma-ruby {
+    white-space: nowrap;
+    ruby-position: over;
+    ruby-merge: separate;
+    ruby-align: center;
+}
+
+.lichsoma-ruby rt {
+    display: ruby-text;
+    font-size: 0.65em;
+    line-height: 1;
+    letter-spacing: 0;
+}
+
+/* pf2e 헤더 편집 */
+.lichsoma-chat-header .portrait.token {
+    display: none !important;
+}
+
+.lichsoma-chat-header .user {
+    display: none !important;
+}
+
+/* D&D 챗 편집 */
+.chat-message::before {
+   background: none !important;
+   border: none !important;
+   box-shadow: none !important;
+   border-radius: 0px !important;
+}
+
+.system-dnd5e .lichsoma-dnd5e-original-sender {
+    display: none !important;
+}
+
+/* D&D 5e */
+.dnd5e2 .chat-card .description {
+    background: none !important;
+}
+
+/* Foundry VTT 13 <hr> 스타일 제거 */
+.chat-message .message-content hr,
+.chat-message hr {
+    background: none !important;
+    border-top: 1px solid currentColor !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    height: 1px !important;
+    width: 100% !important;
+    color: rgb(255, 255, 255, 0.5) !important;
+    margin: 0.2em 0 !important;
+    padding: 0 !important;
+}

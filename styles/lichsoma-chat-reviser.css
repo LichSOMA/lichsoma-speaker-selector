@@ -1,0 +1,44 @@
+/* 채팅 메시지 수정 오버레이 */
+.lichsoma-chat-reviser-overlay {
+    position: absolute;
+    background: var(--background-color, var(--color-cool-5)); /* 반투명 녹색 */
+    border: 2px solid var(--border-color, var(--color-cool-4));
+    border-radius: 4px;
+    z-index: 1000;
+    pointer-events: auto;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    cursor: text;
+}
+
+.lichsoma-chat-reviser-content {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    padding: var(--chat-message-spacing);
+    font-family: var(--font-body);
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.4;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    overflow-y: auto;
+    word-wrap: break-word;
+    box-sizing: border-box;
+}
+
+/* 편집 중인 메시지 하이라이트 */
+.chat-scroll .chat-log.plain.theme-light .chat-message.lichsoma-editing-message {
+    transition: background-color 0.2s ease, outline 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chat-scroll .chat-log.plain.theme-light .chat-message.lichsoma-editing-message .message-content {
+    color: #ff4444 !important;
+}
+
