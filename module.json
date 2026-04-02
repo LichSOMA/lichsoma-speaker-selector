@@ -1,7 +1,7 @@
 {
     "id": "lichsoma-speaker-selector",
-    "title": "SPEAKERSELECTOR.ModuleName",
-    "description": "SPEAKERSELECTOR.ModuleDescription",
+    "title": "LichSOMA Speaker Selector",
+    "description": "A Module that provide chat header customization, token-independent speaker selection, and chat log html extraction.",
     "version": "1.2.0",
     "compatibility": {
       "minimum": "14",
