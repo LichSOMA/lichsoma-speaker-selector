@@ -58,6 +58,13 @@
     order: 3;
 }
 
+/* FVTT v14: 채팅 입력(ProseMirror) 상단 메뉴는 별도 버튼으로 대체
+   - display:none 상태에서 내부 버튼을 트리거하면 드롭다운이 (0,0)으로 뜰 수 있어
+     기본은 숨기되, 동작 순간에는 잠깐 노출하도록 클래스 기반으로 제어 */
+.chat-form.lichsoma-hide-chat-editor-menu #chat-message .menu-container {
+    display: none !important;
+}
+
 /* 채팅 로그 스크롤바 스타일 */
 .chat-scroll {
     scrollbar-width: thin;

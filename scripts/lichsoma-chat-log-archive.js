@@ -22,17 +22,15 @@
       await FilePicker.browse('data', targetPath);
       return true;
     } catch (error) {
-      console.log(`[${MODULE_ID}] ${label} 확인 중:`, error.message || error);
+      // browse 실패 시 아래에서 디렉터리 생성 시도
     }
 
     if (typeof FilePicker.createDirectory === 'function') {
       try {
         await FilePicker.createDirectory('data', targetPath);
-        console.log(`[${MODULE_ID}] ${label} 생성 완료`);
         return true;
       } catch (createError) {
         if (createError.message && createError.message.includes('EEXIST')) {
-          console.log(`[${MODULE_ID}] ${label}가 이미 존재합니다.`);
           return true;
         }
         console.warn(`[${MODULE_ID}] ${label} 생성 실패:`, createError);
@@ -189,7 +187,6 @@
   // HTML 파일 읽기
   async function readHtmlFile(filePath) {
     try {
-      // filePath는 이미 log-archive/dx3rd-dev/파일명.html 형식
       // /data/ 없이 직접 경로 사용
       let url = filePath;
       
@@ -198,7 +195,7 @@
         url = `/${url}`;
       }
       
-      // 경로 중복 제거 (log-archive/dx3rd-dev/log-archive/dx3rd-dev/... 같은 경우)
+      // 경로 세그먼트 연속 중복 제거
       const pathParts = url.split('/').filter(p => p);
       const cleanedParts = [];
       let lastPart = '';

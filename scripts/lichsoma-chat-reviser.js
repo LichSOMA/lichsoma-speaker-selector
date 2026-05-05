@@ -129,6 +129,10 @@ export class ChatReviser {
         // 오버레이 요소 생성
         const overlay = document.createElement('div');
         overlay.className = 'lichsoma-chat-reviser-overlay';
+
+        // Foundry v14 채팅 입력은 ProseMirror로 구성되며 menu-container + editor-container를 포함함.
+        // 오버레이는 편집 영역(editor-container)만 덮어야 하므로 타깃을 분리한다.
+        const overlayTarget = chatInput.querySelector?.('.editor-container') || chatInput;
         
         // 편집 가능한 contenteditable div 생성
         const contentEditable = document.createElement('div');
@@ -158,12 +162,13 @@ export class ChatReviser {
         }
 
         this._overlayElement = overlay;
+        this._overlayTargetElement = overlayTarget;
 
         // 위치 및 크기 설정
-        this._updateOverlayPosition(chatInput);
+        this._updateOverlayPosition(overlayTarget);
 
         // 위치 변경 감지 (ResizeObserver + MutationObserver)
-        this._setupPositionObservers(chatInput);
+        this._setupPositionObservers(overlayTarget);
 
         // 포커스 설정
         setTimeout(() => {
@@ -179,11 +184,11 @@ export class ChatReviser {
     }
 
     // 오버레이 위치 및 크기 업데이트
-    static _updateOverlayPosition(chatInput) {
-        if (!this._overlayElement || !chatInput) return;
+    static _updateOverlayPosition(targetElement) {
+        if (!this._overlayElement || !targetElement) return;
 
-        const rect = chatInput.getBoundingClientRect();
-        const formRect = chatInput.closest('.chat-form')?.getBoundingClientRect();
+        const rect = targetElement.getBoundingClientRect();
+        const formRect = targetElement.closest('.chat-form')?.getBoundingClientRect();
 
         if (formRect) {
             // chat-form 기준 상대 위치 계산
@@ -196,7 +201,7 @@ export class ChatReviser {
             this._overlayElement.style.height = `${rect.height}px`;
         } else {
             // 절대 위치 사용 (fallback)
-            const absoluteRect = chatInput.getBoundingClientRect();
+            const absoluteRect = targetElement.getBoundingClientRect();
             this._overlayElement.style.position = 'fixed';
             this._overlayElement.style.top = `${absoluteRect.top}px`;
             this._overlayElement.style.left = `${absoluteRect.left}px`;
@@ -206,24 +211,24 @@ export class ChatReviser {
     }
 
     // 위치 변경 감지 설정
-    static _setupPositionObservers(chatInput) {
+    static _setupPositionObservers(targetElement) {
         // 기존 observer 정리
         this._cleanupObservers();
 
-        // ResizeObserver: chat-input 크기 변경 감지
+        // ResizeObserver: 타깃(editor-container) 크기 변경 감지
         this._resizeObserver = new ResizeObserver(() => {
-            if (this._overlayElement && chatInput) {
-                this._updateOverlayPosition(chatInput);
+            if (this._overlayElement && targetElement) {
+                this._updateOverlayPosition(targetElement);
             }
         });
-        this._resizeObserver.observe(chatInput);
+        this._resizeObserver.observe(targetElement);
 
         // MutationObserver: chat-form 구조 변경 감지
-        const chatForm = chatInput.closest('.chat-form');
+        const chatForm = targetElement.closest('.chat-form');
         if (chatForm) {
             this._positionObserver = new MutationObserver(() => {
-                if (this._overlayElement && chatInput) {
-                    this._updateOverlayPosition(chatInput);
+                if (this._overlayElement && targetElement) {
+                    this._updateOverlayPosition(targetElement);
                 }
             });
             this._positionObserver.observe(chatForm, {
@@ -235,8 +240,8 @@ export class ChatReviser {
 
         // window resize 이벤트
         const handleResize = () => {
-            if (this._overlayElement && chatInput) {
-                this._updateOverlayPosition(chatInput);
+            if (this._overlayElement && targetElement) {
+                this._updateOverlayPosition(targetElement);
             }
         };
         window.addEventListener('resize', handleResize);

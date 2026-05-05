@@ -1,0 +1,72 @@
+/* sidebar-content 좌측 경계 드래그 — pointer-events 복구 (active-chat 시 부모가 none) */
+#sidebar-content {
+    position: relative;
+}
+
+.lichsoma-sidebar-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    z-index: 25;
+    cursor: ew-resize;
+    pointer-events: auto;
+    touch-action: none;
+    background: transparent;
+}
+
+.lichsoma-sidebar-resize-handle:hover {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.12) 0%,
+        rgba(255, 255, 255, 0) 100%
+    );
+}
+
+#sidebar.lichsoma-sidebar-resizing #sidebar-content {
+    transition: none !important;
+}
+
+body.lichsoma-sidebar-resize-active {
+    user-select: none;
+}
+
+#sidebar-content:not(.expanded) .lichsoma-sidebar-resize-handle {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* #chat-message > .editor-container — 상단 드래그로 --chat-input-height 조절 */
+#sidebar #chat-message > .editor-container {
+    position: relative;
+}
+
+.lichsoma-editor-height-handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 6px;
+    z-index: 30;
+    cursor: ns-resize;
+    pointer-events: auto;
+    touch-action: none;
+    background: transparent;
+}
+
+.lichsoma-editor-height-handle:hover {
+    background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.14) 0%,
+        rgba(255, 255, 255, 0) 100%
+    );
+}
+
+#sidebar.lichsoma-chat-input-resizing .chat-sidebar .chat-input {
+    transition: none !important;
+}
+
+#sidebar.lichsoma-chat-input-resizing #chat-message > .editor-container {
+    transition: none !important;
+}

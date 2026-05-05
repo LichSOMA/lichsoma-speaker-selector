@@ -45,6 +45,11 @@ body {
     display: none !important;
 }
 
+/* <hr>만 있는 메시지: 머지 여부와 관계없이 헤더 숨김 (포트레잇 없을 때는 .message-header 만 있을 수 있음) */
+.chat-log .chat-message.lichsoma-hr-only .message-header {
+    display: none !important;
+}
+
 .message-header {
     font-weight: bold;
     margin-bottom: 5px;
@@ -62,6 +67,16 @@ body {
 .message-content {
     color: var(--export-text-color);
     font-size: 14px;
+}
+
+.message-content p {
+    margin: 0 0;
+    line-height: 1.25em;
+}
+
+.message-content img {
+    max-width: 400px;
+    height: auto;
 }
 
 .lichsoma-chat-header {
@@ -101,6 +116,18 @@ body {
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
     transform: scale(var(--portrait-scale-x, 1), var(--portrait-scale-y, 1));
     transform-origin: center center;
+}
+
+/* 프로토타입 토큰 Chat Portrait(앵커·스케일) — 채팅 UI와 동일, HTML 내보내기용 */
+.lichsoma-chat-portrait-container .lichsoma-chat-portrait.lichsoma-chat-portrait--token-framed {
+    height: auto;
+    width: auto;
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    object-position: center;
+    transform-origin: var(--lichsoma-cp-anchor-x, 50%) var(--lichsoma-cp-anchor-y, 50%);
+    transform: scale(var(--lichsoma-cp-scale, 1));
 }
 
 .message-sender {

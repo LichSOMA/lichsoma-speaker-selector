@@ -4,16 +4,34 @@
  */
 
 export class ActorEmotions {
+    static MODULE_ID = 'lichsoma-speaker-selector';
+    /** 모듈 플래그로 감정을 한 번이라도 저장했으면 `system.emotions`와 병합하지 않음(전부 삭제 시 `{}` 유지) */
+    static EMOTIONS_USE_MODULE_FLAG = 'emotionsUseModule';
+
     static _currentEmotion = null;
     static _currentEmotionName = null;
     static _currentEmotionPortrait = null;
     static _actorEmotionMap = new Map();
-    static _emotionManagerWindow = null; // 감정 관리 창 참조
+    /** @type {LichsomaEmotionManagerApp | null} */
+    static _emotionManagerApp = null;
+    /** @type {LichsomaEmotionSelectorApp | null} */
+    static _emotionSelectorApp = null;
+    static _emotionEscapeHandler = null;
+
+    /** Foundry v13+ — 전역 `FilePicker` 대신 namespaced 구현 사용 */
+    static _openImageFilePicker({ current, callback }) {
+        const FilePickerImpl = foundry.applications.apps.FilePicker.implementation;
+        new FilePickerImpl({
+            type: 'image',
+            current: current || '',
+            callback
+        }).render(true);
+    }
 
     static initialize() {
-        Hooks.on('renderActorSheet', (app, html, data) => {
-            this._injectEmotionButton(app, html);
-        });
+        const run = (app, html) => this._injectEmotionButton(app, html);
+        Hooks.on('renderActorSheet', (app, html) => run(app, html));
+        Hooks.on('renderActorSheetV2', (app, html) => run(app, html));
     }
 
     static _injectEmotionButton(app, html) {
@@ -23,39 +41,55 @@ export class ActorEmotions {
         const canEdit = actor.isOwner || game.user.isGM;
         if (!canEdit) return;
 
-        const windowHeader = html.find('.window-header');
+        const $root = html?.jquery ? html : $(html);
+        const windowHeader = $root.find('.window-header');
         if (!windowHeader.length) return;
 
         if (windowHeader.find('.lichsoma-emotion-manage-btn').length) return;
 
+        const manageTitle = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage') || '감정 관리';
+        const emotionLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Label') || '감정';
+        // <a>는 헤더 창 드래그와 동일 레이어로 처리되어 클릭이 먹히지 않는 경우가 많음 — 코어와 동일한 header-control 버튼 사용
         const button = $(`
-            <a class="lichsoma-emotion-manage-btn" title="${game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage') || '감정 관리'}">
-                <i class="fa-solid fa-face-smile"></i> ${game.i18n.localize('SPEAKERSELECTOR.Emotion.Label') || '감정'}
-            </a>
+            <button type="button" class="header-control lichsoma-emotion-manage-btn" title="${manageTitle}" aria-label="${manageTitle}">
+                <i class="fa-solid fa-face-smile"></i>
+                <span class="lichsoma-emotion-manage-label">${emotionLabel}</span>
+            </button>
         `);
+
+        const stopDragHandshake = (ev) => {
+            ev.stopPropagation();
+        };
+        button.on('pointerdown', stopDragHandshake);
+        button.on('mousedown', stopDragHandshake);
 
         button.on('click', (ev) => {
             ev.preventDefault();
             ev.stopPropagation();
-            this._openEmotionManager(actor);
+            void this._openEmotionManager(actor);
         });
 
-        const closeBtn = windowHeader.find('.close');
-        if (closeBtn.length) {
-            closeBtn.before(button);
+        const toggleBtn = windowHeader.find('button[data-action="toggleControls"]');
+        if (toggleBtn.length) {
+            toggleBtn.first().before(button);
         } else {
-            windowHeader.append(button);
+            const title = windowHeader.find('.window-title').first();
+            if (title.length) {
+                title.after(button);
+            } else {
+                windowHeader.prepend(button);
+            }
         }
     }
 
-    // HTML 템플릿 로드
-    static async _loadEmotionManagerTemplate() {
-        try {
-            const template = await fetch('modules/lichsoma-speaker-selector/templates/emotion-manager.html');
-            return await template.text();
-        } catch (err) {
-            // 템플릿 로드 실패 (무시)
-            return null;
+    static _getEmotionManagerRoot() {
+        return this._emotionManagerApp?.element?.querySelector('.lichsoma-emotion-manager-app-inner') ?? null;
+    }
+
+    static _teardownEmotionEscapeListener() {
+        if (this._emotionEscapeHandler) {
+            document.removeEventListener('keydown', this._emotionEscapeHandler);
+            this._emotionEscapeHandler = null;
         }
     }
 
@@ -64,96 +98,41 @@ export class ActorEmotions {
             return;
         }
 
-        // 기존 창이 있으면 닫기
-        if (this._emotionManagerWindow) {
-            this._closeEmotionManagerWindow();
+        if (this._emotionManagerApp?.rendered) {
+            await this._closeEmotionManagerWindow();
             return;
         }
 
-        await this._createEmotionManagerWindow(actor);
+        this._emotionManagerApp = new LichsomaEmotionManagerApp({ actor });
+        await this._emotionManagerApp.render({ force: true });
     }
 
-    static async _createEmotionManagerWindow(actor) {
-        // 템플릿 로드
-        let templateHTML = await this._loadEmotionManagerTemplate();
-        if (!templateHTML) {
-            // 템플릿 로드 실패 시 기본 HTML 사용
-            templateHTML = `
-                <div class="lichsoma-emotion-manager-window">
-                    <div class="lichsoma-grid-window-header" style="cursor: move;">
-                        <h3>${game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage') || '감정 관리'}</h3>
-                        <div class="lichsoma-grid-controls">
-                            <button class="lichsoma-emotion-close-btn" title="${game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.Dialog.Close') || '닫기'}">×</button>
-                        </div>
-                    </div>
-                    <div class="lichsoma-grid-window-content">
-                        <div class="lichsoma-emotion-manager-container">
-                            <div class="lichsoma-emotion-manager-list"></div>
-                            <div class="lichsoma-emotion-manager-actions">
-                                <button type="button" class="lichsoma-emotion-add-btn">
-                                    <i class="fa-solid fa-plus"></i> ${game.i18n.localize('SPEAKERSELECTOR.Emotion.Add') || '감정 추가'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
+    /**
+     * 감정 데이터는 모듈 플래그에 저장한다(시스템이 `system.emotions`를 무시하는 경우 대비).
+     * 모듈에 저장한 적이 있으면 플래그만 사용한다. `Object.assign(system, flag)` 병합은 플래그가 `{}`일 때
+     * 삭제가 반영되지 않아 사용하지 않는다.
+     * @param {Actor} actor
+     */
+    static _getActorEmotions(actor) {
+        const useModule = actor.getFlag(this.MODULE_ID, this.EMOTIONS_USE_MODULE_FLAG);
+        const fromFlag = actor.getFlag(this.MODULE_ID, 'emotions');
+
+        if (useModule || fromFlag !== undefined) {
+            if (fromFlag !== undefined && fromFlag !== null && typeof fromFlag === 'object' && !Array.isArray(fromFlag)) {
+                return fromFlag;
+            }
+            return {};
         }
 
-        // 템플릿 DOM 생성
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = templateHTML.trim();
-        this._emotionManagerWindow = wrapper.firstElementChild;
-        if (!this._emotionManagerWindow) {
-            // 감정 관리 템플릿 구조가 올바르지 않음 (무시)
-            return;
-        }
-        // 중복 루트 방지 위해 클래스 부여 여부 확인
-        if (!this._emotionManagerWindow.classList.contains('lichsoma-emotion-manager-window')) {
-            this._emotionManagerWindow.classList.add('lichsoma-emotion-manager-window');
-        }
-
-        // 액터 정보 저장
-        this._emotionManagerWindow.dataset.actorId = actor.id;
-
-        // 텍스트 로컬라이징
-        const titleEl = this._emotionManagerWindow.querySelector('.lichsoma-emotion-manager-title');
-        if (titleEl) {
-            titleEl.textContent = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage') || '감정 관리';
-        }
-        const closeBtn = this._emotionManagerWindow.querySelector('.lichsoma-emotion-close-btn');
-        if (closeBtn) {
-            closeBtn.title = game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.Dialog.Close') || '닫기';
-        }
-        const saveAction = this._emotionManagerWindow.querySelector('.lichsoma-emotion-save-action');
-        if (saveAction) {
-            saveAction.textContent = game.i18n.localize('SPEAKERSELECTOR.Emotion.Save') || '저장';
-        }
-        const cancelAction = this._emotionManagerWindow.querySelector('.lichsoma-emotion-cancel-action');
-        if (cancelAction) {
-            cancelAction.textContent = game.i18n.localize('SPEAKERSELECTOR.Emotion.Cancel') || '취소';
-        }
-
-        // 감정 목록 렌더링
-        this._renderEmotionList(actor);
-
-        // body에 추가
-        document.body.appendChild(this._emotionManagerWindow);
-
-        // 이벤트 리스너 추가
-        this._setupEmotionManagerWindowEvents(actor);
-
-        // 애니메이션을 위한 클래스 추가
-        setTimeout(() => {
-            this._emotionManagerWindow.classList.add('lichsoma-grid-window-open');
-        }, 10);
+        const fromSystem = actor.system?.emotions;
+        return typeof fromSystem === 'object' && fromSystem !== null && !Array.isArray(fromSystem) ? fromSystem : {};
     }
 
     static _renderEmotionList(actor) {
-        const listContainer = this._emotionManagerWindow.querySelector('.lichsoma-emotion-manager-list');
+        const listContainer = this._getEmotionManagerRoot()?.querySelector('.lichsoma-emotion-manager-list');
         if (!listContainer) return;
 
-        const emotions = actor.system?.emotions || {};
+        const emotions = this._getActorEmotions(actor);
         const items = Object.entries(emotions).map(([id, data]) => ({
             id,
             name: data.name || '',
@@ -193,7 +172,7 @@ export class ActorEmotions {
     }
 
     static _setupEmotionItemEvents(actor) {
-        const listContainer = this._emotionManagerWindow.querySelector('.lichsoma-emotion-manager-list');
+        const listContainer = this._getEmotionManagerRoot()?.querySelector('.lichsoma-emotion-manager-list');
         if (!listContainer) return;
 
         // 포트레잇 선택 버튼
@@ -203,14 +182,13 @@ export class ActorEmotions {
                 const portraitInput = item.querySelector('.lichsoma-emotion-portrait');
                 const currentPath = portraitInput.value;
 
-                new FilePicker({
-                    type: 'image',
+                this._openImageFilePicker({
                     current: currentPath || actor.img,
                     callback: (path) => {
                         portraitInput.value = path;
                         item.querySelector('img').src = path;
                     }
-                }).render(true);
+                });
             });
         });
 
@@ -230,116 +208,43 @@ export class ActorEmotions {
         }
     }
 
-    static _closeEmotionManagerWindow() {
-        if (this._emotionManagerWindow) {
-            this._emotionManagerWindow.classList.remove('lichsoma-grid-window-open');
-            setTimeout(() => {
-                if (this._emotionManagerWindow) {
-                    this._emotionManagerWindow.remove();
-                    this._emotionManagerWindow = null;
-                }
-            }, 200);
-        }
+    static async _closeEmotionManagerWindow() {
+        this._teardownEmotionEscapeListener();
+        const app = this._emotionManagerApp;
+        if (!app) return;
+        await app.close({ animate: true });
     }
 
     static _setupEmotionManagerWindowEvents(actor) {
-        if (!this._emotionManagerWindow) return;
+        const root = this._getEmotionManagerRoot();
+        if (!root) return;
 
-        // 창 드래그 기능
-        const header = this._emotionManagerWindow.querySelector('.lichsoma-grid-window-header');
-        let isDragging = false;
-        let dragOffset = { x: 0, y: 0 };
-        let animationFrameId = null;
-
-        const handleMouseDown = (e) => {
-            if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
-                return;
+        this._teardownEmotionEscapeListener();
+        this._emotionEscapeHandler = (e) => {
+            if (e.key === 'Escape') {
+                e.stopPropagation();
+                void this._closeEmotionManagerWindow();
             }
-
-            isDragging = true;
-            const rect = this._emotionManagerWindow.getBoundingClientRect();
-            this._emotionManagerWindow.style.left = rect.left + 'px';
-            this._emotionManagerWindow.style.top = rect.top + 'px';
-            this._emotionManagerWindow.style.transform = 'none';
-            dragOffset.x = e.clientX - rect.left;
-            dragOffset.y = e.clientY - rect.top;
-
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-            e.preventDefault();
         };
+        document.addEventListener('keydown', this._emotionEscapeHandler);
 
-        const handleMouseMove = (e) => {
-            if (!isDragging) return;
-
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-            }
-
-            animationFrameId = requestAnimationFrame(() => {
-                const x = e.clientX - dragOffset.x;
-                const y = e.clientY - dragOffset.y;
-
-                const maxX = window.innerWidth - this._emotionManagerWindow.offsetWidth;
-                const maxY = window.innerHeight;
-
-                const clampedX = Math.max(0, Math.min(x, maxX));
-                const clampedY = Math.max(0, Math.min(y, maxY));
-
-                this._emotionManagerWindow.style.left = clampedX + 'px';
-                this._emotionManagerWindow.style.top = clampedY + 'px';
-            });
-        };
-
-        const handleMouseUp = () => {
-            isDragging = false;
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-
-        if (header) {
-            header.addEventListener('mousedown', handleMouseDown);
-        }
-
-        // 닫기 버튼
-        const closeBtn = this._emotionManagerWindow.querySelector('.lichsoma-emotion-close-btn');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                this._closeEmotionManagerWindow();
-            });
-        }
-
-        // 하단 저장/취소 버튼
-        const saveBtn = this._emotionManagerWindow.querySelector('.lichsoma-emotion-save-action');
+        const saveBtn = root.querySelector('.lichsoma-emotion-save-action');
         if (saveBtn) {
             saveBtn.addEventListener('click', async () => {
-            await this._saveEmotionsFromWindow(actor);
-            this._closeEmotionManagerWindow();
-        });
-        }
-        const cancelBtn = this._emotionManagerWindow.querySelector('.lichsoma-emotion-cancel-action');
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => {
-                this._closeEmotionManagerWindow();
+                await this._saveEmotionsFromWindow(actor);
+                await this._closeEmotionManagerWindow();
             });
         }
-
-        // ESC 키로 닫기
-        const handleKeydown = (e) => {
-            if (e.key === 'Escape' && this._emotionManagerWindow) {
-                this._closeEmotionManagerWindow();
-                document.removeEventListener('keydown', handleKeydown);
-            }
-        };
-        document.addEventListener('keydown', handleKeydown);
+        const cancelBtn = root.querySelector('.lichsoma-emotion-cancel-action');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', () => {
+                void this._closeEmotionManagerWindow();
+            });
+        }
     }
 
     static _addEmotionItemToWindow(actor) {
-        const listContainer = this._emotionManagerWindow.querySelector('.lichsoma-emotion-manager-list');
+        const listContainer = this._getEmotionManagerRoot()?.querySelector('.lichsoma-emotion-manager-list');
         if (!listContainer) return;
 
         const newId = foundry.utils.randomID();
@@ -368,14 +273,13 @@ export class ActorEmotions {
             const portraitInput = item.querySelector('.lichsoma-emotion-portrait');
             const currentPath = portraitInput.value;
 
-            new FilePicker({
-                type: 'image',
+            this._openImageFilePicker({
                 current: currentPath || actor?.img || '',
                 callback: (path) => {
                     portraitInput.value = path;
                     item.querySelector('img').src = path;
                 }
-            }).render(true);
+            });
         });
 
         // 삭제 버튼
@@ -397,9 +301,10 @@ export class ActorEmotions {
     }
 
     static async _saveEmotionsFromWindow(actor) {
-        if (!this._emotionManagerWindow) return;
+        const root = this._getEmotionManagerRoot();
+        if (!root) return;
 
-        const items = this._emotionManagerWindow.querySelectorAll('.lichsoma-emotion-manager-item');
+        const items = root.querySelectorAll('.lichsoma-emotion-manager-item');
         const emotions = {};
 
         items.forEach(item => {
@@ -415,7 +320,12 @@ export class ActorEmotions {
         });
 
         try {
-            await actor.update({ 'system.emotions': emotions });
+            // Foundry 플래그 갱신이 객체를 깊게 병합하는 경우, setFlag만으로는 삭제된 키가 남을 수 있음 → unset 후 재설정
+            await actor.unsetFlag(this.MODULE_ID, 'emotions');
+            if (Object.keys(emotions).length > 0) {
+                await actor.setFlag(this.MODULE_ID, 'emotions', emotions);
+            }
+            await actor.setFlag(this.MODULE_ID, this.EMOTIONS_USE_MODULE_FLAG, true);
         } catch (err) {
             // 감정 저장 실패
             ui.notifications.error(game.i18n.localize('SPEAKERSELECTOR.Emotion.SaveError') || '감정 저장 중 오류가 발생했습니다.');
@@ -435,7 +345,36 @@ export class ActorEmotions {
         return this._actorEmotionMap.get(actorId) || null;
     }
 
-    static showEmotionSelector(selector, actorId) {
+    static _handleEmotionPick(selector, actorId, emotions, emotionId) {
+        if (emotionId) {
+            const emotion = emotions[emotionId];
+            if (!emotion) return;
+            this._currentEmotion = emotionId;
+            this._currentEmotionName = emotion.name || null;
+            this._currentEmotionPortrait = emotion.portrait;
+            selector.find('.emotion-btn').addClass('active');
+            this._actorEmotionMap.set(actorId, {
+                emotionId,
+                emotionName: emotion.name || null,
+                emotionPortrait: emotion.portrait
+            });
+        } else {
+            this.clearEmotion();
+            selector.find('.emotion-btn').removeClass('active');
+            this._actorEmotionMap.delete(actorId);
+        }
+
+        const SpeakerSelector = window.SpeakerSelector;
+        if (SpeakerSelector) {
+            if (SpeakerSelector._updateActorOptionInDropdown) {
+                SpeakerSelector._updateActorOptionInDropdown(actorId);
+            } else if (SpeakerSelector._updateSpeakerDropdown) {
+                SpeakerSelector._updateSpeakerDropdown();
+            }
+        }
+    }
+
+    static async showEmotionSelector(selector, actorId) {
         if (!actorId) {
             return;
         }
@@ -445,7 +384,7 @@ export class ActorEmotions {
             return;
         }
 
-        const emotions = actor.system?.emotions || {};
+        const emotions = this._getActorEmotions(actor);
         const emotionList = Object.entries(emotions).map(([id, data]) => ({
             id,
             name: data.name,
@@ -453,91 +392,21 @@ export class ActorEmotions {
         }));
 
         if (!emotionList.length) {
-            ui.notifications.warn('No emotions are registered on this actor.');
+            void this._openEmotionManager(actor);
             return;
         }
 
-        const content = `
-            <div class="lichsoma-emotion-selector-dialog">
-                <div class="lichsoma-emotion-options">
-                    <div class="lichsoma-emotion-option default-option" data-emotion-id="">
-                        <img src="${actor.img}" alt="기본" />
-                        <span>기본</span>
-                    </div>
-                    ${emotionList.map(emotion => `
-                        <div class="lichsoma-emotion-option" data-emotion-id="${emotion.id}">
-                            <img src="${emotion.portrait}" alt="${emotion.name}" />
-                            <span>${emotion.name}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
+        if (this._emotionSelectorApp?.rendered) {
+            await this._emotionSelectorApp.close({ animate: false });
+        }
 
-        const dlg = new Dialog({
-            title: `${actor.name} - 감정 선택`,
-            content,
-            buttons: {
-                manage: {
-                    icon: '<i class="fas fa-cog"></i>',
-                    label: '감정 관리',
-                    callback: () => {
-                        dlg.close();
-                        this._openEmotionManager(actor);
-                    }
-                }
-            },
-            default: null,
-            render: (html) => {
-                html.find('.lichsoma-emotion-option').on('click', (ev) => {
-                    const emotionId = $(ev.currentTarget).data('emotion-id');
-                    let emotion = null;
-                    let emotionName = null;
-
-                    if (emotionId) {
-                        emotion = emotions[emotionId];
-                        this._currentEmotion = emotionId;
-                        this._currentEmotionName = emotion.name || null;
-                        this._currentEmotionPortrait = emotion.portrait;
-                        emotionName = emotion.name || null;
-                        selector.find('.emotion-btn').addClass('active');
-                        this._actorEmotionMap.set(actorId, {
-                            emotionId,
-                            emotionName: emotion.name || null,
-                            emotionPortrait: emotion.portrait
-                        });
-                    } else {
-                        // 기본 포트레잇으로 복귀
-                        this.clearEmotion();
-                        selector.find('.emotion-btn').removeClass('active');
-                        this._actorEmotionMap.delete(actorId);
-                    }
-
-                    // 드롭다운의 해당 액터 옵션만 즉시 업데이트
-                    const SpeakerSelector = window.SpeakerSelector;
-                    if (SpeakerSelector) {
-                        if (SpeakerSelector._updateActorOptionInDropdown) {
-                            SpeakerSelector._updateActorOptionInDropdown(actorId);
-                        } else {
-                            // _updateActorOptionInDropdown 함수를 찾을 수 없으면 전체 드롭다운 업데이트
-                            if (SpeakerSelector._updateSpeakerDropdown) {
-                                SpeakerSelector._updateSpeakerDropdown();
-                            }
-                        }
-                    }
-
-                    dlg.close();
-                });
-
-                if (this._currentEmotion) {
-                    html.find(`.lichsoma-emotion-option[data-emotion-id="${this._currentEmotion}"]`).addClass('selected');
-                } else {
-                    html.find('.default-option').addClass('selected');
-                }
-            }
+        this._emotionSelectorApp = new LichsomaEmotionSelectorApp({
+            actor,
+            selector,
+            actorId,
+            emotions
         });
-
-        dlg.render(true);
+        await this._emotionSelectorApp.render({ force: true });
     }
 
     static restoreEmotionForActor(actorId) {
@@ -571,6 +440,211 @@ export class ActorEmotions {
     static getEmotionPortraitForMessage(message) {
         const flags = message.flags?.['lichsoma-speaker-selector'];
         return flags?.emotionPortrait || null;
+    }
+}
+
+/**
+ * 감정 선택 — ApplicationV2
+ */
+class LichsomaEmotionSelectorApp extends foundry.applications.api.ApplicationV2 {
+    static DEFAULT_OPTIONS = {
+        id: 'lichsoma-emotion-selector',
+        classes: ['lichsoma-emotion-selector-app'],
+        tag: 'div',
+        position: {
+            width: 480,
+            height: 420
+        },
+        window: {
+            frame: true,
+            positioned: true,
+            title: 'SPEAKERSELECTOR.Emotion.SelectTitle',
+            resizable: true,
+            minimizable: false,
+            contentClasses: ['lichsoma-emotion-selector-window-content']
+        }
+    };
+
+    constructor(options = {}) {
+        const actor = options.actor;
+        const selector = options.selector;
+        const actorId = options.actorId;
+        const emotions = options.emotions;
+        if (!actor || !selector || !actorId || emotions === undefined) {
+            throw new Error('LichsomaEmotionSelectorApp requires actor, selector, actorId, emotions');
+        }
+        const { actor: _a, selector: _s, actorId: _i, emotions: _e, ...rest } = options;
+        const base = foundry.utils.mergeObject(LichsomaEmotionSelectorApp.DEFAULT_OPTIONS, rest);
+        base.window = foundry.utils.mergeObject(base.window, {
+            title: `${actor.name} — ${game.i18n.localize('SPEAKERSELECTOR.Emotion.SelectTitle') || '감정 선택'}`
+        });
+        super(base);
+        this.actor = actor;
+        this.selector = selector;
+        this.actorId = actorId;
+        this.emotions = emotions;
+    }
+
+    async _prepareContext(options) {
+        return {};
+    }
+
+    async _renderHTML(context, options) {
+        const esc = foundry.utils.escapeHTML;
+        const actor = this.actor;
+        const emotionList = Object.entries(this.emotions).map(([id, data]) => ({
+            id,
+            name: data?.name || '',
+            portrait: data?.portrait || ''
+        }));
+        const defaultLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Default') || '기본';
+        const manageLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage') || '감정 관리';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'lichsoma-emotion-selector-app-inner';
+        wrap.innerHTML = `
+            <div class="lichsoma-emotion-selector-dialog">
+                <div class="lichsoma-emotion-options">
+                    <div class="lichsoma-emotion-option default-option" data-emotion-id="">
+                        <img src="${actor.img}" alt="${esc(defaultLabel)}" />
+                        <span>${esc(defaultLabel)}</span>
+                    </div>
+                    ${emotionList.map(emotion => `
+                        <div class="lichsoma-emotion-option" data-emotion-id="${esc(emotion.id)}">
+                            <img src="${emotion.portrait}" alt="${esc(emotion.name)}" />
+                            <span>${esc(emotion.name)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            <div class="lichsoma-emotion-selector-footer">
+                <button type="button" class="lichsoma-emotion-selector-manage">
+                    <i class="fas fa-cog"></i> ${esc(manageLabel)}
+                </button>
+            </div>
+        `;
+        return wrap;
+    }
+
+    _replaceHTML(result, content, options) {
+        content.replaceChildren(result);
+    }
+
+    async _onFirstRender(context, options) {
+        ActorEmotions._emotionSelectorApp = this;
+        const root = this.element?.querySelector('.lichsoma-emotion-selector-app-inner');
+        if (!root) return;
+
+        root.querySelectorAll('.lichsoma-emotion-option').forEach((el) => {
+            el.addEventListener('click', () => {
+                const raw = el.getAttribute('data-emotion-id');
+                const emotionId = raw === null || raw === '' ? '' : raw;
+                ActorEmotions._handleEmotionPick(this.selector, this.actorId, this.emotions, emotionId);
+                void this.close();
+            });
+        });
+
+        const manageBtn = root.querySelector('.lichsoma-emotion-selector-manage');
+        if (manageBtn) {
+            manageBtn.addEventListener('click', async () => {
+                await this.close({ animate: false });
+                void ActorEmotions._openEmotionManager(this.actor);
+            });
+        }
+
+        const current = ActorEmotions._currentEmotion;
+        if (current) {
+            root.querySelectorAll('.lichsoma-emotion-option').forEach((el) => {
+                if (el.getAttribute('data-emotion-id') === current) {
+                    el.classList.add('selected');
+                }
+            });
+        } else {
+            root.querySelector('.default-option')?.classList.add('selected');
+        }
+    }
+
+    _onClose(options) {
+        if (ActorEmotions._emotionSelectorApp === this) {
+            ActorEmotions._emotionSelectorApp = null;
+        }
+    }
+}
+
+/**
+ * 감정 관리 — ApplicationV2 (스피커 액터 격자 설정과 동일 패턴)
+ */
+class LichsomaEmotionManagerApp extends foundry.applications.api.ApplicationV2 {
+    static DEFAULT_OPTIONS = {
+        id: 'lichsoma-emotion-manager',
+        classes: ['lichsoma-emotion-manager-app'],
+        tag: 'div',
+        position: {
+            width: 600,
+            height: 500
+        },
+        window: {
+            frame: true,
+            positioned: true,
+            title: 'SPEAKERSELECTOR.Emotion.Manage',
+            resizable: true,
+            minimizable: false,
+            contentClasses: ['lichsoma-emotion-manager-window-content']
+        }
+    };
+
+    constructor(options = {}) {
+        const actor = options.actor;
+        if (!actor) throw new Error('LichsomaEmotionManagerApp requires an actor');
+        const { actor: _a, ...rest } = options;
+        const manageLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage') || '감정 관리';
+        const title = game.i18n.format('SPEAKERSELECTOR.Emotion.ManageWindowTitle', {
+            manage: manageLabel,
+            actorName: actor.name
+        });
+        const base = foundry.utils.mergeObject(LichsomaEmotionManagerApp.DEFAULT_OPTIONS, rest);
+        base.window = foundry.utils.mergeObject(base.window, { title });
+        // super() 이전에는 this를 쓸 수 없음 — this.constructor.DEFAULT_OPTIONS 금지
+        super(base);
+        this.actor = actor;
+    }
+
+    async _prepareContext(options) {
+        return {};
+    }
+
+    async _renderHTML(context, options) {
+        const wrap = document.createElement('div');
+        wrap.className = 'lichsoma-emotion-manager-app-inner';
+        const saveLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Save');
+        const cancelLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Cancel');
+        wrap.innerHTML = `
+            <div class="lichsoma-emotion-manager-container">
+                <div class="lichsoma-emotion-manager-list"></div>
+                <div class="lichsoma-emotion-manager-actions">
+                    <button type="button" class="lichsoma-emotion-save-action">${saveLabel}</button>
+                    <button type="button" class="lichsoma-emotion-cancel-action">${cancelLabel}</button>
+                </div>
+            </div>
+        `;
+        return wrap;
+    }
+
+    _replaceHTML(result, content, options) {
+        content.replaceChildren(result);
+    }
+
+    async _onFirstRender(context, options) {
+        ActorEmotions._emotionManagerApp = this;
+        ActorEmotions._renderEmotionList(this.actor);
+        ActorEmotions._setupEmotionManagerWindowEvents(this.actor);
+    }
+
+    _onClose(options) {
+        ActorEmotions._teardownEmotionEscapeListener();
+        if (ActorEmotions._emotionManagerApp === this) {
+            ActorEmotions._emotionManagerApp = null;
+        }
     }
 }
 

@@ -9,6 +9,7 @@
 
 .chat-message .message-content p {
     margin: 0 0;
+    line-height: 1.25em;
 }
 
 .lichsoma-chat-header .message-sender {
@@ -65,8 +66,7 @@
 
 /* 기본 채팅(챗 로그) 메시지 스타일 수정 */
 .chat-scroll .chat-message {
-    left: 5px !important;
-    margin: 0px 0px -16px 0px !important;
+    margin: 0px 1px -16px 5px !important;
     line-height: 25px !important;
     font-size: 15px !important;
     border: none !important;
@@ -115,6 +115,18 @@
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
     transform: scale(var(--portrait-scale-x, 1), var(--portrait-scale-y, 1));
     transform-origin: center center;
+}
+
+/* 프로토타입 토큰 Chat Portrait 설정 — 프리뷰와 동일(앵커·스케일) */
+.lichsoma-chat-portrait-container .lichsoma-chat-portrait.lichsoma-chat-portrait--token-framed {
+    height: auto;
+    width: auto;
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    object-position: center;
+    transform-origin: var(--lichsoma-cp-anchor-x, 50%) var(--lichsoma-cp-anchor-y, 50%);
+    transform: scale(var(--lichsoma-cp-scale, 1));
 }
 
 .lichsoma-chat-header .flavor-text {

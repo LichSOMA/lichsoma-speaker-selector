@@ -31,6 +31,10 @@
                 "Name": "채팅 머지 기능 활성화",
                 "Hint": "같은 유저, 같은 포트레잇의 연속된 메시지에서 헤더를 숨깁니다."
             },
+            "SidebarMinWidth": {
+                "Name": "사이드바 최소 넓이",
+                "Hint": "사이드바 드래그 리사이즈 시 최소 넓이를 설정합니다. (312~400px)"
+            },
             "ChatHeaderFont": {
                 "Name": "채팅 헤더 폰트",
                 "Hint": "채팅 메시지 헤더의 발신자 폰트를 설정합니다."
@@ -85,7 +89,7 @@
             },
             "NarratorChatCard": {
                 "Name": "나레이터 채팅 카드",
-                "Hint": "활성화하면 나레이터로 말한 채팅의 컨텐츠를 narrator-card로 감싸고, 이탤릭 효과와 중앙 정렬이 적용됩니다. 또한 해당 메시지는 머지에서 제외되고 헤더가 숨겨집니다."
+                "Hint": "나레이터 모드로 출력한 채팅 메시지에 별도의 양식을 적용합니다."
             },
             "ChatLogExportBasePath": {
                 "Name": "채팅 로그 내보내기 기본 경로",
@@ -106,6 +110,10 @@
             "ChatLogExportShowDiceTooltip": {
                 "Name": "주사위 툴팁 표시",
                 "Hint": "활성화하면 채팅 로그 내보내기 시 주사위 툴팁(상세 롤 정보)을 표시합니다."
+            },
+            "ChatUtilsForIC": {
+                "Name": "IC 모드에서 토큰 미 선택 시 OOC로 전송",
+                "Hint": "Public as Character 모드에서 토큰을 선택하지 않고 채팅을 전송할 경우 자동으로 OOC로 전송합니다."
             }
         },
         "DeleteButton": {
@@ -133,13 +141,13 @@
         "SpeakerSetting": {
             "Button": {
                 "Title": "스피커 설정",
-                "AriaLabel": "스피커 설정 열기"
+                "AriaLabel": "스피커 열기"
             },
             "Notifications": {
                 "GMOnly": "GM만 사용할 수 있습니다."
             },
             "Dialog": {
-                "Title": "스피커 액터 설정",
+                "Title": "스피커 설정",
                 "AddRow": "행 추가",
                 "RemoveRow": "행 제거",
                 "Close": "닫기",
@@ -151,12 +159,24 @@
         },
         "Emotion": {
             "Label": "감정",
+            "SelectTitle": "감정 선택",
+            "Default": "기본",
             "Manage": "감정 관리",
+            "ManageWindowTitle": "{manage}: {actorName}",
             "Add": "감정 추가",
             "Save": "저장",
             "Cancel": "취소",
             "Saved": "감정이 저장되었습니다.",
-            "SaveError": "감정 저장 중 오류가 발생했습니다."
+            "SaveError": "감정 저장 중 오류가 발생했습니다.",
+            "NoEmotionsRegistered": "이 액터에 등록된 감정이 없습니다. 액터 시트에서 「감정」으로 감정을 추가한 뒤 저장해 주세요."
+        },
+        "ChatPortraitToken": {
+            "Title": "채팅 포트레잇 토큰 이미지 설정",
+            "PreviewAlt": "Image Path 기준 토큰 이미지 미리보기",
+            "PreviewInteractHint": "휠: 확대·축소 (1~3) · 드래그: 앵커",
+            "Scale": "스케일",
+            "AnchorX": "앵커 X",
+            "AnchorY": "앵커 Y"
         },
         "ChatLogExport": {
             "Success": "채팅 로그 HTML이 저장되었습니다. ({count}개 메시지)",
@@ -192,6 +212,23 @@
             },
             "Error": {
                 "LoadFailed": "폴더 내용을 불러오는데 실패했습니다."
+            }
+        },
+        "ChatSenderEdit": {
+            "ContextMenu": "스피커 수정",
+            "Title": "스피커 수정",
+            "UserLabel": "사용자 수정",
+            "ActorLabel": "캐릭터",
+            "ActorNone": "OOC / 캐릭터 없음",
+            "SpeakModeActor": "액터",
+            "SpeakModeToken": "토큰",
+            "SpeakModeToggleHint": "클릭할 때마다 액터 말하기 ↔ 토큰 말하기 전환",
+            "Save": "적용",
+            "Notifications": {
+                "GMOnly": "GM만 이 작업을 할 수 있습니다.",
+                "Success": "메시지 센더가 수정되었습니다.",
+                "UpdateFailed": "메시지를 업데이트하지 못했습니다",
+                "NoTokenOnScene": "활성 씬에 해당 액터의 토큰이 없어 액터로 말한 것처럼 저장했습니다."
             }
         },
         "Typing": {

@@ -17,6 +17,22 @@
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
+
+  /** @see scripts/lichsoma-chat-system-registry.js — 시스템 모듈이 등록한 내보내기 머지 제외 규칙 */
+  function chatSystemExportExcludeCurrent(message, element) {
+    const bridge = globalThis.LichsomaChatSystemRegistry?.ChatSystemBridge?.export;
+    return bridge?.excludeCurrent?.(message, element) === true;
+  }
+  
+  /** ChatMerge._isOnlyHrMessage 와 동일: ProseMirror의 `<p><hr></p>` 등도 구분선 전용으로 처리 */
+  function isOnlyHrMessageContent(messageEl) {
+    const messageContent = messageEl.querySelector('.message-content');
+    if (!messageContent) return false;
+    const htmlContent = messageContent.innerHTML || '';
+    const withoutHr = htmlContent.replace(/<hr\s*\/?>/gi, '');
+    const textOnly = withoutHr.replace(/<[^>]+>/g, '').replace(/\s+/g, '');
+    return textOnly === '';
+  }
   
   function normalizeImageUrl(imageUrl, localHost) {
     if (!imageUrl || typeof imageUrl !== 'string') return '';
@@ -276,7 +292,10 @@
       
       let prevUserId = null;
       let prevPortraitSrc = null;
+      let prevActorId = null;
       let prevHasNarratorCard = false;
+      /** 직전에 시스템 전용(export 제외) 메시지였으면 true — 다음 메시지와 머지하지 않음 */
+      let prevSystemExportBreak = false;
       
       messages.forEach((messageEl) => {
         const messageId = messageEl.getAttribute('data-message-id');
@@ -288,21 +307,9 @@
         // 플래그에서 정보 가져오기
         const flags = message.flags?.['lichsoma-speaker-selector'] || {};
         const currentUserId = flags.userId || message.author?.id;
+        const currentActorId = flags.actorId || message.speaker?.actor || null;
         const portraitImg = messageEl.querySelector('.lichsoma-chat-portrait');
-        const portraitContainer = messageEl.querySelector('.lichsoma-chat-portrait-container');
         const currentPortraitSrc = flags.portraitSrc || portraitImg?.getAttribute('src') || null;
-        // 포트레잇 스케일 적용
-        if (portraitContainer) {
-          if (flags.portraitScale) {
-            portraitContainer.style.setProperty('--portrait-scale', flags.portraitScale);
-          }
-          if (flags.portraitScaleX !== undefined) {
-            portraitContainer.style.setProperty('--portrait-scale-x', flags.portraitScaleX);
-          }
-          if (flags.portraitScaleY !== undefined) {
-            portraitContainer.style.setProperty('--portrait-scale-y', flags.portraitScaleY);
-          }
-        }
         
         // 자신의 메시지인지 확인하고 클래스 추가
         const isOwnMessage = currentUserId === game.user.id;
@@ -310,6 +317,44 @@
           messageEl.classList.add('lichsoma-own-message');
         } else {
           messageEl.classList.remove('lichsoma-own-message');
+        }
+        
+        // <hr> 전용 메시지: 머지하지 않고 이후 체인 끊기 (ChatMerge._processAllMessages 와 동일)
+        if (isOnlyHrMessageContent(messageEl)) {
+          messageEl.classList.add('lichsoma-hr-only');
+          messageEl.classList.remove('lichsoma-merged');
+          prevUserId = null;
+          prevPortraitSrc = null;
+          prevActorId = null;
+          prevHasNarratorCard = false;
+          prevSystemExportBreak = false;
+          return;
+        }
+        messageEl.classList.remove('lichsoma-hr-only');
+        
+        // 메신저 메시지 (lichsoma-fvtt-smartphone): 머지 체인 끊기
+        const isMessengerMessage = message.flags?.['lichsoma-fvtt-smartphone']?.type === 'messenger-message';
+        if (isMessengerMessage) {
+          messageEl.classList.add('lichsoma-messenger-message');
+          messageEl.classList.remove('lichsoma-merged');
+          prevUserId = null;
+          prevPortraitSrc = null;
+          prevActorId = null;
+          prevHasNarratorCard = false;
+          prevSystemExportBreak = false;
+          return;
+        }
+        messageEl.classList.remove('lichsoma-messenger-message');
+
+        // 시스템별 내보내기 머지 제외 — ChatMerge 의 ChatSystemBridge.export 와 동일 소스
+        if (chatSystemExportExcludeCurrent(message, messageEl)) {
+          messageEl.classList.remove('lichsoma-merged');
+          prevUserId = null;
+          prevPortraitSrc = null;
+          prevActorId = null;
+          prevHasNarratorCard = false;
+          prevSystemExportBreak = true;
+          return;
         }
         
         // narrator-card 확인
@@ -322,23 +367,29 @@
           // narrator-card 메시지는 머지하지 않음
           prevUserId = null;
           prevPortraitSrc = null;
+          prevActorId = null;
           prevHasNarratorCard = true;
+          prevSystemExportBreak = false;
         } else {
           messageEl.classList.remove('lichsoma-narrator-card');
           
-          // 머지 조건 확인 (이전 메시지에 narrator-card가 없어야 함)
+          // 머지 조건 확인 (이전 메시지에 narrator-card가 없어야 함, actorId 일치 — ChatMerge 와 동일)
           if (prevUserId && 
               prevUserId === currentUserId && 
               prevPortraitSrc === currentPortraitSrc &&
+              prevActorId === currentActorId &&
               currentPortraitSrc !== null &&
-              !prevHasNarratorCard) {
+              !prevHasNarratorCard &&
+              !prevSystemExportBreak) {
             messageEl.classList.add('lichsoma-merged');
           } else {
             messageEl.classList.remove('lichsoma-merged');
             prevUserId = currentUserId;
             prevPortraitSrc = currentPortraitSrc;
+            prevActorId = currentActorId;
           }
           prevHasNarratorCard = false;
+          prevSystemExportBreak = false;
         }
       });
       
@@ -415,7 +466,9 @@
             parent.classList.contains('lichsoma-chat-header') ||
             parent.classList.contains('item-header')
           );
-          
+          /* Chat Portrait(앵커·스케일)는 <img>의 transform/object-fit 유지 — 배경화 최적화 경로 제외 */
+          const isTokenFramedPortrait = img.classList.contains('lichsoma-chat-portrait--token-framed');
+
           try {
             let base64Url;
             const normalizedSrcForCache = isAlreadyBase64 ? src : normalizeImageUrl(src, localHost);
@@ -456,7 +509,7 @@
             const estimatedOriginalSize = (base64DataLength * 3) / 4;
             const isLargeImage = estimatedOriginalSize >= 500 * 1024; // 500KB 이상
             
-            if (isHeaderImage && !isLargeImage) {
+            if (isHeaderImage && !isLargeImage && !isTokenFramedPortrait) {
               // 헤더 이미지 (500KB 미만): CSS 변수 + background-image로 처리 (중복 제거)
               let imageHash;
               
@@ -613,7 +666,6 @@
           
           if (extensionCSS.trim()) {
             extensionCSS = `\n\n/* 확장 모듈 CSS */\n${extensionCSS}`;
-            console.log('확장 모듈 CSS 로드 성공:', extensionCSS.length, '문자');
           }
         }
       } catch (e) {
@@ -714,6 +766,9 @@
         ${imageClassCSS}
         /* 나레이터 카드 스타일 */
         .chat-log .chat-message.lichsoma-narrator-card .lichsoma-chat-header {
+          display: none !important;
+        }
+        .chat-log .chat-message.lichsoma-hr-only .message-header {
           display: none !important;
         }
         .chat-message .message-content .narrator-card {

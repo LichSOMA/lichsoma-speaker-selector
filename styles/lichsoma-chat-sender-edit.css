@@ -1,0 +1,112 @@
+/* GM 메시지 센더 수정 — scripts/lichsoma-chat-sender-edit.js (ApplicationV2)
+ * 액터 목록 기본 스타일은 lichsoma-speaker-selector.css 의 .lichsoma-available-actor 등을 따름 */
+
+.lichsoma-chat-sender-edit-inner .form-group {
+    margin-bottom: 0.75em;
+}
+
+.lichsoma-chat-sender-edit-inner label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 0.25em;
+}
+
+.lichsoma-chat-sender-edit-inner select[name="userId"] {
+    width: 100%;
+}
+
+.lichsoma-chat-sender-edit-actor-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0.5em 0 0.35em;
+    flex-wrap: wrap;
+}
+
+.lichsoma-chat-sender-edit-actor-header-row .lichsoma-chat-sender-edit-actor-label {
+    display: inline-block;
+    font-weight: bold;
+    margin: 0;
+    text-align: left;
+    flex: 1;
+    min-width: 4em;
+}
+
+.lichsoma-chat-sender-edit-speak-mode {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.lichsoma-chat-sender-edit-speak-mode.is-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.lichsoma-sender-speak-toggle {
+    min-width: 5.5em;
+    padding: 0.35em 0.75em;
+    border: 1px solid #5c5c5c;
+    border-radius: 6px;
+    outline: none;
+    box-shadow: none;
+    background: var(--color-bg-tint, #2a2a2a);
+    color: var(--color-text-primary, #fff);
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.lichsoma-sender-speak-toggle:hover:not(:disabled) {
+    color: #ffbb00;
+}
+
+.lichsoma-sender-speak-toggle:disabled {
+    cursor: not-allowed;
+}
+
+.lichsoma-sender-edit-actor-list-host.lichsoma-available-actors-container {
+    width: 100%;
+    max-height: min(380px, 55vh);
+    margin-top: 0.35em;
+    padding-right: 4px;
+    border-left: none;
+    padding-left: 0;
+}
+
+.lichsoma-chat-sender-edit-app .lichsoma-available-actor.lichsoma-sender-edit-actor-pick,
+.lichsoma-chat-sender-edit-app .lichsoma-sender-edit-ooc {
+    cursor: pointer;
+}
+
+.lichsoma-chat-sender-edit-app .lichsoma-sender-edit-ooc {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lichsoma-chat-sender-edit-app .lichsoma-sender-edit-ooc i {
+    width: 40px;
+    flex-shrink: 0;
+    text-align: center;
+    font-size: 1.1rem;
+    color: var(--color-text-secondary, #999);
+}
+
+.lichsoma-chat-sender-edit-app .lichsoma-sender-edit-actor-pick.selected,
+.lichsoma-chat-sender-edit-app .lichsoma-sender-edit-ooc.selected {
+    border-color: var(--color-primary, #4a90e2);
+    box-shadow: 0 0 0 1px var(--color-primary, #4a90e2);
+    background: var(--color-bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.lichsoma-chat-sender-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border-light-primary, #444);
+}
