@@ -2,7 +2,7 @@
  * LichSOMA Chat Handler
  * 채팅 메시지에서 마크다운 스타일 포맷팅 처리
  * - 루비 문자: [[텍스트|루비]]
- * - 취소선: ~텍스트~
+ * - 취소선: ~~텍스트~~
  * - 이탤릭: *텍스트*
  * - 볼드: **텍스트**
  * - 볼드+이탤릭: ***텍스트***
@@ -65,7 +65,7 @@ export class ChatRubyHandler {
                 // 4. 이탤릭: *텍스트* -> <i>텍스트</i>
                 content = this.processItalic(content);
                 
-                // 5. 취소선: ~텍스트~ -> <s>텍스트</s>
+                // 5. 취소선: ~~텍스트~~ -> <s>텍스트</s>
                 content = this.processStrikethrough(content);
                 
                 element.innerHTML = content;
@@ -131,12 +131,12 @@ export class ChatRubyHandler {
     }
     
     /**
-     * 취소선 처리: ~텍스트~ -> <s>텍스트</s>
+     * 취소선 처리: ~~텍스트~~ -> <s>텍스트</s>
      * @param {string} content - 처리할 텍스트
      * @returns {string} 처리된 텍스트
      */
     static processStrikethrough(content) {
-        const strikethroughPattern = /~([^~]+?)~/g;
+        const strikethroughPattern = /~~([^~]+?)~~/g;
         return content.replace(
             strikethroughPattern,
             '<s>$1</s>'

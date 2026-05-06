@@ -2053,11 +2053,19 @@ export class SpeakerSelector {
 
     static _renderChatInsertImageButton(chatForm) {
         const $chatForm = chatForm?.find ? chatForm : $(chatForm ?? document);
-        const $controls = $chatForm.find('#chat-controls .control-buttons').first();
-        if (!$controls.length) return;
+        // GM은 보통 #chat-controls .control-buttons 를 가지지만,
+        // 플레이어 화면은 해당 영역이 없을 수 있어(#chat-controls만 존재) 폴백을 둔다.
+        let $controls = $chatForm.find('#chat-controls .control-buttons').first();
+        let $controlsRoot = $chatForm.find('#chat-controls').first();
+
+        // control-buttons도 chat-controls도 없으면 삽입 불가
+        if (!$controls.length && !$controlsRoot.length) return;
+        if (!$controls.length) $controls = $controlsRoot;
 
         // 중복 삽입 방지
         if ($controls.find('button.lichsoma-insert-image-btn').length) return;
+        // (GM/플레이어 DOM 차이로 다른 컨테이너에 들어갔던 경우도 방지)
+        if ($controlsRoot.length && $controlsRoot.find('button.lichsoma-insert-image-btn').length) return;
 
         const localizedLabel =
             (game?.i18n?.localize && game.i18n.localize('EDITOR.InsertImage')) || 'Insert Image';
@@ -2077,13 +2085,20 @@ export class SpeakerSelector {
             this._triggerChatEditorInsertImage($chatForm);
         });
 
-        // Export(저장) 버튼 왼쪽에 삽입
-        const $exportBtn = $controls
-            .find('button[data-action="export"], button.ui-control.icon.fa-solid.fa-floppy-disk')
-            .first();
+        // control-buttons가 있는 환경(GM)은 Export(저장) 버튼 왼쪽에 삽입.
+        // 그 외(플레이어 등)는 chat-controls 맨 앞에 삽입.
+        const isControlButtons = $chatForm.find('#chat-controls .control-buttons').first()[0] === $controls[0];
+        if (isControlButtons) {
+            const $exportBtn = $controls
+                .find('button[data-action="export"], button.ui-control.icon.fa-solid.fa-floppy-disk')
+                .first();
 
-        if ($exportBtn.length) $exportBtn.before($btn);
-        else $controls.prepend($btn);
+            if ($exportBtn.length) $exportBtn.before($btn);
+            else $controls.prepend($btn);
+        } else {
+            // 플레이어 화면 등: chat-controls의 우측 끝에 위치시키기
+            $controls.append($btn);
+        }
     }
 
     static _triggerChatEditorInsertImage(chatForm) {

@@ -30,6 +30,20 @@
     if (!messageContent) return false;
     const htmlContent = messageContent.innerHTML || '';
     const withoutHr = htmlContent.replace(/<hr\s*\/?>/gi, '');
+
+    // 텍스트가 없어도 "콘텐츠"가 있으면 hr-only가 아님 (이미지/임베드/비디오 등)
+    // - 기존 구현은 태그를 전부 제거해서 <img>만 있는 메시지를 hr-only로 오판했다.
+    try {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = withoutHr;
+      const hasNonTextContent = !!tmp.querySelector(
+        'img, video, audio, iframe, embed, object, canvas, picture, svg, source'
+      );
+      if (hasNonTextContent) return false;
+    } catch (e) {
+      // DOM 파싱 실패 시 기존 텍스트 판정으로 fallback
+    }
+
     const textOnly = withoutHr.replace(/<[^>]+>/g, '').replace(/\s+/g, '');
     return textOnly === '';
   }
