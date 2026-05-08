@@ -322,6 +322,11 @@
         const flags = message.flags?.['lichsoma-speaker-selector'] || {};
         const currentUserId = flags.userId || message.author?.id;
         const currentActorId = flags.actorId || message.speaker?.actor || null;
+        const alwaysUseActor = game.settings.get('lichsoma-speaker-selector', 'alwaysUseActor') === true;
+        const speakerTokenId = message.speaker?.token || null;
+        const currentMergeSpeakerId =
+          flags.mergeSpeakerId ||
+          (!alwaysUseActor && speakerTokenId ? speakerTokenId : currentActorId);
         const portraitImg = messageEl.querySelector('.lichsoma-chat-portrait');
         const currentPortraitSrc = flags.portraitSrc || portraitImg?.getAttribute('src') || null;
         
@@ -387,11 +392,11 @@
         } else {
           messageEl.classList.remove('lichsoma-narrator-card');
           
-          // 머지 조건 확인 (이전 메시지에 narrator-card가 없어야 함, actorId 일치 — ChatMerge 와 동일)
+          // 머지 조건 확인 (이전 메시지에 narrator-card가 없어야 함, mergeSpeaker 키 일치 — ChatMerge 와 동일)
           if (prevUserId && 
               prevUserId === currentUserId && 
               prevPortraitSrc === currentPortraitSrc &&
-              prevActorId === currentActorId &&
+              prevActorId === currentMergeSpeakerId &&
               currentPortraitSrc !== null &&
               !prevHasNarratorCard &&
               !prevSystemExportBreak) {
@@ -400,7 +405,8 @@
             messageEl.classList.remove('lichsoma-merged');
             prevUserId = currentUserId;
             prevPortraitSrc = currentPortraitSrc;
-            prevActorId = currentActorId;
+            // prevActorId 변수는 기존 호환을 위해 유지하되 mergeSpeakerId를 저장한다.
+            prevActorId = currentMergeSpeakerId;
           }
           prevHasNarratorCard = false;
           prevSystemExportBreak = false;

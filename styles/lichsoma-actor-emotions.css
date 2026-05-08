@@ -136,10 +136,6 @@
     touch-action: manipulation;
 }
 
-.application .window-header .lichsoma-emotion-manage-btn .lichsoma-emotion-manage-label {
-    font-size: var(--font-size-12, 12px);
-}
-
 /* 감정 관리 — ApplicationV2 창 (스피커 액터 격자 설정과 동일 패턴) */
 .application.lichsoma-emotion-manager-app {
     min-width: 480px;

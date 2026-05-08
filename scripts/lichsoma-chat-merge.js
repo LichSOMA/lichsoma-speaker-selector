@@ -176,7 +176,10 @@ export class ChatMerge {
         const flags = message.flags?.['lichsoma-speaker-selector'] || {};
         const currentUserId = flags.userId || message.author?.id;
         const currentPortraitSrc = flags.portraitSrc || null;
-        const currentActorId = flags.actorId || message.speaker?.actor || null;
+        const currentMergeSpeakerId =
+            flags.mergeSpeakerId || flags.actorId || message.speaker?.actor || null;
+        const currentMergeSpeakerType =
+            flags.mergeSpeakerType || (flags.mergeSpeakerId ? 'actor' : null) || 'actor';
         
         // userId나 portraitSrc가 없으면 머지 불가
         if (!currentUserId || !currentPortraitSrc) {
@@ -207,7 +210,10 @@ export class ChatMerge {
         const prevFlags = prevMessage.flags?.['lichsoma-speaker-selector'] || {};
         const prevUserId = prevFlags.userId || prevMessage.author?.id;
         const prevPortraitSrc = prevFlags.portraitSrc || null;
-        const prevActorId = prevFlags.actorId || prevMessage.speaker?.actor || null;
+        const prevMergeSpeakerId =
+            prevFlags.mergeSpeakerId || prevFlags.actorId || prevMessage.speaker?.actor || null;
+        const prevMergeSpeakerType =
+            prevFlags.mergeSpeakerType || (prevFlags.mergeSpeakerId ? 'actor' : null) || 'actor';
         
         // <hr> 뿐인 메시지와는 머지하지 않음
         const prevIsOnlyHr = this._isOnlyHrMessage(prevMessageElement);
@@ -238,10 +244,11 @@ export class ChatMerge {
             return;
         }
         
-        // 머지 조건 확인: userId, portraitSrc, actorId가 모두 일치하고, <hr> 뿐인 메시지가 아니어야 함
+        // 머지 조건 확인: userId, portraitSrc, mergeSpeaker(토큰/액터) 키가 모두 일치하고, <hr> 뿐인 메시지가 아니어야 함
         const shouldMerge = (currentUserId === prevUserId) && 
                            (currentPortraitSrc === prevPortraitSrc) && 
-                           (currentActorId === prevActorId) &&
+                           (currentMergeSpeakerType === prevMergeSpeakerType) &&
+                           (currentMergeSpeakerId === prevMergeSpeakerId) &&
                            (currentPortraitSrc !== null) &&
                            !isOnlyHr;
         
@@ -297,7 +304,10 @@ export class ChatMerge {
             const flags = message.flags?.['lichsoma-speaker-selector'] || {};
             const currentUserId = flags.userId || message.author?.id;
             const currentPortraitSrc = flags.portraitSrc || null;
-            const currentActorId = flags.actorId || message.speaker?.actor || null;
+            const currentMergeSpeakerId =
+                flags.mergeSpeakerId || flags.actorId || message.speaker?.actor || null;
+            const currentMergeSpeakerType =
+                flags.mergeSpeakerType || (flags.mergeSpeakerId ? 'actor' : null) || 'actor';
             
             // <hr> 뿐인 메시지 처리
             const isOnlyHr = this._isOnlyHrMessage($currentMessage);
@@ -377,7 +387,8 @@ export class ChatMerge {
             if (prevMeta && 
                 prevMeta.userId === currentUserId && 
                 prevMeta.portraitSrc === currentPortraitSrc &&
-                prevMeta.actorId === currentActorId &&
+                prevMeta.mergeSpeakerType === currentMergeSpeakerType &&
+                prevMeta.mergeSpeakerId === currentMergeSpeakerId &&
                 currentPortraitSrc !== null &&
                 !isOnlyHr &&
                 !prevIsOnlyHr &&
@@ -390,7 +401,8 @@ export class ChatMerge {
                 prevMeta = { 
                     userId: currentUserId, 
                     portraitSrc: currentPortraitSrc, 
-                    actorId: currentActorId,
+                    mergeSpeakerId: currentMergeSpeakerId,
+                    mergeSpeakerType: currentMergeSpeakerType,
                     messageElement: $currentMessage,
                     message: message
                 };

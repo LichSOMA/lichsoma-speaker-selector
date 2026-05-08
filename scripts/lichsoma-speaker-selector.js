@@ -1273,11 +1273,22 @@ export class SpeakerSelector {
             data.speaker = {};
         }
         Object.assign(data.speaker, speakerData);
-        this._applySenderFlagsToDoc(doc, data, speakerData.alias, extraFlags);
+        this._applySenderFlagsToDoc(doc, data, speakerData.alias, extraFlags, speakerData);
     }
     
-    static _applySenderFlagsToDoc(doc, data, alias, extraFlags = {}) {
+    static _applySenderFlagsToDoc(doc, data, alias, extraFlags = {}, speakerData = null) {
         const moduleFlags = foundry.utils.mergeObject(extraFlags || {}, {}, { inplace: false });
+        // 머지 비교 키 저장 (항상 액터로 말하기 OFF + 토큰으로 말하기일 때 token 기준)
+        if (speakerData && !moduleFlags.mergeSpeakerId) {
+            const mergeKey = this._getMergeSpeakerKey(speakerData);
+            if (mergeKey.mergeSpeakerId) {
+                moduleFlags.mergeSpeakerId = mergeKey.mergeSpeakerId;
+                moduleFlags.mergeSpeakerType = mergeKey.mergeSpeakerType;
+            }
+            if (mergeKey.tokenId) {
+                moduleFlags.tokenId = mergeKey.tokenId;
+            }
+        }
         if (alias) {
             moduleFlags.senderAlias = alias;
         }
@@ -1290,6 +1301,23 @@ export class SpeakerSelector {
         if (!data.flags) data.flags = {};
         const existingDataFlags = data.flags['lichsoma-speaker-selector'] || {};
         data.flags['lichsoma-speaker-selector'] = Object.assign({}, existingDataFlags, moduleFlags);
+    }
+
+    /**
+     * 채팅 머지용 비교 키 계산
+     * - "항상 액터로 말하기"가 꺼져 있고 speaker.token 이 있으면 token 기준
+     * - 그 외엔 actor 기준
+     */
+    static _getMergeSpeakerKey(speakerData) {
+        const speaker = speakerData || {};
+        const alwaysUseActor = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.ALWAYS_USE_ACTOR);
+        const tokenId = speaker.token || null;
+        const actorId = speaker.actor || null;
+
+        if (!alwaysUseActor && tokenId) {
+            return { mergeSpeakerId: tokenId, mergeSpeakerType: 'token', tokenId, actorId };
+        }
+        return { mergeSpeakerId: actorId, mergeSpeakerType: 'actor', tokenId, actorId };
     }
     
     // 동기 버전의 이미지 주소 가져오기 (플래그 저장용)
@@ -2302,7 +2330,7 @@ export class SpeakerSelector {
                     if (needsSpeakerUpdate) {
                         this._applySpeakerData(doc, data, speakerData, extraFlags);
                     } else {
-                        this._applySenderFlagsToDoc(doc, data, null, extraFlags);
+                        this._applySenderFlagsToDoc(doc, data, null, extraFlags, speakerData);
                     }
                 }
                 return;
