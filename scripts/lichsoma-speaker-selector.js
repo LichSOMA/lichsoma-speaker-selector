@@ -2386,18 +2386,18 @@ export class SpeakerSelector {
                 }
             }
             
-            // "@"로 시작하는 메시지 처리 (OOC로 전환)
-            if (plainTextForDesc.startsWith('@')) {
-                // "@" 부분 제거
+            // "#"로 시작하는 메시지 처리 (OOC로 전환)
+            if (plainTextForDesc.startsWith('#')) {
+                // "#" 부분 제거
                 const oocRemovedText = plainTextForDesc.substring(1).trim();
                 
                 if (oocRemovedText) {
                     // HTML 태그가 있는 경우 처리
                     let processedContent = content;
-                    // HTML에서도 "@" 부분 제거 시도
-                    if (content.startsWith('@')) {
-                        // HTML 태그를 유지하면서 "@" 부분만 제거
-                        processedContent = content.replace(/^@\s*/, '');
+                    // HTML에서도 "#" 부분 제거 시도
+                    if (content.startsWith('#')) {
+                        // HTML 태그를 유지하면서 "#" 부분만 제거
+                        processedContent = content.replace(/^#\s*/, '');
                     } else {
                         // HTML이 없으면 순수 텍스트 사용
                         processedContent = oocRemovedText;
@@ -2418,10 +2418,10 @@ export class SpeakerSelector {
                     // 이미지 주소 계산 및 플래그에 저장
                     const portraitData = this._getMessageImageSync(oocSpeakerData, userId);
                     const actorId = oocSpeakerData.actor || null;
-                    // @ 처리된 메시지임을 표시하는 플래그 추가
+                    // # 처리된 메시지임을 표시하는 플래그 추가
                     const extraFlags = { portraitSrc: portraitData.src, userId, actorId, isAtOOC: true };
                     this._applySpeakerData(doc, data, oocSpeakerData, extraFlags);
-                    return; // "@" 처리 완료
+                    return; // "#" 처리 완료
                 }
             }
             
