@@ -29,12 +29,16 @@ export class ActorEmotions {
     }
 
     static initialize() {
-        const run = (app, html) => this._injectEmotionButton(app, html);
-        Hooks.on('renderActorSheet', (app, html) => run(app, html));
-        Hooks.on('renderActorSheetV2', (app, html) => run(app, html));
+        Hooks.on('renderActorSheet', (app, html) => this._injectEmotionButton(app, html, false));
+        // V2 시트는 DOM에 따라 `.application-v2` 조상이 헤더에서 안 잡히는 경우가 있어,
+        // `--legacy-sheet`(평탄 헤더·호버 무시)가 오부착되어 코어 헤더 호버가 깨짐 → 훅으로만 구분
+        Hooks.on('renderActorSheetV2', (app, html) => this._injectEmotionButton(app, html, true));
     }
 
-    static _injectEmotionButton(app, html) {
+    /**
+     * @param {boolean} fromActorSheetV2Hook - `renderActorSheetV2` 에서 호출되면 true (레거시 스타일 클래스 금지)
+     */
+    static _injectEmotionButton(app, html, fromActorSheetV2Hook = false) {
         const actor = app.actor || app.object || app.document;
         if (!actor) return;
 
@@ -56,6 +60,15 @@ export class ActorEmotions {
                 <span class="lichsoma-emotion-manage-label">${emotionLabel}</span>
             </button>
         `);
+
+        // Application v1 / window-app 시트만 레거시(플랫 헤더) 스타일 — V2 훅이면 절대 부착하지 않음
+        if (!fromActorSheetV2Hook) {
+            const sheetRoot = windowHeader.closest('.application, .window-app');
+            const isAppV2 = windowHeader.closest('.application-v2').length > 0;
+            if (sheetRoot.length && !isAppV2) {
+                button.addClass('lichsoma-emotion-manage-btn--legacy-sheet');
+            }
+        }
 
         const stopDragHandshake = (ev) => {
             ev.stopPropagation();

@@ -122,18 +122,53 @@
     color: var(--color-warm-1) !important;
 }
 
-/* 액터 시트 헤더 감정 — header-control 로 창 드래그와 분리 (코어 토글/닫기와 동일 계열) */
-.application .window-header .lichsoma-emotion-manage-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
+/* 액터 시트 헤더 감정 — header-control 로 창 드래그와 분리 (코어 토글/닫기와 동일 계열)
+ * flexrow 헤더에서 유일한 button 이 남는 폭을 전부 먹는 경우가 있어 flex-grow 를 끈다 */
+.window-header .lichsoma-emotion-manage-btn {
     width: auto;
+    max-width: max-content;
     min-width: unset;
-    padding: 0 6px;
     white-space: nowrap;
     user-select: none;
     touch-action: manipulation;
+}
+
+/*
+ * Actor Sheet Application v1 / window-app 전용: 코어 header-control(설정·롤 등)과 같은 플랫 링크 톤.
+ * `.application` 없이 `.window-app`만 쓰는 시트(BitD v1 등)도 동일하게 적용되도록 ancestor를 두지 않음.
+ * Application V2 시트는 `renderActorSheetV2` 훅에서 `--legacy-sheet`를 붙이지 않음(DOM상 application-v2 미탐지 오부착 방지).
+ */
+.window-header .lichsoma-emotion-manage-btn--legacy-sheet {
+    padding: 0;
+    margin-left: 8px;
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: #F0F0E0 !important;
+}
+
+.window-header .lichsoma-emotion-manage-btn--legacy-sheet i,
+.window-header .lichsoma-emotion-manage-btn--legacy-sheet .lichsoma-emotion-manage-label {
+    color: #F0F0E0 !important;
+}
+
+.window-header .lichsoma-emotion-manage-btn--legacy-sheet:hover,
+.window-header .lichsoma-emotion-manage-btn--legacy-sheet:focus-visible {
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    color: #F0F0E0 !important;
+}
+
+.window-header .lichsoma-emotion-manage-btn--legacy-sheet:hover i,
+.window-header .lichsoma-emotion-manage-btn--legacy-sheet:hover .lichsoma-emotion-manage-label,
+.window-header .lichsoma-emotion-manage-btn--legacy-sheet:focus-visible i,
+.window-header .lichsoma-emotion-manage-btn--legacy-sheet:focus-visible .lichsoma-emotion-manage-label {
+    color: #F0F0E0 !important;
+    text-shadow:
+        0 0 8px rgba(255, 95, 95, 0.95),
+        0 0 16px rgba(200, 55, 60, 0.65);
 }
 
 /* 감정 관리 — ApplicationV2 창 (스피커 액터 격자 설정과 동일 패턴) */
