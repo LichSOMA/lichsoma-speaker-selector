@@ -3,10 +3,13 @@
  * 채팅 UI 관련 기능 (사이드바 자동 열기 등)
  */
 
+import { LichsomaChatDom } from './lichsoma-chat-dom.js';
+
 export class ChatUI {
     // 중복 실행 방지 플래그
     static _isEnsuringSidebarOpen = false;
     static _sidebarOpenedOnce = false;
+    static _chatFormResizeObserver = null;
 
     // 사이드바 상태 체크 함수
     static isSidebarCollapsed() {
@@ -16,7 +19,7 @@ export class ChatUI {
         }
 
         // 방법 2: DOM 요소로 확인
-        const sidebarElement = document.querySelector('#sidebar');
+        const sidebarElement = LichsomaChatDom.getSidebar();
         if (sidebarElement) {
             const computedStyle = getComputedStyle(sidebarElement);
             return sidebarElement.classList.contains('collapsed') ||
@@ -36,7 +39,7 @@ export class ChatUI {
         
         try {
             // DOM 요소로 사이드바 상태 확인
-            const sidebarElement = document.querySelector('#sidebar');
+            const sidebarElement = LichsomaChatDom.getSidebar();
             if (!sidebarElement) {
                 this._isEnsuringSidebarOpen = false;
                 return;
@@ -100,7 +103,7 @@ export class ChatUI {
                     }
                 } catch (e) {
                     // 채팅 탭 버튼 클릭 (fallback)
-                    const chatTabButton = document.querySelector('#sidebar-tabs button[data-tab="chat"]');
+                    const chatTabButton = LichsomaChatDom.query('#sidebar-tabs button[data-tab="chat"]');
                     if (chatTabButton && !chatTabButton.classList.contains('active')) {
                         chatTabButton.click();
                     }
@@ -150,19 +153,15 @@ export class ChatUI {
         // 기존 메시지들에도 프리뷰 연결 (채팅 로그가 렌더링될 때)
         Hooks.on('renderChatLog', (app, html, data) => {
             setTimeout(() => {
-                const $html = $(html);
-                const portraitContainers = $html.find('.lichsoma-chat-portrait-container');
-                portraitContainers.each((index, container) => {
-                    const $container = $(container);
-                    if (!$container[0].hasAttribute('data-preview-attached')) {
-                        const img = $container.find('.lichsoma-chat-portrait');
-                        if (img.length) {
-                            const imgSrc = img.attr('src');
-                            if (imgSrc) {
-                                this._attachPortraitPreview($container[0], imgSrc);
-                                $container[0].setAttribute('data-preview-attached', 'true');
-                            }
-                        }
+                const root = LichsomaChatDom.asElement(html);
+                const portraitContainers = LichsomaChatDom.queryAll('.lichsoma-chat-portrait-container', root);
+                portraitContainers.forEach((container) => {
+                    if (container.hasAttribute('data-preview-attached')) return;
+                    const img = container.querySelector('.lichsoma-chat-portrait');
+                    const imgSrc = img?.getAttribute('src');
+                    if (imgSrc) {
+                        this._attachPortraitPreview(container, imgSrc);
+                        container.setAttribute('data-preview-attached', 'true');
                     }
                 });
             }, 100);
@@ -289,8 +288,8 @@ export class ChatUI {
 
     // 챗폼 높이를 동적으로 계산하여 CSS 변수로 설정
     static updateChatFormHeight() {
-        const chatForm = document.querySelector('#chat .chat-form');
-        const chatSidebar = document.querySelector('#chat.chat-sidebar');
+        const chatForm = LichsomaChatDom.getChatForm();
+        const chatSidebar = LichsomaChatDom.getChatSection();
         
         if (chatForm && chatSidebar) {
             const formHeight = chatForm.offsetHeight;
@@ -300,18 +299,19 @@ export class ChatUI {
 
     // 챗폼 높이 변경 감지 및 업데이트
     static setupChatFormHeightObserver() {
-        const chatForm = document.querySelector('#chat .chat-form');
+        const chatForm = LichsomaChatDom.getChatForm();
         if (!chatForm) return;
 
         // 초기 높이 설정
         this.updateChatFormHeight();
 
         // ResizeObserver로 높이 변경 감지
-        const observer = new ResizeObserver(() => {
+        this._chatFormResizeObserver?.disconnect?.();
+        this._chatFormResizeObserver = new ResizeObserver(() => {
             this.updateChatFormHeight();
         });
 
-        observer.observe(chatForm);
+        this._chatFormResizeObserver.observe(chatForm);
 
         // 채팅 로그 렌더링 시에도 업데이트
         Hooks.on('renderChatLog', () => {

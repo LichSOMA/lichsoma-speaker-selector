@@ -3,9 +3,12 @@
  * 채팅 메시지 수정 기능
  */
 
+import { LichsomaChatDom } from './lichsoma-chat-dom.js';
+
 export class ChatReviser {
     static _editingMessageId = null;
     static _overlayElement = null;
+    static _overlayTargetElement = null;
     static _positionObserver = null;
     static _resizeObserver = null;
     static _resizeHandler = null;
@@ -13,23 +16,43 @@ export class ChatReviser {
     static initialize() {
         // 더블클릭으로 수정 모드 시작
         this._setupDoubleClickHandler();
-        
+
         // 메시지 렌더링 시 편집 상태 하이라이트 적용
         this._setupRenderHook();
     }
-    
+
+    static _getMessageElement(element) {
+        return LichsomaChatDom.getChatMessageElement(element);
+    }
+
+    static _findMessageElementById(messageId) {
+        return LichsomaChatDom.findRenderedMessageById(messageId);
+    }
+
+    static _getChatInput() {
+        return LichsomaChatDom.getChatInput();
+    }
+
+    static _getOverlayTarget(chatInput) {
+        return LichsomaChatDom.getChatEditorContainer(chatInput)
+            ?? chatInput?.querySelector?.('.editor-container')
+            ?? chatInput;
+    }
+
+    static _getChatFormForElement(element) {
+        const el = LichsomaChatDom.asElement(element);
+        return el?.closest?.('.chat-form')
+            ?? LichsomaChatDom.getChatForm()
+            ?? null;
+    }
+
     // 메시지 렌더링 훅 설정
     static _setupRenderHook() {
         Hooks.on('renderChatMessageHTML', (message, html, data) => {
             try {
-                // HTMLElement를 직접 사용
-                let li = html;
-                if (!li.classList.contains('chat-message')) {
-                    li = html.querySelector('.chat-message');
-                    if (!li) li = html.closest('.chat-message');
-                }
+                const li = this._getMessageElement(html);
                 if (!li) return;
-                
+
                 // 편집 상태 플래그 확인
                 const editingBy = message.flags?.['lichsoma-speaker-selector']?.editingBy;
                 if (editingBy) {
@@ -46,11 +69,10 @@ export class ChatReviser {
     // 더블클릭 이벤트 핸들러 설정
     static _setupDoubleClickHandler() {
         // 채팅 메시지 내용 영역 더블클릭 감지
-        // chat-scroll 내부의 메시지만 처리 (overflow 제외)
         $(document).on('dblclick.lichsoma-chat-reviser', '.chat-message .message-content', (ev) => {
             try {
                 const messageContent = ev.currentTarget;
-                const li = messageContent.closest('.chat-message');
+                const li = this._getMessageElement(messageContent);
                 if (!li) return;
 
                 // overflow 내부의 메시지는 제외
@@ -58,12 +80,12 @@ export class ChatReviser {
                     return;
                 }
 
-                // chat-scroll 내부의 메시지만 처리
-                if (!li.closest('.chat-scroll')) {
+                // 일반 채팅 로그 내부의 메시지만 처리
+                if (!LichsomaChatDom.isInMainChatLog(li)) {
                     return;
                 }
 
-                const messageId = li.getAttribute('data-message-id');
+                const messageId = LichsomaChatDom.getMessageId(li);
                 if (!messageId) return;
 
                 const message = game.messages.get(messageId);
@@ -95,7 +117,7 @@ export class ChatReviser {
 
         // 편집 대상 메시지에 하이라이트 클래스 추가
         try {
-            const li = document.querySelector(`.chat-message[data-message-id="${message.id}"]`);
+            const li = this._findMessageElementById(message.id);
             if (li) {
                 li.classList.add('lichsoma-editing-message');
             }
@@ -106,7 +128,7 @@ export class ChatReviser {
         }
 
         // chat-input 요소 찾기
-        const chatInput = document.querySelector('#sidebar .chat-form .chat-input, .chat-form .chat-input, #chat-message');
+        const chatInput = this._getChatInput();
         if (!chatInput) {
             // chat-input이 아직 없으면 잠시 후 재시도
             setTimeout(() => {
@@ -132,13 +154,13 @@ export class ChatReviser {
 
         // Foundry v14 채팅 입력은 ProseMirror로 구성되며 menu-container + editor-container를 포함함.
         // 오버레이는 편집 영역(editor-container)만 덮어야 하므로 타깃을 분리한다.
-        const overlayTarget = chatInput.querySelector?.('.editor-container') || chatInput;
-        
+        const overlayTarget = this._getOverlayTarget(chatInput);
+
         // 편집 가능한 contenteditable div 생성
         const contentEditable = document.createElement('div');
         contentEditable.className = 'lichsoma-chat-reviser-content';
         contentEditable.contentEditable = true;
-        
+
         // HTML 내용을 그대로 설정
         contentEditable.innerHTML = message.content || '';
 
@@ -153,12 +175,14 @@ export class ChatReviser {
 
         overlay.appendChild(contentEditable);
 
-        // chat-input의 부모 요소에 추가 (같은 위치에 배치하기 위해)
-        const chatForm = chatInput.closest('.chat-form');
+        // chat-input의 부모 form에 추가 (같은 위치에 배치하기 위해)
+        const chatForm = this._getChatFormForElement(chatInput);
         if (chatForm) {
             chatForm.appendChild(overlay);
-        } else {
+        } else if (chatInput.parentElement) {
             chatInput.parentElement.appendChild(overlay);
+        } else {
+            document.body.appendChild(overlay);
         }
 
         this._overlayElement = overlay;
@@ -173,6 +197,7 @@ export class ChatReviser {
         // 포커스 설정
         setTimeout(() => {
             contentEditable.focus();
+
             // 커서를 끝으로 이동
             const range = document.createRange();
             const selection = window.getSelection();
@@ -188,25 +213,26 @@ export class ChatReviser {
         if (!this._overlayElement || !targetElement) return;
 
         const rect = targetElement.getBoundingClientRect();
-        const formRect = targetElement.closest('.chat-form')?.getBoundingClientRect();
+        const chatForm = this._getChatFormForElement(targetElement);
+        const formRect = chatForm?.getBoundingClientRect?.();
 
         if (formRect) {
             // chat-form 기준 상대 위치 계산
             const relativeTop = rect.top - formRect.top;
             const relativeLeft = rect.left - formRect.left;
 
+            this._overlayElement.style.position = 'absolute';
             this._overlayElement.style.top = `${relativeTop}px`;
             this._overlayElement.style.left = `${relativeLeft}px`;
             this._overlayElement.style.width = `${rect.width}px`;
             this._overlayElement.style.height = `${rect.height}px`;
         } else {
             // 절대 위치 사용 (fallback)
-            const absoluteRect = targetElement.getBoundingClientRect();
             this._overlayElement.style.position = 'fixed';
-            this._overlayElement.style.top = `${absoluteRect.top}px`;
-            this._overlayElement.style.left = `${absoluteRect.left}px`;
-            this._overlayElement.style.width = `${absoluteRect.width}px`;
-            this._overlayElement.style.height = `${absoluteRect.height}px`;
+            this._overlayElement.style.top = `${rect.top}px`;
+            this._overlayElement.style.left = `${rect.left}px`;
+            this._overlayElement.style.width = `${rect.width}px`;
+            this._overlayElement.style.height = `${rect.height}px`;
         }
     }
 
@@ -214,6 +240,8 @@ export class ChatReviser {
     static _setupPositionObservers(targetElement) {
         // 기존 observer 정리
         this._cleanupObservers();
+
+        if (!targetElement) return;
 
         // ResizeObserver: 타깃(editor-container) 크기 변경 감지
         this._resizeObserver = new ResizeObserver(() => {
@@ -224,7 +252,7 @@ export class ChatReviser {
         this._resizeObserver.observe(targetElement);
 
         // MutationObserver: chat-form 구조 변경 감지
-        const chatForm = targetElement.closest('.chat-form');
+        const chatForm = this._getChatFormForElement(targetElement);
         if (chatForm) {
             this._positionObserver = new MutationObserver(() => {
                 if (this._overlayElement && targetElement) {
@@ -245,7 +273,7 @@ export class ChatReviser {
             }
         };
         window.addEventListener('resize', handleResize);
-        
+
         // 정리 함수에 저장 (나중에 제거하기 위해)
         this._resizeHandler = handleResize;
     }
@@ -272,6 +300,7 @@ export class ChatReviser {
             this._overlayElement.remove();
             this._overlayElement = null;
         }
+        this._overlayTargetElement = null;
         this._cleanupObservers();
     }
 
@@ -284,10 +313,10 @@ export class ChatReviser {
         try {
             // HTML 내용을 그대로 저장 (이미 HTML 형식)
             await message.update({ content: newContent });
-            
+
             // 수정 모드 종료
             this._stopEditingMode();
-            
+
             ui.notifications.info("메시지가 수정되었습니다.");
         } catch (e) {
             // 오류 발생 시 알림
@@ -300,10 +329,11 @@ export class ChatReviser {
         // 편집 하이라이트 제거
         try {
             if (this._editingMessageId) {
-                const li = document.querySelector(`.chat-message[data-message-id="${this._editingMessageId}"]`);
+                const li = this._findMessageElementById(this._editingMessageId);
                 if (li) {
                     li.classList.remove('lichsoma-editing-message');
                 }
+
                 const msg = game.messages.get(this._editingMessageId);
                 if (msg) {
                     msg.unsetFlag('lichsoma-speaker-selector', 'editingBy').catch(() => {});
@@ -312,7 +342,7 @@ export class ChatReviser {
         } catch (e) {
             // 오류 발생 시 무시
         }
-        
+
         this._editingMessageId = null;
         this._removeOverlay();
     }
@@ -333,4 +363,3 @@ Hooks.once('ready', () => {
     ChatReviser.initialize();
     ChatReviser._setupEscapeHandler();
 });
-

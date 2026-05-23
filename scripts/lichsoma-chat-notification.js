@@ -3,6 +3,8 @@
  * 채팅 입력 중 상태 표시 기능
  */
 
+import { LichsomaChatDom } from './lichsoma-chat-dom.js';
+
 export class ChatNotification {
     // 입력 중인 사용자 상태 저장 (userId -> timestamp)
     static _typingUsers = new Map();
@@ -24,6 +26,9 @@ export class ChatNotification {
     
     // 인디케이터 요소
     static _indicatorElement = null;
+
+    // 인디케이터 위치 갱신용 ResizeObserver
+    static _resizeObserver = null;
     
     // 입력 필드 이벤트 핸들러 바인딩 (제거용)
     static _inputHandlers = {
@@ -61,12 +66,22 @@ export class ChatNotification {
         });
     }
 
+    static _getChatInput(root = document) {
+        return LichsomaChatDom.getChatInput(root) || LichsomaChatDom.getChatInput(document);
+    }
+
+    static _getChatForm(root = document) {
+        return LichsomaChatDom.getChatForm(root)
+            || LichsomaChatDom.getSidebarChatForm(document)
+            || LichsomaChatDom.getChatForm(document);
+    }
+
     /**
      * 채팅 입력 필드 리스너 설정
      */
     static _setupChatInputListener() {
         const setupListener = () => {
-            const chatInput = document.querySelector('#chat-message');
+            const chatInput = this._getChatInput();
             if (!chatInput) {
                 // 입력 필드가 아직 없으면 잠시 후 다시 시도
                 setTimeout(setupListener, 500);
@@ -314,7 +329,7 @@ export class ChatNotification {
         }
         
         // 인디케이터 생성 또는 업데이트
-        const chatForm = document.querySelector('.chat-form');
+        const chatForm = this._getChatForm();
         if (!chatForm) return;
         
         // 인디케이터 요소가 없으면 생성
@@ -363,21 +378,21 @@ export class ChatNotification {
         
         // chat-form에 직접 추가 (absolute positioning 사용)
         chatForm.appendChild(indicator);
-        
+        this._indicatorElement = indicator;
+
         // 입력칸 위치 기준으로 인디케이터 위치 설정
         this._updateIndicatorPosition();
-        
+
         // 입력칸 크기 변경 시 인디케이터 위치 재조정
-        const chatInput = chatForm.querySelector('#chat-message');
+        const chatInput = this._getChatInput(chatForm);
         if (chatInput) {
-            const resizeObserver = new ResizeObserver(() => {
+            this._resizeObserver?.disconnect?.();
+            this._resizeObserver = new ResizeObserver(() => {
                 this._updateIndicatorPosition();
             });
-            resizeObserver.observe(chatInput);
-            resizeObserver.observe(chatForm);
+            this._resizeObserver.observe(chatInput);
+            this._resizeObserver.observe(chatForm);
         }
-        
-        this._indicatorElement = indicator;
     }
 
     /**
@@ -389,7 +404,7 @@ export class ChatNotification {
         const chatForm = this._indicatorElement.closest('.chat-form');
         if (!chatForm) return;
         
-        const chatInput = chatForm.querySelector('#chat-message');
+        const chatInput = this._getChatInput(chatForm);
         if (!chatInput) return;
         
         // 입력칸이 display: none이거나 아직 렌더링되지 않았으면 건너뜀

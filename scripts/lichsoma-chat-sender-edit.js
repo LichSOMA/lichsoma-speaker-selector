@@ -23,58 +23,100 @@ function _findTokenForActorOnActiveScene(actorId) {
 }
 
 /**
+ * SpeakerSelector의 공식 API 기반 helper를 우선 사용하고,
+ * helper가 없는 구버전과 함께 로드되어도 동작하도록 로컬 폴백을 둔다.
+ */
+function _buildSpeakerViaFoundry({ user = game.user, actor = null, token = null, alias = null, forceActor = false } = {}) {
+    const scene = game.scenes.active ?? canvas?.scene ?? null;
+    const actorDoc = actor || token?.actor || token?.document?.actor || null;
+    const tokenDoc = forceActor ? null : (token?.document ?? token ?? null);
+    const fallbackAlias = alias || actorDoc?.name || tokenDoc?.name || user?.name || 'Unknown';
+
+    let speaker = null;
+    try {
+        if (typeof ChatMessage?.getSpeaker === 'function') {
+            const options = { alias: fallbackAlias };
+            if (scene) options.scene = scene;
+            if (actorDoc) options.actor = actorDoc;
+            if (tokenDoc && !forceActor) options.token = tokenDoc;
+            speaker = ChatMessage.getSpeaker(options);
+        }
+    } catch (e) {
+        speaker = null;
+    }
+
+    return {
+        alias: speaker?.alias || fallbackAlias,
+        scene: speaker?.scene || scene?.id || null,
+        actor: actorDoc?.id || speaker?.actor || null,
+        token: (!forceActor && tokenDoc) ? (tokenDoc.id || speaker?.token || null) : null
+    };
+}
+
+function _buildOocSpeaker(user) {
+    if (typeof SpeakerSelector._buildOocSpeakerData === 'function') {
+        return SpeakerSelector._buildOocSpeakerData(user);
+    }
+
+    const speaker = _buildSpeakerViaFoundry({
+        user,
+        alias: user?.name || 'Unknown'
+    });
+    speaker.actor = null;
+    speaker.token = null;
+    return speaker;
+}
+
+function _buildActorSpeaker(actor, user) {
+    if (typeof SpeakerSelector._buildActorSpeakerData === 'function') {
+        return SpeakerSelector._buildActorSpeakerData(actor, { alias: actor?.name || user?.name || 'Unknown' });
+    }
+
+    if (!actor) return _buildOocSpeaker(user);
+    return _buildSpeakerViaFoundry({
+        user,
+        actor,
+        alias: actor.name,
+        forceActor: true
+    });
+}
+
+function _buildTokenSpeaker(tokenDoc, actor, user) {
+    if (typeof SpeakerSelector._buildTokenSpeakerData === 'function') {
+        return SpeakerSelector._buildTokenSpeakerData(tokenDoc, { alias: tokenDoc?.name || actor?.name || user?.name || 'Unknown' });
+    }
+
+    if (!tokenDoc) return _buildActorSpeaker(actor, user);
+    return _buildSpeakerViaFoundry({
+        user,
+        actor: actor || tokenDoc.actor,
+        token: tokenDoc,
+        alias: tokenDoc.name || actor?.name,
+        forceActor: false
+    });
+}
+
+/**
  * @param {string} userId
  * @param {string|null|undefined} actorId
  * @param {boolean} [speakAsToken] - 캐릭터 선택 시에만 사용. true면 활성 씬 토큰으로 말하기
  */
 function _buildSpeakerFromSelection(userId, actorId, speakAsToken = false) {
-    const user = game.users.get(userId);
-    const sceneId = game.scenes.active?.id ?? null;
-    if (!actorId) {
-        return {
-            alias: user?.name ?? 'Unknown',
-            scene: sceneId,
-            actor: null,
-            token: null
-        };
-    }
-    const actor = game.actors.get(actorId);
-    if (!actor) {
-        return {
-            alias: user?.name ?? 'Unknown',
-            scene: sceneId,
-            actor: null,
-            token: null
-        };
-    }
+    const user = game.users.get(userId) || game.user;
+    if (!actorId) return _buildOocSpeaker(user);
 
-    if (!speakAsToken) {
-        return {
-            alias: actor.name,
-            scene: sceneId,
-            actor: actor.id,
-            token: null
-        };
-    }
+    const actor = game.actors.get(actorId);
+    if (!actor) return _buildOocSpeaker(user);
+
+    if (!speakAsToken) return _buildActorSpeaker(actor, user);
 
     const tokenDoc = _findTokenForActorOnActiveScene(actor.id);
     if (!tokenDoc) {
         ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatSenderEdit.Notifications.NoTokenOnScene'));
-        return {
-            alias: actor.name,
-            scene: sceneId,
-            actor: actor.id,
-            token: null
-        };
+        return _buildActorSpeaker(actor, user);
     }
 
-    const scene = game.scenes.active;
-    return {
-        alias: tokenDoc.name || actor.name,
-        scene: scene?.id ?? sceneId,
-        actor: actor.id,
-        token: tokenDoc.id
-    };
+    return _buildTokenSpeaker(tokenDoc, actor, user);
 }
 
 /**
@@ -116,7 +158,10 @@ async function _openSenderEditDialogInner(message) {
         {
             portraitSrc: portraitData.src,
             userId: result.userId,
-            actorId: speaker.actor || null
+            actorId: speaker.actor || null,
+            ...(typeof SpeakerSelector._getMergeSpeakerKey === 'function'
+                ? SpeakerSelector._getMergeSpeakerKey(speaker, result.userId)
+                : {})
         },
         { inplace: false }
     );

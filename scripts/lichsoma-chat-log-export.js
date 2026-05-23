@@ -23,6 +23,11 @@
     const bridge = globalThis.LichsomaChatSystemRegistry?.ChatSystemBridge?.export;
     return bridge?.excludeCurrent?.(message, element) === true;
   }
+
+  function chatSystemExportExcludePrevious(message, element) {
+    const bridge = globalThis.LichsomaChatSystemRegistry?.ChatSystemBridge?.export;
+    return bridge?.excludePrevious?.(message, element) === true;
+  }
   
   /** ChatMerge._isOnlyHrMessage 와 동일: ProseMirror의 `<p><hr></p>` 등도 구분선 전용으로 처리 */
   function isOnlyHrMessageContent(messageEl) {
@@ -46,6 +51,91 @@
 
     const textOnly = withoutHr.replace(/<[^>]+>/g, '').replace(/\s+/g, '');
     return textOnly === '';
+  }
+
+
+  function hasNarratorCard(messageEl) {
+    return !!messageEl?.querySelector?.('.message-content .narrator-card');
+  }
+
+  function isMessengerMessage(message) {
+    return message?.flags?.['lichsoma-fvtt-smartphone']?.type === 'messenger-message';
+  }
+
+  /**
+   * ChatMerge._getMergeMeta와 같은 목적의 내보내기용 머지 메타.
+   * - token/actor 플래그가 있으면 해당 기준
+   * - actor/token이 없는 FVTT v14 Public as User 계열 메시지는 user 기준
+   * - portraitSrc는 저장 플래그를 우선하고, 없으면 렌더된 포트레잇 img에서 fallback
+   */
+  function getExportMergeMeta(message, messageEl) {
+    const flags = message?.flags?.['lichsoma-speaker-selector'] || {};
+    const speaker = message?.speaker || {};
+
+    const userId = flags.userId || message?.author?.id || null;
+
+    const portraitImg = messageEl?.querySelector?.('.lichsoma-chat-portrait');
+    const portraitSrc = flags.portraitSrc || portraitImg?.getAttribute?.('src') || null;
+
+    const alwaysUseActor = game.settings.get('lichsoma-speaker-selector', 'alwaysUseActor') === true;
+    const tokenId = flags.tokenId || speaker.token || null;
+    const actorId = flags.actorId || speaker.actor || null;
+
+    let mergeSpeakerId = flags.mergeSpeakerId || null;
+    let mergeSpeakerType = flags.mergeSpeakerType || null;
+
+    if (!mergeSpeakerId) {
+      if (!alwaysUseActor && tokenId) {
+        mergeSpeakerId = tokenId;
+        mergeSpeakerType = mergeSpeakerType || 'token';
+      } else if (actorId) {
+        mergeSpeakerId = actorId;
+        mergeSpeakerType = mergeSpeakerType || 'actor';
+      }
+    }
+
+    if (!mergeSpeakerId && userId) {
+      mergeSpeakerId = userId;
+      mergeSpeakerType = 'user';
+    }
+
+    if (!mergeSpeakerType) {
+      if ((tokenId && mergeSpeakerId === tokenId) || (speaker.token && mergeSpeakerId === speaker.token)) {
+        mergeSpeakerType = 'token';
+      } else if (actorId && mergeSpeakerId === actorId) {
+        mergeSpeakerType = 'actor';
+      } else if (userId && mergeSpeakerId === userId) {
+        mergeSpeakerType = 'user';
+      } else {
+        mergeSpeakerType = 'actor';
+      }
+    }
+
+    return {
+      userId,
+      portraitSrc,
+      mergeSpeakerId,
+      mergeSpeakerType
+    };
+  }
+
+  function isValidExportMergeMeta(meta) {
+    return !!(
+      meta &&
+      meta.userId &&
+      meta.portraitSrc &&
+      meta.mergeSpeakerId &&
+      meta.mergeSpeakerType
+    );
+  }
+
+  function canExportMerge(currentMeta, previousMeta) {
+    if (!isValidExportMergeMeta(currentMeta) || !isValidExportMergeMeta(previousMeta)) return false;
+
+    return currentMeta.userId === previousMeta.userId &&
+      currentMeta.portraitSrc === previousMeta.portraitSrc &&
+      currentMeta.mergeSpeakerId === previousMeta.mergeSpeakerId &&
+      currentMeta.mergeSpeakerType === previousMeta.mergeSpeakerType;
   }
   
   function normalizeImageUrl(imageUrl, localHost) {
@@ -122,297 +212,224 @@
     }
   }
   
-  // chat-log에 렌더링된 메시지 수를 세는 함수
-  function countRenderedMessages(chatLog) {
-    if (!chatLog) return 0;
-    const messages = chatLog.querySelectorAll('.chat-message[data-message-id]');
-    return messages.length;
+  // game.messages의 ChatMessage 문서를 기준으로 내보내기용 HTML을 새로 렌더링한다.
+  // 기존 방식처럼 현재 사이드바의 .chat-log DOM, 스크롤 위치, 가상 렌더링 상태에 의존하지 않는다.
+  function escapeHTML(value) {
+    const text = String(value ?? '');
+    try {
+      if (foundry?.utils?.escapeHTML) return foundry.utils.escapeHTML(text);
+    } catch (e) {
+      // fallback below
+    }
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
-  
-  // 모든 메시지가 로드될 때까지 기다리는 함수
-  async function waitForAllMessagesLoaded(chatLog, chatScroll) {
-    const totalMessageCount = game.messages.size;
-    
-    // 이미 모든 메시지가 로드되어 있는지 확인
-    let renderedCount = countRenderedMessages(chatLog);
-    if (renderedCount >= totalMessageCount) {
-      return true; // 이미 모두 로드됨
+
+  function isExportableMessage(message) {
+    if (!message) return false;
+    try {
+      if (message.visible === false) return false;
+    } catch (e) {
+      // visible getter가 실패하면 렌더링 시도에 맡긴다.
     }
-    
-    // 맨 위로 스크롤
-    if (chatScroll) {
-      chatScroll.scrollTop = 0;
-      // 스크롤이 완료될 때까지 잠시 대기
-      await new Promise(resolve => setTimeout(resolve, 100));
+    return true;
+  }
+
+  function getSortedChatMessages() {
+    const collection = game.messages?.contents ?? [];
+    return collection
+      .filter(isExportableMessage)
+      .map((message, index) => ({ message, index }))
+      .sort((a, b) => {
+        const ta = Number(a.message.timestamp ?? 0);
+        const tb = Number(b.message.timestamp ?? 0);
+        if (Number.isFinite(ta) && Number.isFinite(tb) && ta !== tb) return ta - tb;
+        return a.index - b.index;
+      })
+      .map(entry => entry.message);
+  }
+
+  function normalizeRenderedChatMessageElement(rendered, message) {
+    let root = rendered;
+
+    // 일부 API/모듈 호환: jQuery 형태가 들어와도 HTMLElement로 정규화
+    if (root?.jquery) root = root[0];
+
+    if (root instanceof DocumentFragment) {
+      root = root.querySelector?.('.chat-message') || root.firstElementChild;
     }
-    
-    // MutationObserver로 DOM 변화 감지
-    return new Promise((resolve) => {
-      let lastCount = renderedCount;
-      let stableCount = 0; // 변화가 없는 연속 체크 횟수
-      const maxStableChecks = 5; // 5번 연속 변화 없으면 완료로 간주
-      const checkInterval = 200; // 200ms마다 체크
-      const maxWaitTime = 30000; // 최대 30초 대기
-      const startTime = Date.now();
-      
-      const observer = new MutationObserver(() => {
-        // DOM 변화 감지 시 카운트 재확인
-        const currentCount = countRenderedMessages(chatLog);
-        if (currentCount !== lastCount) {
-          lastCount = currentCount;
-          stableCount = 0;
-        }
-      });
-      
-      // chatLog 감시 시작
-      if (chatLog) {
-        observer.observe(chatLog, {
-          childList: true,
-          subtree: true
-        });
+
+    if (!(root instanceof HTMLElement)) return null;
+
+    const messageEl = root.matches?.('.chat-message')
+      ? root
+      : root.querySelector?.('.chat-message');
+
+    if (!(messageEl instanceof HTMLElement)) return null;
+
+    if (message?.id) {
+      messageEl.setAttribute('data-message-id', message.id);
+    }
+
+    return messageEl;
+  }
+
+  function renderFallbackChatMessageElement(message) {
+    const li = document.createElement('li');
+    li.className = 'chat-message message flexcol lichsoma-export-fallback';
+    if (message?.id) li.setAttribute('data-message-id', message.id);
+
+    const alias = message?.speaker?.alias || message?.alias || message?.author?.name || 'Unknown';
+    const content = message?.content ?? '';
+    const timestamp = message?.timestamp
+      ? new Date(message.timestamp).toLocaleString()
+      : '';
+
+    li.innerHTML = `
+      <header class="message-header flexrow">
+        <h4 class="message-sender">${escapeHTML(alias)}</h4>
+        <span class="message-metadata">
+          <time class="message-timestamp">${escapeHTML(timestamp)}</time>
+        </span>
+      </header>
+      <div class="message-content">${content}</div>
+    `;
+
+    return li;
+  }
+
+  async function renderChatMessageForExport(message) {
+    try {
+      if (typeof message?.renderHTML !== 'function') {
+        return renderFallbackChatMessageElement(message);
       }
-      
-      // 주기적으로 체크
-      const intervalId = setInterval(() => {
-        const currentCount = countRenderedMessages(chatLog);
-        
-        // 시간 초과 체크
-        if (Date.now() - startTime > maxWaitTime) {
-          clearInterval(intervalId);
-          observer.disconnect();
-          resolve(currentCount >= totalMessageCount);
-          return;
-        }
-        
-        // 카운트가 변경되었는지 확인
-        if (currentCount !== lastCount) {
-          lastCount = currentCount;
-          stableCount = 0;
-        } else {
-          stableCount++;
-        }
-        
-        // 목표 달성 확인
-        if (currentCount >= totalMessageCount) {
-          clearInterval(intervalId);
-          observer.disconnect();
-          resolve(true);
-          return;
-        }
-        
-        // 변화가 없을 때 스크롤 시도 (가상 스크롤링 대응)
-        if (stableCount >= 2 && chatScroll) {
-          // 약간씩 스크롤하여 추가 메시지 로드 시도
-          const currentScroll = chatScroll.scrollTop;
-          chatScroll.scrollTop = currentScroll + 100;
-          
-          // 다시 맨 위로 스크롤 (새로운 메시지가 위에 추가될 수 있음)
-          setTimeout(() => {
-            chatScroll.scrollTop = 0;
-          }, 50);
-        }
-      }, checkInterval);
-    });
+
+      const rendered = await message.renderHTML({
+        canDelete: false,
+        canClose: false
+      });
+      return normalizeRenderedChatMessageElement(rendered, message)
+        || renderFallbackChatMessageElement(message);
+    } catch (error) {
+      console.warn('[lichsoma-speaker-selector] ChatMessage.renderHTML() 실패, fallback HTML 사용:', message?.id, error);
+      return renderFallbackChatMessageElement(message);
+    }
   }
-  
+
+  async function buildChatLogHTMLFromMessages() {
+    const messages = getSortedChatMessages();
+    const htmlParts = [];
+
+    for (const message of messages) {
+      const element = await renderChatMessageForExport(message);
+      if (!element) continue;
+      htmlParts.push(element.outerHTML);
+    }
+
+    return {
+      html: htmlParts.join('\n'),
+      count: htmlParts.length,
+      total: messages.length
+    };
+  }
+
   // 채팅 로그 HTML로 저장하는 함수
   async function exportChatLogAsHTML() {
     try {
-      // game.messages의 총 개수 확인
+      // game.messages의 ChatMessage 문서를 기준으로 내보내기용 HTML을 새로 렌더링한다.
       const totalMessageCount = game.messages.size;
       if (totalMessageCount === 0) {
         ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Warning.Empty'));
         return;
       }
-      
-      // 채팅 로그의 HTML 가져오기 - 올바른 경로로 찾기
-      let chatLog = null;
-      let chatScroll = null;
-      
-      // 방법 1: section#chat .chat-scroll .chat-log (올바른 경로)
-      const chatSection = document.querySelector('section#chat');
-      if (chatSection) {
-        chatScroll = chatSection.querySelector('.chat-scroll');
-        if (chatScroll) {
-          chatLog = chatScroll.querySelector('.chat-log');
-        }
-      }
-      
-      // 방법 2: .chat-sidebar.active .chat-scroll .chat-log
-      if (!chatLog || chatLog.innerHTML.trim().length === 0) {
-        const chatSidebar = document.querySelector('.chat-sidebar.active');
-        if (chatSidebar) {
-          chatScroll = chatSidebar.querySelector('.chat-scroll');
-          if (chatScroll) {
-            chatLog = chatScroll.querySelector('.chat-log');
-          }
-        }
-      }
-      
-      // 방법 3: 모든 .chat-log 요소 찾아서 가장 큰 것 선택
-      if (!chatLog || chatLog.innerHTML.trim().length === 0) {
-        const allChatLogs = document.querySelectorAll('.chat-log');
-        
-        // 내부 HTML이 가장 긴 것을 선택
-        let maxLength = 0;
-        allChatLogs.forEach(log => {
-          if (log.innerHTML.length > maxLength) {
-            maxLength = log.innerHTML.length;
-            chatLog = log;
-            // chatScroll도 함께 찾기
-            chatScroll = log.closest('.chat-scroll');
-          }
-        });
-      }
-      
-      if (!chatLog) {
-        ui.notifications.error(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Error.NotFound'));
-        return;
-      }
-      
-      // 모든 메시지가 로드될 때까지 대기
-      const allLoaded = await waitForAllMessagesLoaded(chatLog, chatScroll);
-      
-      if (!allLoaded) {
-        // 일부만 로드된 경우 경고
-        const renderedCount = countRenderedMessages(chatLog);
-        ui.notifications.warn(game.i18n.format('SPEAKERSELECTOR.ChatLogExport.Warning.PartialLoad', {
-          rendered: renderedCount,
-          total: totalMessageCount
-        }));
-      }
-      
-      // 최종 확인: 메시지 수가 일치하는지 확인
-      const finalRenderedCount = countRenderedMessages(chatLog);
-      if (finalRenderedCount < totalMessageCount) {
-        ui.notifications.warn(game.i18n.format('SPEAKERSELECTOR.ChatLogExport.Warning.CountMismatch', {
-          rendered: finalRenderedCount,
-          total: totalMessageCount
-        }));
-      }
-      
-      // 전체 chat-log의 innerHTML을 사용 (ol 태그 안의 내용만)
-      let chatLogHTML = chatLog.innerHTML;
-      
+
+      const renderedLog = await buildChatLogHTMLFromMessages();
+      let chatLogHTML = renderedLog.html;
+
       if (!chatLogHTML || chatLogHTML.trim().length === 0) {
         ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Warning.Empty'));
         return;
       }
-      
+
+      if (renderedLog.count < renderedLog.total) {
+        ui.notifications.warn(game.i18n.format('SPEAKERSELECTOR.ChatLogExport.Warning.CountMismatch', {
+          rendered: renderedLog.count,
+          total: renderedLog.total
+        }));
+      }
+
       // 챗 머지 처리: 추출된 HTML에서 머지 조건 확인 및 클래스 추가
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = chatLogHTML;
       const messages = tempDiv.querySelectorAll('.chat-message');
-      
-      let prevUserId = null;
-      let prevPortraitSrc = null;
-      let prevActorId = null;
-      let prevHasNarratorCard = false;
-      /** 직전에 시스템 전용(export 제외) 메시지였으면 true — 다음 메시지와 머지하지 않음 */
-      let prevSystemExportBreak = false;
-      
+
+      let prevMeta = null;
+
       messages.forEach((messageEl) => {
         const messageId = messageEl.getAttribute('data-message-id');
-        if (!messageId) return;
-        
-        const message = game.messages.get(messageId);
-        if (!message) return;
-        
-        // 플래그에서 정보 가져오기
-        const flags = message.flags?.['lichsoma-speaker-selector'] || {};
-        const currentUserId = flags.userId || message.author?.id;
-        const currentActorId = flags.actorId || message.speaker?.actor || null;
-        const alwaysUseActor = game.settings.get('lichsoma-speaker-selector', 'alwaysUseActor') === true;
-        const speakerTokenId = message.speaker?.token || null;
-        const currentMergeSpeakerId =
-          flags.mergeSpeakerId ||
-          (!alwaysUseActor && speakerTokenId ? speakerTokenId : currentActorId);
-        const portraitImg = messageEl.querySelector('.lichsoma-chat-portrait');
-        const currentPortraitSrc = flags.portraitSrc || portraitImg?.getAttribute('src') || null;
-        
-        // 자신의 메시지인지 확인하고 클래스 추가
-        const isOwnMessage = currentUserId === game.user.id;
-        if (isOwnMessage) {
-          messageEl.classList.add('lichsoma-own-message');
-        } else {
-          messageEl.classList.remove('lichsoma-own-message');
+        if (!messageId) {
+          messageEl.classList.remove('lichsoma-merged');
+          prevMeta = null;
+          return;
         }
-        
-        // <hr> 전용 메시지: 머지하지 않고 이후 체인 끊기 (ChatMerge._processAllMessages 와 동일)
+
+        const message = game.messages.get(messageId);
+        if (!message) {
+          messageEl.classList.remove('lichsoma-merged');
+          prevMeta = null;
+          return;
+        }
+
+        const currentMeta = getExportMergeMeta(message, messageEl);
+
+        // 자신의 메시지인지 확인하고 클래스 추가
+        const isOwnMessage = currentMeta.userId === game.user.id;
+        messageEl.classList.toggle('lichsoma-own-message', isOwnMessage);
+
+        // <hr> 전용 메시지: 머지하지 않고 이후 체인 끊기
+        // 이미지/비디오 등 비텍스트 콘텐츠만 있는 메시지는 hr-only가 아니므로 머지 대상이 될 수 있다.
         if (isOnlyHrMessageContent(messageEl)) {
           messageEl.classList.add('lichsoma-hr-only');
           messageEl.classList.remove('lichsoma-merged');
-          prevUserId = null;
-          prevPortraitSrc = null;
-          prevActorId = null;
-          prevHasNarratorCard = false;
-          prevSystemExportBreak = false;
+          prevMeta = null;
           return;
         }
         messageEl.classList.remove('lichsoma-hr-only');
-        
+
         // 메신저 메시지 (lichsoma-fvtt-smartphone): 머지 체인 끊기
-        const isMessengerMessage = message.flags?.['lichsoma-fvtt-smartphone']?.type === 'messenger-message';
-        if (isMessengerMessage) {
+        if (isMessengerMessage(message)) {
           messageEl.classList.add('lichsoma-messenger-message');
           messageEl.classList.remove('lichsoma-merged');
-          prevUserId = null;
-          prevPortraitSrc = null;
-          prevActorId = null;
-          prevHasNarratorCard = false;
-          prevSystemExportBreak = false;
+          prevMeta = null;
           return;
         }
         messageEl.classList.remove('lichsoma-messenger-message');
 
-        // 시스템별 내보내기 머지 제외 — ChatMerge 의 ChatSystemBridge.export 와 동일 소스
-        if (chatSystemExportExcludeCurrent(message, messageEl)) {
+        // 시스템별 내보내기 머지 제외
+        if (
+          chatSystemExportExcludeCurrent(message, messageEl) ||
+          chatSystemExportExcludePrevious(message, messageEl)
+        ) {
           messageEl.classList.remove('lichsoma-merged');
-          prevUserId = null;
-          prevPortraitSrc = null;
-          prevActorId = null;
-          prevHasNarratorCard = false;
-          prevSystemExportBreak = true;
+          prevMeta = null;
           return;
         }
-        
-        // narrator-card 확인
-        const messageContent = messageEl.querySelector('.message-content');
-        const hasNarratorCard = messageContent && messageContent.innerHTML.includes('narrator-card');
-        
-        if (hasNarratorCard) {
+
+        // narrator-card 확인: 문자열 검색 대신 DOM query 사용
+        if (hasNarratorCard(messageEl)) {
           messageEl.classList.add('lichsoma-narrator-card');
           messageEl.classList.remove('lichsoma-merged');
-          // narrator-card 메시지는 머지하지 않음
-          prevUserId = null;
-          prevPortraitSrc = null;
-          prevActorId = null;
-          prevHasNarratorCard = true;
-          prevSystemExportBreak = false;
-        } else {
-          messageEl.classList.remove('lichsoma-narrator-card');
-          
-          // 머지 조건 확인 (이전 메시지에 narrator-card가 없어야 함, mergeSpeaker 키 일치 — ChatMerge 와 동일)
-          if (prevUserId && 
-              prevUserId === currentUserId && 
-              prevPortraitSrc === currentPortraitSrc &&
-              prevActorId === currentMergeSpeakerId &&
-              currentPortraitSrc !== null &&
-              !prevHasNarratorCard &&
-              !prevSystemExportBreak) {
-            messageEl.classList.add('lichsoma-merged');
-          } else {
-            messageEl.classList.remove('lichsoma-merged');
-            prevUserId = currentUserId;
-            prevPortraitSrc = currentPortraitSrc;
-            // prevActorId 변수는 기존 호환을 위해 유지하되 mergeSpeakerId를 저장한다.
-            prevActorId = currentMergeSpeakerId;
-          }
-          prevHasNarratorCard = false;
-          prevSystemExportBreak = false;
+          prevMeta = null;
+          return;
         }
+        messageEl.classList.remove('lichsoma-narrator-card');
+
+        const shouldMerge = canExportMerge(currentMeta, prevMeta);
+        messageEl.classList.toggle('lichsoma-merged', shouldMerge);
+        prevMeta = isValidExportMergeMeta(currentMeta) ? currentMeta : null;
       });
-      
+
       // 처리된 HTML 다시 가져오기
       chatLogHTML = tempDiv.innerHTML;
       

@@ -7,6 +7,7 @@ import { ChatUI } from './lichsoma-chat-ui.js';
 import { ActorEmotions } from './lichsoma-actor-emotions.js';
 import { ChatMerge } from './lichsoma-chat-merge.js';
 import { ChatRubyHandler } from './lichsoma-chat-handler.js';
+import { LichsomaChatDom } from './lichsoma-chat-dom.js';
 
 export class SpeakerSelector {
     static SETTINGS = {
@@ -39,6 +40,35 @@ export class SpeakerSelector {
     };
     
     static _fontChoicesUpdated = false;
+
+    static _getChatInputElement(root = document) {
+        return LichsomaChatDom.getChatInput(root) || LichsomaChatDom.getChatInput(document);
+    }
+
+    static _getChatFormElement(root = document) {
+        return LichsomaChatDom.getChatForm(root) || LichsomaChatDom.getSidebarChatForm(document) || LichsomaChatDom.getChatForm(document);
+    }
+
+    static _getSidebarChatFormElement(root = document) {
+        return LichsomaChatDom.getSidebarChatForm(root) || LichsomaChatDom.getSidebarChatForm(document) || LichsomaChatDom.getChatForm(root);
+    }
+
+    static _getChatInputText(chatInput) {
+        if (!chatInput) return '';
+        if (typeof chatInput.value === 'string') return chatInput.value;
+        const pmRoot = LichsomaChatDom.getProseMirrorRoot(chatInput);
+        return (pmRoot?.innerText ?? pmRoot?.textContent ?? chatInput.textContent ?? '').trim();
+    }
+
+    static _isChatInputFocused(chatInput) {
+        const active = document.activeElement;
+        return !!chatInput && (active === chatInput || chatInput.contains?.(active));
+    }
+
+    static _getSpeakerSelectorElement(root = document) {
+        return LichsomaChatDom.query('.lichsoma-speaker-selector', root)
+            || LichsomaChatDom.query('.lichsoma-speaker-selector', document);
+    }
 
     /**
      * `document.fonts` / 월드 설정에 들어간 패밀리 이름 앞뒤의 ASCII 따옴표 제거.
@@ -80,9 +110,9 @@ export class SpeakerSelector {
             this._prepareDnd5eSender($html);
             
             // 메시지 요소에 author.id를 data 속성으로 저장 (챗 머지 기능용)
-            const messageElement = $html.closest('.chat-message');
-            if (messageElement.length && message.author?.id) {
-                messageElement.attr('data-author-id', message.author.id);
+            const messageElement = LichsomaChatDom.getChatMessageElement(html);
+            if (messageElement && message.author?.id) {
+                messageElement.dataset.authorId = message.author.id;
             }
             
             // 플래그에 portraitSrc와 userId가 없으면 저장 (머지 기능을 위해 필요)
@@ -96,7 +126,7 @@ export class SpeakerSelector {
                     headerElement.attr('data-actor-id', actorId);
                 }
             }
-            if (!flags.portraitSrc || !flags.userId) {
+            if (!flags.portraitSrc || !flags.userId || !flags.mergeSpeakerId || !flags.mergeSpeakerType) {
                 let speakerData = message.speaker;
                 if (speakerData && speakerData.token) {
                     // speaker가 이미 있지만 token이 설정된 경우: "항상 액터로 말하기" 적용 (본인 메시지만)
@@ -104,12 +134,7 @@ export class SpeakerSelector {
                     if (alwaysUseActor && message.author?.id === game.user.id) {
                         const tokenFromSpeaker = canvas.tokens?.placeables?.find(t => t.id === speakerData.token);
                         if (tokenFromSpeaker?.actor) {
-                            speakerData = {
-                                alias: tokenFromSpeaker.actor.name,
-                                scene: speakerData.scene || game.scenes.active?.id || null,
-                                actor: tokenFromSpeaker.actor.id,
-                                token: null
-                            };
+                            speakerData = this._buildActorSpeakerData(tokenFromSpeaker.actor, { scene: speakerData.scene || game.scenes.active?.id || null });
                         }
                     }
                 }
@@ -130,30 +155,15 @@ export class SpeakerSelector {
                                     ? game.user.character 
                                     : game.actors.get(game.user.character);
                                 if (character) {
-                                    speakerData = {
-                                        alias: character.name,
-                                        scene: game.scenes.active?.id || null,
-                                        actor: character.id,
-                                        token: null
-                                    };
+                                    speakerData = this._buildActorSpeakerData(character);
                                 }
                             }
                         } else if (alwaysUseActor && token.actor) {
                             // 설정이 활성화되어 있으면 액터로 말하기 (token: null)
-                            speakerData = {
-                                alias: token.actor.name,
-                                scene: game.scenes.active?.id || null,
-                                actor: token.actor.id,
-                                token: null
-                            };
+                            speakerData = this._buildTokenSpeakerData(token, { forceActor: true });
                         } else {
                             // 기본 동작: 토큰으로 말하기
-                            speakerData = {
-                                alias: token.actor?.name || token.name,
-                                scene: game.scenes.active?.id || null,
-                                actor: token.actor?.id || null,
-                                token: token.id || null
-                            };
+                            speakerData = this._buildTokenSpeakerData(token);
                         }
                     } else if (game.user.character) {
                         // 토큰도 없으면 할당된 캐릭터 사용
@@ -161,12 +171,7 @@ export class SpeakerSelector {
                             ? game.user.character 
                             : game.actors.get(game.user.character);
                         if (character) {
-                            speakerData = {
-                                alias: character.name,
-                                scene: game.scenes.active?.id || null,
-                                actor: character.id,
-                                token: null
-                            };
+                            speakerData = this._buildActorSpeakerData(character);
                         }
                     }
                 }
@@ -174,7 +179,7 @@ export class SpeakerSelector {
                 if (speakerData) {
                     const portraitData = this._getMessageImageSync(speakerData, message.author?.id);
                     const actorId = speakerData.actor || null;
-                    const extraFlags = { portraitSrc: portraitData.src, userId: message.author?.id, actorId };
+                    const extraFlags = this._addMergeSpeakerFlags({ portraitSrc: portraitData.src, userId: message.author?.id, actorId }, speakerData, message.author?.id);
                     const existingFlags = message.flags?.['lichsoma-speaker-selector'] || {};
                     const mergedFlags = foundry.utils.mergeObject(existingFlags, extraFlags, { inplace: false });
                     message.updateSource({ flags: { 'lichsoma-speaker-selector': mergedFlags } });
@@ -629,7 +634,7 @@ export class SpeakerSelector {
                 setTimeout(() => {
                     this._applyChatFonts();
                     // 기존 메시지들에도 한자 감싸기 재적용
-                    document.querySelectorAll('.chat-message').forEach(messageEl => {
+                    LichsomaChatDom.findRenderedMessages().forEach(messageEl => {
                         const senderEl = this._getSenderElement($(messageEl));
                         if (senderEl.length) {
                             senderEl[0].removeAttribute('data-lichsoma-chinese-wrapped');
@@ -713,7 +718,7 @@ export class SpeakerSelector {
                 setTimeout(() => {
                     this._applyChatFonts();
                     // 기존 메시지들에도 한자 감싸기 재적용
-                    document.querySelectorAll('.chat-message .message-content').forEach(el => {
+                    LichsomaChatDom.findRenderedMessages().map(el => LichsomaChatDom.getMessageContent(el)).filter(Boolean).forEach(el => {
                         el.removeAttribute('data-lichsoma-chinese-wrapped');
                         this._wrapChineseCharacters(el, 'message');
                     });
@@ -1007,9 +1012,9 @@ export class SpeakerSelector {
         // 이미 narrator-card로 감싸져 있는지 확인
         const htmlContent = messageContent.html() || '';
         if (htmlContent.includes('narrator-card')) {
-            const messageElement = $html.closest('.chat-message');
-            if (messageElement.length) {
-                messageElement.addClass('lichsoma-narrator-card');
+            const messageElement = LichsomaChatDom.getChatMessageElement($html);
+            if (messageElement) {
+                messageElement.classList.add('lichsoma-narrator-card');
             }
             return;
         }
@@ -1021,9 +1026,9 @@ export class SpeakerSelector {
             messageContent.html(`<div class="narrator-card">${innerContent}</div>`);
             
             // 클래스 추가
-            const messageElement = $html.closest('.chat-message');
-            if (messageElement.length) {
-                messageElement.addClass('lichsoma-narrator-card');
+            const messageElement = LichsomaChatDom.getChatMessageElement($html);
+            if (messageElement) {
+                messageElement.classList.add('lichsoma-narrator-card');
             }
         }
     }
@@ -1142,12 +1147,13 @@ export class SpeakerSelector {
 
     static _addDeleteButton(message, html) {
         // chat-message 요소 찾기
-        const $message = html.closest('.chat-message');
-        if (!$message.length) return;
+        const messageElement = LichsomaChatDom.getChatMessageElement(html);
+        if (!messageElement) return;
 
         // notifications 영역이 아닌 일반 채팅에만 추가
-        const isInNotifications = $message.closest('#chat-notifications').length > 0;
-        if (isInNotifications) return;
+        if (LichsomaChatDom.isInChatNotifications(messageElement)) return;
+
+        const $message = $(messageElement);
 
         // 기존 삭제 버튼 제거 (중복 방지)
         $message.find('.lichsoma-delete-btn').remove();
@@ -1266,6 +1272,129 @@ export class SpeakerSelector {
         return portraitContainer;
     }
     
+
+    /**
+     * ChatMessage speaker data를 공식 API를 우선 사용해 생성한다.
+     * - token이 있으면 token speaker
+     * - forceActor가 true면 actor speaker(token null)
+     * - actor/token이 없으면 OOC speaker(actor/token null)
+     *
+     * 반환값은 기존 모듈 로직과 호환되도록 항상
+     * { alias, scene, actor, token } 형태로 정규화한다.
+     */
+    static _buildSpeakerData({ alias = null, actor = null, token = null, scene = null, forceActor = false, user = game.user } = {}) {
+        const sceneDoc = this._resolveSceneDocument(scene);
+        const tokenDoc = forceActor ? null : this._resolveTokenDocument(token);
+        const tokenObject = tokenDoc || token || null;
+        const actorDoc = this._resolveActorDocument(actor || tokenObject?.actor || tokenObject?.document?.actor || null);
+        const fallbackAlias = alias || actorDoc?.name || tokenObject?.name || user?.name || game.user?.name || '';
+        const sceneId = typeof scene === 'string'
+            ? scene
+            : sceneDoc?.id || tokenDoc?.parent?.id || game.scenes?.active?.id || canvas?.scene?.id || null;
+
+        let speaker = null;
+        try {
+            if (typeof ChatMessage?.getSpeaker === 'function') {
+                const speakerOptions = {};
+                if (sceneDoc) speakerOptions.scene = sceneDoc;
+                if (actorDoc) speakerOptions.actor = actorDoc;
+                if (tokenDoc && !forceActor) speakerOptions.token = tokenDoc;
+                if (fallbackAlias) speakerOptions.alias = fallbackAlias;
+                speaker = ChatMessage.getSpeaker(speakerOptions);
+            }
+        } catch (e) {
+            speaker = null;
+        }
+
+        return {
+            alias: speaker?.alias || fallbackAlias,
+            scene: speaker?.scene || sceneId,
+            actor: actorDoc?.id || speaker?.actor || null,
+            token: (!forceActor && tokenDoc) ? (tokenDoc.id || speaker?.token || null) : null
+        };
+    }
+
+    static _buildOocSpeakerData(user = game.user, { alias = null, scene = null } = {}) {
+        const speaker = this._buildSpeakerData({
+            alias: alias || user?.name || game.user?.name || 'Unknown',
+            scene,
+            user
+        });
+        // ChatMessage.getSpeaker()는 인자가 비어 있으면 선택 토큰을 추론할 수 있으므로 OOC는 명시적으로 비운다.
+        speaker.actor = null;
+        speaker.token = null;
+        return speaker;
+    }
+
+    static _buildActorSpeakerData(actor, { alias = null, token = null, useToken = false, scene = null } = {}) {
+        const actorDoc = this._resolveActorDocument(actor);
+        if (!actorDoc) return this._buildOocSpeakerData(game.user, { alias, scene });
+        return this._buildSpeakerData({
+            alias: alias || actorDoc.name,
+            actor: actorDoc,
+            token: useToken ? token : null,
+            scene,
+            forceActor: !useToken
+        });
+    }
+
+    static _buildTokenSpeakerData(token, { alias = null, forceActor = false, scene = null } = {}) {
+        const tokenDoc = this._resolveTokenDocument(token);
+        const tokenObject = tokenDoc || token;
+        const actor = this._resolveActorDocument(tokenObject?.actor || tokenObject?.document?.actor || null);
+        if (forceActor && actor) {
+            return this._buildActorSpeakerData(actor, { alias: alias || actor.name, scene });
+        }
+        return this._buildSpeakerData({
+            alias: alias || actor?.name || tokenObject?.name || '',
+            actor,
+            token: tokenDoc || tokenObject,
+            scene,
+            forceActor
+        });
+    }
+
+    static _resolveSceneDocument(scene = null) {
+        if (!scene) return game.scenes?.active || canvas?.scene || null;
+        if (typeof scene !== 'string') return scene;
+        return game.scenes?.get(scene) || null;
+    }
+
+    static _resolveActorDocument(actor = null) {
+        if (!actor) return null;
+        if (typeof actor === 'string') return game.actors?.get(actor) || null;
+        return actor;
+    }
+
+    static _resolveTokenDocument(token = null) {
+        if (!token) return null;
+        if (typeof token === 'string') {
+            return canvas?.scene?.tokens?.get(token) || game.scenes?.active?.tokens?.get(token) || null;
+        }
+        return token.document || token;
+    }
+
+    static _getAssignedCharacter(user = game.user) {
+        const character = user?.character;
+        if (!character) return null;
+        return character instanceof Actor ? character : game.actors?.get(character) || null;
+    }
+
+    static _findFirstTokenForActor(actor) {
+        const actorDoc = this._resolveActorDocument(actor);
+        if (!actorDoc) return null;
+        const tokens = canvas?.tokens?.placeables?.filter(t => t.actor?.id === actorDoc.id) || [];
+        return tokens.length > 0 ? tokens[0] : null;
+    }
+
+    static _speakerEquals(a, b) {
+        return !!a && !!b &&
+            (a.alias ?? null) === (b.alias ?? null) &&
+            (a.scene ?? null) === (b.scene ?? null) &&
+            (a.actor ?? null) === (b.actor ?? null) &&
+            (a.token ?? null) === (b.token ?? null);
+    }
+
     // 공통: 문서/데이터에 스피커 정보와 센더 이름 플래그 저장
     static _applySpeakerData(doc, data, speakerData, extraFlags = {}) {
         doc.updateSource({ speaker: speakerData });
@@ -1278,37 +1407,49 @@ export class SpeakerSelector {
     
     static _applySenderFlagsToDoc(doc, data, alias, extraFlags = {}, speakerData = null) {
         const moduleFlags = foundry.utils.mergeObject(extraFlags || {}, {}, { inplace: false });
-        // 머지 비교 키 저장 (항상 액터로 말하기 OFF + 토큰으로 말하기일 때 token 기준)
-        if (speakerData && !moduleFlags.mergeSpeakerId) {
-            const mergeKey = this._getMergeSpeakerKey(speakerData);
-            if (mergeKey.mergeSpeakerId) {
-                moduleFlags.mergeSpeakerId = mergeKey.mergeSpeakerId;
-                moduleFlags.mergeSpeakerType = mergeKey.mergeSpeakerType;
-            }
-            if (mergeKey.tokenId) {
-                moduleFlags.tokenId = mergeKey.tokenId;
-            }
-        }
+        const userId = moduleFlags.userId || data?.user || doc?.user?.id || doc?.user || game.user?.id || null;
+
+        // 머지 비교 키 저장
+        // - 토큰 발화는 token 기준
+        // - 액터 발화는 actor 기준
+        // - FVTT v14 기본 Public as User처럼 actor/token이 없는 발화는 user 기준
+        this._addMergeSpeakerFlags(moduleFlags, speakerData, userId);
+
         if (alias) {
             moduleFlags.senderAlias = alias;
         }
         if (!Object.keys(moduleFlags).length) return;
-        
+
         const existingDocFlags = foundry.utils.getProperty(doc, 'flags.lichsoma-speaker-selector') || {};
         const mergedDocFlags = foundry.utils.mergeObject(existingDocFlags, moduleFlags, { inplace: false });
         doc.updateSource({ flags: { 'lichsoma-speaker-selector': mergedDocFlags } });
-        
+
         if (!data.flags) data.flags = {};
         const existingDataFlags = data.flags['lichsoma-speaker-selector'] || {};
         data.flags['lichsoma-speaker-selector'] = Object.assign({}, existingDataFlags, moduleFlags);
     }
 
+    static _addMergeSpeakerFlags(flags, speakerData, userId = null) {
+        if (!flags || flags.mergeSpeakerId) return flags;
+
+        const mergeKey = this._getMergeSpeakerKey(speakerData, userId);
+        if (mergeKey.mergeSpeakerId) {
+            flags.mergeSpeakerId = mergeKey.mergeSpeakerId;
+            flags.mergeSpeakerType = mergeKey.mergeSpeakerType;
+        }
+        if (mergeKey.tokenId) {
+            flags.tokenId = mergeKey.tokenId;
+        }
+        return flags;
+    }
+
     /**
      * 채팅 머지용 비교 키 계산
      * - "항상 액터로 말하기"가 꺼져 있고 speaker.token 이 있으면 token 기준
-     * - 그 외엔 actor 기준
+     * - actor가 있으면 actor 기준
+     * - actor/token이 없으면 FVTT v14 기본 Public as User 병합을 위해 user 기준
      */
-    static _getMergeSpeakerKey(speakerData) {
+    static _getMergeSpeakerKey(speakerData, userId = null) {
         const speaker = speakerData || {};
         const alwaysUseActor = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.ALWAYS_USE_ACTOR);
         const tokenId = speaker.token || null;
@@ -1317,9 +1458,12 @@ export class SpeakerSelector {
         if (!alwaysUseActor && tokenId) {
             return { mergeSpeakerId: tokenId, mergeSpeakerType: 'token', tokenId, actorId };
         }
-        return { mergeSpeakerId: actorId, mergeSpeakerType: 'actor', tokenId, actorId };
+        if (actorId) {
+            return { mergeSpeakerId: actorId, mergeSpeakerType: 'actor', tokenId, actorId };
+        }
+        return { mergeSpeakerId: userId || null, mergeSpeakerType: 'user', tokenId: null, actorId: null };
     }
-    
+
     // 동기 버전의 이미지 주소 가져오기 (플래그 저장용)
     static _getMessageImageSync(speaker, authorId) {
         const speakerObj = speaker || {};
@@ -1509,7 +1653,7 @@ export class SpeakerSelector {
 
         // 채팅 입력 필드 찾기 및 이벤트 리스너 추가
         const setupListener = () => {
-            const chatInput = document.querySelector('#chat-message');
+            const chatInput = this._getChatInputElement();
             if (!chatInput) {
                 // 입력 필드가 아직 없으면 잠시 후 다시 시도
                 setTimeout(setupListener, 500);
@@ -1580,7 +1724,7 @@ export class SpeakerSelector {
     static _onChatInputHookForDescPrefix(event) {
         if (event.key !== 'ArrowUp' || !event.shiftKey) return;
         if (event.ctrlKey || event.metaKey || event.altKey) return;
-        if (!event.target?.closest?.('#chat-message')) return;
+        if (!LichsomaChatDom.isInChatForm(event.target) && !event.target?.closest?.('#chat-message, prose-mirror[name="message"]')) return;
         if (!game.settings.get('lichsoma-speaker-selector', SpeakerSelector.SETTINGS.NARRATOR_CHAT_CARD)) return;
         event.preventDefault();
         SpeakerSelector._insertDescSlashPrefixIntoChatInput();
@@ -1590,12 +1734,12 @@ export class SpeakerSelector {
     /** 채팅 입력(ProseMirror) 커서 위치에 `/desc ` 삽입 */
     static _insertDescSlashPrefixIntoChatInput() {
         const PREFIX = '/desc ';
-        const el = document.querySelector('#chat-message');
+        const el = this._getChatInputElement();
         if (!el) return;
         el.focus();
         if (document.execCommand?.('insertText', false, PREFIX)) return;
 
-        const pmRoot = el.querySelector?.('.ProseMirror');
+        const pmRoot = LichsomaChatDom.getProseMirrorRoot(el);
         const View = foundry.prosemirror?.EditorView;
         if (View && typeof View.findFromDOM === 'function' && pmRoot) {
             const view = View.findFromDOM(pmRoot);
@@ -1655,12 +1799,12 @@ export class SpeakerSelector {
                 const maxAttempts = 5;
                 const checkAndRender = () => {
                     attempts++;
-                    const chatForm = $('#sidebar .chat-form');
-                    const chatControls = chatForm.find('#chat-controls');
-                    const chatInput = chatForm.find('.chat-input');
+                    const chatFormElement = this._getSidebarChatFormElement();
+                    const chatControls = chatFormElement ? LichsomaChatDom.getChatControls(chatFormElement) : null;
+                    const chatInput = chatFormElement ? LichsomaChatDom.getChatInput(chatFormElement) : null;
                     
-                    if (chatForm.length && (chatControls.length || chatInput.length)) {
-                        this._renderSpeakerSelector($(document));
+                    if (chatFormElement && (chatControls || chatInput)) {
+                        this._renderSpeakerSelector(document);
                     } else if (attempts < maxAttempts) {
                         setTimeout(checkAndRender, 100);
                     } else {
@@ -1674,9 +1818,9 @@ export class SpeakerSelector {
         Hooks.on('collapseSidebar', () => {
             setTimeout(() => {
                 if (this._isSidebarCollapsed()) {
-                    $('#sidebar .chat-form').find('.lichsoma-speaker-selector').remove();
+                    this._getSidebarChatFormElement()?.querySelector('.lichsoma-speaker-selector')?.remove();
                 } else {
-                    this._renderSpeakerSelector($(document));
+                    this._renderSpeakerSelector(document);
                 }
             }, 100);
         });
@@ -1684,9 +1828,9 @@ export class SpeakerSelector {
         Hooks.on('expandSidebar', () => {
             setTimeout(() => {
                 if (!this._isSidebarCollapsed()) {
-                    this._renderSpeakerSelector($(document));
+                    this._renderSpeakerSelector(document);
                 } else {
-                    $('#sidebar .chat-form').find('.lichsoma-speaker-selector').remove();
+                    this._getSidebarChatFormElement()?.querySelector('.lichsoma-speaker-selector')?.remove();
                 }
             }, 100);
         });
@@ -1707,19 +1851,21 @@ export class SpeakerSelector {
             this._isRenderingSelector = false;
         }, 1000);
 
-        const $root = html?.find ? html : $(html ?? document);
+        const rootElement = LichsomaChatDom.asElement(html) || document;
 
         // 렌더된 앱 루트(사이드바/팝아웃 등)에서 chat-form 우선 탐색
-        // - renderSidebarTab에서는 document가 넘어오기도 해서, 그 경우에는 #sidebar를 우선
-        let chatForm = ($root[0] === document) ? $('#sidebar .chat-form') : $root.find('.chat-form');
-        if (!chatForm.length) chatForm = $('#sidebar .chat-form');
-        if (!chatForm.length) chatForm = $('.chat-form');
-        chatForm = chatForm.first();
+        // - document가 넘어오면 사이드바 chat-form을 먼저 사용
+        let chatFormElement = rootElement === document
+            ? this._getSidebarChatFormElement(rootElement)
+            : this._getChatFormElement(rootElement);
+        if (!chatFormElement) chatFormElement = this._getSidebarChatFormElement(document) || this._getChatFormElement(document);
 
-        if (!chatForm.length) {
+        if (!chatFormElement) {
             this._isRenderingSelector = false;
             return;
         }
+
+        const chatForm = $(chatFormElement);
 
         // 채팅 컨트롤에 "이미지 삽입" 버튼 추가 (ProseMirror 툴바 대체)
         try {
@@ -1741,14 +1887,14 @@ export class SpeakerSelector {
         }
         
         // notifications에 있는 경우 제외
-        if (chatForm.closest('#chat-notifications').length > 0) {
+        if (LichsomaChatDom.isInChatNotifications(chatFormElement)) {
             this._isRenderingSelector = false;
             return;
         }
 
         // chat-controls와 chat-input 사이에 삽입할 위치 찾기
-        const chatControls = chatForm.find('#chat-controls');
-        const chatInput = chatForm.find('.chat-input');
+        const chatControls = $(LichsomaChatDom.getChatControls(chatFormElement));
+        const chatInput = $(LichsomaChatDom.getChatInput(chatFormElement));
 
         // 스피커 셀렉터 HTML 생성
         const selectorLabel = game.i18n.localize('SPEAKERSELECTOR.Selector.Label');
@@ -2080,11 +2226,12 @@ export class SpeakerSelector {
     }
 
     static _renderChatInsertImageButton(chatForm) {
-        const $chatForm = chatForm?.find ? chatForm : $(chatForm ?? document);
+        const chatFormElement = LichsomaChatDom.asElement(chatForm) || this._getChatFormElement();
+        const $chatForm = chatFormElement ? $(chatFormElement) : $(chatForm ?? document);
         // GM은 보통 #chat-controls .control-buttons 를 가지지만,
         // 플레이어 화면은 해당 영역이 없을 수 있어(#chat-controls만 존재) 폴백을 둔다.
-        let $controls = $chatForm.find('#chat-controls .control-buttons').first();
-        let $controlsRoot = $chatForm.find('#chat-controls').first();
+        let $controls = $(LichsomaChatDom.getChatControlButtons(chatFormElement));
+        let $controlsRoot = $(LichsomaChatDom.getChatControls(chatFormElement));
 
         // control-buttons도 chat-controls도 없으면 삽입 불가
         if (!$controls.length && !$controlsRoot.length) return;
@@ -2115,7 +2262,7 @@ export class SpeakerSelector {
 
         // control-buttons가 있는 환경(GM)은 Export(저장) 버튼 왼쪽에 삽입.
         // 그 외(플레이어 등)는 chat-controls 맨 앞에 삽입.
-        const isControlButtons = $chatForm.find('#chat-controls .control-buttons').first()[0] === $controls[0];
+        const isControlButtons = LichsomaChatDom.getChatControlButtons(chatFormElement) === $controls[0];
         if (isControlButtons) {
             const $exportBtn = $controls
                 .find('button[data-action="export"], button.ui-control.icon.fa-solid.fa-floppy-disk')
@@ -2130,13 +2277,11 @@ export class SpeakerSelector {
     }
 
     static _triggerChatEditorInsertImage(chatForm) {
-        const $chatForm = chatForm?.find ? chatForm : $(chatForm ?? document);
+        const chatFormElement = LichsomaChatDom.asElement(chatForm) || this._getChatFormElement();
+        const $chatForm = chatFormElement ? $(chatFormElement) : $(chatForm ?? document);
 
         // 채팅 입력 에디터 루트 탐색 (사이드바/팝아웃 모두 대응)
-        const editorRoot =
-            $chatForm.find('#chat-message').first()[0] ??
-            document.querySelector('#sidebar .chat-form #chat-message') ??
-            document.querySelector('.chat-form #chat-message');
+        const editorRoot = LichsomaChatDom.getChatInput(chatFormElement) || this._getChatInputElement();
 
         if (!editorRoot) {
             ui?.notifications?.warn?.('채팅 입력창을 찾지 못했습니다.');
@@ -2222,10 +2367,10 @@ export class SpeakerSelector {
             
             // 채팅 입력 필드가 포커스되어 있고, 입력 필드의 값이 메시지 내용과 일치하면 _fromChatInput을 true로 설정
             // (↑ 키로 이전 메시지 불러올 때 대응)
-            const chatInput = document.querySelector('#chat-message');
-            const chatInputFocused = chatInput && document.activeElement === chatInput;
+            const chatInput = this._getChatInputElement();
+            const chatInputFocused = this._isChatInputFocused(chatInput);
             const messageContent = typeof data.content === 'string' ? data.content : '';
-            const chatInputValue = chatInput?.value || '';
+            const chatInputValue = this._getChatInputText(chatInput);
             
             // HTML 태그 제거하여 순수 텍스트만 비교
             const tempDiv = document.createElement('div');
@@ -2286,22 +2431,12 @@ export class SpeakerSelector {
                                     ? game.user.character 
                                     : game.actors.get(game.user.character);
                                 if (character) {
-                                    speakerData = {
-                                        alias: character.name,
-                                        scene: game.scenes.active?.id || null,
-                                        actor: character.id,
-                                        token: null
-                                    };
+                                    speakerData = this._buildActorSpeakerData(character);
                                     needsSpeakerUpdate = true;
                                 }
                             }
                         } else if (token.actor) {
-                            speakerData = {
-                                alias: token.actor.name,
-                                scene: game.scenes.active?.id || null,
-                                actor: token.actor.id,
-                                token: token.id || null
-                            };
+                            speakerData = this._buildTokenSpeakerData(token);
                             needsSpeakerUpdate = true;
                         }
                     } else if (game.user.character) {
@@ -2310,12 +2445,7 @@ export class SpeakerSelector {
                             ? game.user.character 
                             : game.actors.get(game.user.character);
                         if (character) {
-                            speakerData = {
-                                alias: character.name,
-                                scene: game.scenes.active?.id || null,
-                                actor: character.id,
-                                token: null
-                            };
+                            speakerData = this._buildActorSpeakerData(character);
                             needsSpeakerUpdate = true;
                         }
                     }
@@ -2369,12 +2499,7 @@ export class SpeakerSelector {
                         }
                         
                         // OOC로 설정 (나레이터 카드이므로)
-                        const narratorSpeakerData = {
-                            alias: game.user.name,
-                            scene: game.scenes.active?.id || null,
-                            actor: null,
-                            token: null
-                        };
+                        const narratorSpeakerData = this._buildOocSpeakerData(game.user);
                         // 이미지 주소 계산 및 플래그에 저장
                         const portraitData = this._getMessageImageSync(narratorSpeakerData, userId);
                         const actorId = narratorSpeakerData.actor || null;
@@ -2409,12 +2534,7 @@ export class SpeakerSelector {
                     }
                     
                     // OOC로 설정
-                    const oocSpeakerData = {
-                        alias: game.user.name,
-                        scene: game.scenes.active?.id || null,
-                        actor: null,
-                        token: null
-                    };
+                    const oocSpeakerData = this._buildOocSpeakerData(game.user);
                     // 이미지 주소 계산 및 플래그에 저장
                     const portraitData = this._getMessageImageSync(oocSpeakerData, userId);
                     const actorId = oocSpeakerData.actor || null;
@@ -2456,12 +2576,7 @@ export class SpeakerSelector {
                     }
                 }
                 
-                const narratorSpeakerData = {
-                    alias: game.user.name,
-                    scene: game.scenes.active?.id || null,
-                    actor: null,
-                    token: null
-                };
+                const narratorSpeakerData = this._buildOocSpeakerData(game.user);
                 // 이미지 주소 계산 및 플래그에 저장
                 const portraitData = this._getMessageImageSync(narratorSpeakerData, userId);
                 const actorId = narratorSpeakerData.actor || null;
@@ -2474,12 +2589,7 @@ export class SpeakerSelector {
             // OOC 또는 할당된 캐릭터 선택 확인 (2순위, 선택한 토큰보다 우선)
             if (this._selectedSpeaker === 'ooc') {
                 // OOC 선택
-                const oocSpeakerData = {
-                    alias: game.user.name,
-                    scene: game.scenes.active?.id || null,
-                    actor: null,
-                    token: null
-                };
+                const oocSpeakerData = this._buildOocSpeakerData(game.user);
                 // 이미지 주소 계산 및 플래그에 저장
                 const portraitData = this._getMessageImageSync(oocSpeakerData, userId);
                 const actorId = oocSpeakerData.actor || null;
@@ -2500,12 +2610,7 @@ export class SpeakerSelector {
                     const tokens = canvas.tokens?.placeables?.filter(t => t.actor?.id === character.id) || [];
                     const token = tokens.length > 0 ? tokens[0] : null;
                     
-                    const characterSpeakerData = {
-                        alias: character.name,
-                        scene: game.scenes.active?.id || null,
-                        actor: character.id,
-                        token: alwaysUseActor ? null : (token?.id || null)
-                    };
+                    const characterSpeakerData = this._buildActorSpeakerData(character, { token, useToken: !alwaysUseActor });
                     // 감정 포트레잇이 선택된 경우 플래그에 저장
                     const updateData = { speaker: characterSpeakerData };
                     ActorEmotions.addEmotionFlagsToMessage(updateData);
@@ -2536,12 +2641,7 @@ export class SpeakerSelector {
                         return;
                     }
                     
-                    const actorSpeakerData = {
-                        alias: actor.name,
-                        scene: game.scenes.active?.id || null,
-                        actor: actor.id,
-                        token: null
-                    };
+                    const actorSpeakerData = this._buildActorSpeakerData(actor);
                     
                     // 감정 포트레잇이 선택된 경우 플래그에 저장
                     const updateData = { speaker: actorSpeakerData };
@@ -2583,21 +2683,11 @@ export class SpeakerSelector {
                             ? game.user.character 
                             : game.actors.get(game.user.character);
                         if (character) {
-                            speakerData = {
-                                alias: character.name,
-                                scene: game.scenes.active?.id || null,
-                                actor: character.id,
-                                token: null
-                            };
+                            speakerData = this._buildActorSpeakerData(character);
                         }
                     } else {
                         // 할당된 캐릭터가 없으면 OOC로 설정
-                        speakerData = {
-                            alias: game.user.name,
-                            scene: game.scenes.active?.id || null,
-                            actor: null,
-                            token: null
-                        };
+                        speakerData = this._buildOocSpeakerData(game.user);
                     }
                     
                     if (speakerData) {
@@ -2615,31 +2705,16 @@ export class SpeakerSelector {
                 if (!speakerData && selectedTokens.length > 0) {
                     if (alwaysUseActor && token.actor) {
                         // 설정이 활성화되어 있으면 액터로 말하기 (token: null)
-                        speakerData = {
-                            alias: token.actor.name,
-                            scene: game.scenes.active?.id || null,
-                            actor: token.actor.id,
-                            token: null
-                        };
+                        speakerData = this._buildTokenSpeakerData(token, { forceActor: true });
                     } else {
                         // 기본 동작: 토큰으로 말하기
-                        speakerData = {
-                            alias: token.actor?.name || token.name,
-                            scene: game.scenes.active?.id || null,
-                            actor: token.actor?.id || null,
-                            token: token.id || null
-                        };
+                        speakerData = this._buildTokenSpeakerData(token);
                     }
                 } else if (speakerData && alwaysUseActor && speakerData.token) {
                     // 이미 speakerData가 있지만 토큰이 설정되어 있고, 설정이 활성화되어 있으면 액터로 변경
                     const tokenFromSpeaker = canvas.tokens?.placeables?.find(t => t.id === speakerData.token);
                     if (tokenFromSpeaker && tokenFromSpeaker.actor) {
-                        speakerData = {
-                            alias: tokenFromSpeaker.actor.name,
-                            scene: speakerData.scene || game.scenes.active?.id || null,
-                            actor: tokenFromSpeaker.actor.id,
-                            token: null
-                        };
+                        speakerData = this._buildActorSpeakerData(tokenFromSpeaker.actor, { scene: speakerData.scene || game.scenes.active?.id || null });
                     }
                 }
                 
@@ -2670,12 +2745,7 @@ export class SpeakerSelector {
                         const token = tokens.length > 0 ? tokens[0] : null;
                         
                         // 토큰이 없어도 액터만으로 설정 (토큰이 현재 씬에 없어도 할당된 캐릭터로 말하기)
-                        const speakerData = {
-                            alias: character.name,
-                            scene: game.scenes.active?.id || null,
-                            actor: character.id,
-                            token: alwaysUseActor ? null : (token?.id || null)  // "항상 액터로 말하기"가 켜져있으면 토큰을 null로 설정
-                        };
+                        const speakerData = this._buildActorSpeakerData(character, { token, useToken: !alwaysUseActor });
                         
                         // 이미지 주소 계산 및 플래그에 저장
                         const portraitData = this._getMessageImageSync(speakerData, userId);
@@ -2690,12 +2760,7 @@ export class SpeakerSelector {
                 // 플레이어가 토큰을 선택하지 않고 셀렉터로도 아무것도 선택하지 않았을 때 OOC로 말하기
                 // "항상 액터로 말하기"는 토큰 선택 시에만 적용되므로 여기서는 체크하지 않음
                 if (!alwaysUseCharacter) {
-                    const oocSpeakerData = {
-                        alias: game.user.name,
-                        scene: game.scenes.active?.id || null,
-                        actor: null,
-                        token: null
-                    };
+                    const oocSpeakerData = this._buildOocSpeakerData(game.user);
                     // 이미지 주소 계산 및 플래그에 저장
                     const portraitData = this._getMessageImageSync(oocSpeakerData, userId);
                     const actorId = oocSpeakerData.actor || null;
@@ -2716,10 +2781,10 @@ export class SpeakerSelector {
             
             // 채팅 입력 필드가 포커스되어 있고, 입력 필드의 값이 메시지 내용과 일치하면 _fromChatInput을 true로 설정
             // (↑ 키로 이전 메시지 불러올 때 대응)
-            const chatInput = document.querySelector('#chat-message');
-            const chatInputFocused = chatInput && document.activeElement === chatInput;
+            const chatInput = this._getChatInputElement();
+            const chatInputFocused = this._isChatInputFocused(chatInput);
             const messageContent = typeof message.content === 'string' ? message.content : '';
-            const chatInputValue = chatInput?.value || '';
+            const chatInputValue = this._getChatInputText(chatInput);
             
             // HTML 태그 제거하여 순수 텍스트만 비교
             const tempDiv = document.createElement('div');
@@ -2742,12 +2807,7 @@ export class SpeakerSelector {
                     if (alwaysUseActor) {
                         const tokenFromSpeaker = canvas.tokens?.placeables?.find(t => t.id === speakerData.token);
                         if (tokenFromSpeaker?.actor) {
-                            speakerData = {
-                                alias: tokenFromSpeaker.actor.name,
-                                scene: speakerData.scene || game.scenes.active?.id || null,
-                                actor: tokenFromSpeaker.actor.id,
-                                token: null
-                            };
+                            speakerData = this._buildActorSpeakerData(tokenFromSpeaker.actor, { scene: speakerData.scene || game.scenes.active?.id || null });
                             // 메시지 speaker도 액터로 업데이트 (다른 클라이언트/재렌더 시 일관성)
                             message.updateSource({ speaker: speakerData });
                             this._ensureMessageSenderAlias(message, speakerData.alias);
@@ -2771,30 +2831,15 @@ export class SpeakerSelector {
                                     ? game.user.character 
                                     : game.actors.get(game.user.character);
                                 if (character) {
-                                    speakerData = {
-                                        alias: character.name,
-                                        scene: game.scenes.active?.id || null,
-                                        actor: character.id,
-                                        token: null
-                                    };
+                                    speakerData = this._buildActorSpeakerData(character);
                                 }
                             }
                         } else if (alwaysUseActor && token.actor) {
                             // 설정이 활성화되어 있으면 액터로 말하기 (token: null)
-                            speakerData = {
-                                alias: token.actor.name,
-                                scene: game.scenes.active?.id || null,
-                                actor: token.actor.id,
-                                token: null
-                            };
+                            speakerData = this._buildTokenSpeakerData(token, { forceActor: true });
                         } else {
                             // 기본 동작: 토큰으로 말하기
-                            speakerData = {
-                                alias: token.actor?.name || token.name,
-                                scene: game.scenes.active?.id || null,
-                                actor: token.actor?.id || null,
-                                token: token.id || null
-                            };
+                            speakerData = this._buildTokenSpeakerData(token);
                         }
                     } else {
                         // 토큰도 없으면 "항상 액터로 말하기" 또는 할당된 캐릭터 사용
@@ -2806,12 +2851,7 @@ export class SpeakerSelector {
                                 ? game.user.character 
                                 : game.actors.get(game.user.character);
                             if (character) {
-                                speakerData = {
-                                    alias: character.name,
-                                    scene: game.scenes.active?.id || null,
-                                    actor: character.id,
-                                    token: null
-                                };
+                                speakerData = this._buildActorSpeakerData(character);
                             }
                         } else if (game.user.character) {
                             // 할당된 캐릭터 사용
@@ -2819,12 +2859,7 @@ export class SpeakerSelector {
                                 ? game.user.character 
                                 : game.actors.get(game.user.character);
                             if (character) {
-                                speakerData = {
-                                    alias: character.name,
-                                    scene: game.scenes.active?.id || null,
-                                    actor: character.id,
-                                    token: null
-                                };
+                                speakerData = this._buildActorSpeakerData(character);
                             }
                         }
                     }
@@ -2845,12 +2880,7 @@ export class SpeakerSelector {
             // 나레이터 모드 체크 (최우선)
             if (this._narratorModeActive && game.user.isGM) {
                 // 나레이터 모드면 이미 OOC로 설정되어 있어야 함
-                const narratorSpeaker = {
-                    alias: game.user.name,
-                    scene: game.scenes.active?.id || null,
-                    actor: null,
-                    token: null
-                };
+                const narratorSpeaker = this._buildOocSpeakerData(game.user);
                 
                 if (message.speaker?.actor || message.speaker?.token) {
                     message.updateSource({ speaker: narratorSpeaker });
@@ -2873,12 +2903,7 @@ export class SpeakerSelector {
             const isAtOOC = message.flags?.['lichsoma-speaker-selector']?.isAtOOC;
             if (isAtOOC) {
                 // OOC로 설정
-                const oocSpeaker = {
-                    alias: game.user.name,
-                    scene: game.scenes.active?.id || null,
-                    actor: null,
-                    token: null
-                };
+                const oocSpeaker = this._buildOocSpeakerData(game.user);
                 
                 if (message.speaker?.actor || message.speaker?.token) {
                     message.updateSource({ speaker: oocSpeaker });
@@ -2900,12 +2925,7 @@ export class SpeakerSelector {
             // OOC 또는 할당된 캐릭터 선택 확인 (2순위, 선택한 토큰보다 우선)
             if (this._selectedSpeaker === 'ooc') {
                 // OOC 선택
-                const oocSpeaker = {
-                    alias: game.user.name,
-                    scene: game.scenes.active?.id || null,
-                    actor: null,
-                    token: null
-                };
+                const oocSpeaker = this._buildOocSpeakerData(game.user);
                 
                 if (message.speaker?.actor || message.speaker?.token) {
                     message.updateSource({ speaker: oocSpeaker });
@@ -2936,12 +2956,7 @@ export class SpeakerSelector {
                     const tokens = canvas.tokens?.placeables?.filter(t => t.actor?.id === character.id) || [];
                     const token = tokens.length > 0 ? tokens[0] : null;
                     
-                    const expectedSpeaker = {
-                        alias: character.name,
-                        scene: game.scenes.active?.id || null,
-                        actor: character.id,
-                        token: alwaysUseActor ? null : (token?.id || null)
-                    };
+                    const expectedSpeaker = this._buildActorSpeakerData(character, { token, useToken: !alwaysUseActor });
                     
                     // 이미지 주소 계산 및 플래그에 저장
                     const portraitData = this._getMessageImageSync(expectedSpeaker, message.author?.id);
@@ -2979,12 +2994,7 @@ export class SpeakerSelector {
                         return;
                     }
                     
-                    const expectedSpeaker = {
-                        alias: actor.name,
-                        scene: game.scenes.active?.id || null,
-                        actor: actor.id,
-                        token: null
-                    };
+                    const expectedSpeaker = this._buildActorSpeakerData(actor);
                     
                     // 이미지 주소 계산 및 플래그에 저장
                     const portraitData = this._getMessageImageSync(expectedSpeaker, message.author?.id);
@@ -3029,12 +3039,7 @@ export class SpeakerSelector {
                             ? game.user.character 
                             : game.actors.get(game.user.character);
                         if (character) {
-                            const expectedSpeaker = {
-                                alias: character.name,
-                                scene: message.speaker.scene || game.scenes.active?.id || null,
-                                actor: character.id,
-                                token: null
-                            };
+                            const expectedSpeaker = this._buildActorSpeakerData(character, { scene: message.speaker.scene || game.scenes.active?.id || null });
                             
                             // 스피커 업데이트
                             if (!message.speaker || 
@@ -3062,12 +3067,7 @@ export class SpeakerSelector {
                 if (alwaysUseActor && message.speaker.token) {
                     const token = canvas.tokens?.placeables?.find(t => t.id === message.speaker.token);
                     if (token && token.actor) {
-                        const expectedSpeaker = {
-                            alias: token.actor.name,
-                            scene: message.speaker.scene || game.scenes.active?.id || null,
-                            actor: token.actor.id,
-                            token: null
-                        };
+                        const expectedSpeaker = this._buildTokenSpeakerData(token, { forceActor: true, scene: message.speaker.scene || game.scenes.active?.id || null });
                         
                         // 스피커 업데이트
                         if (message.speaker.alias !== expectedSpeaker.alias ||
@@ -3115,12 +3115,7 @@ export class SpeakerSelector {
                         const token = tokens.length > 0 ? tokens[0] : null;
                         
                         // 메시지의 스피커가 올바르게 설정되었는지 확인
-                        const expectedSpeaker = {
-                            alias: character.name,
-                            scene: game.scenes.active?.id || null,
-                            actor: character.id,
-                            token: alwaysUseActor ? null : (token?.id || null)  // "항상 액터로 말하기"가 켜져있으면 토큰을 null로 설정
-                        };
+                        const expectedSpeaker = this._buildActorSpeakerData(character, { token, useToken: !alwaysUseActor });
                         
                         // 이미지 주소 계산 및 플래그에 저장
                         const portraitData = this._getMessageImageSync(expectedSpeaker, message.author?.id);
@@ -3148,12 +3143,7 @@ export class SpeakerSelector {
                 // 플레이어가 토큰을 선택하지 않고 셀렉터로도 아무것도 선택하지 않았을 때 OOC로 말하기
                 // "항상 액터로 말하기"는 토큰 선택 시에만 적용되므로 여기서는 체크하지 않음
                 if (!alwaysUseCharacter) {
-                    const oocSpeaker = {
-                        alias: game.user.name,
-                        scene: game.scenes.active?.id || null,
-                        actor: null,
-                        token: null
-                    };
+                    const oocSpeaker = this._buildOocSpeakerData(game.user);
                     
                     // 스피커가 다르면 업데이트
                     if (!message.speaker || 
@@ -4438,7 +4428,7 @@ SpeakerSelector._handleActorSearch = function(searchTerm) {
 
 // 특정 액터의 드롭다운 옵션만 업데이트 (감정 이름 표시용)
 SpeakerSelector._updateActorOptionInDropdown = function(actorId) {
-    const selector = document.querySelector('.lichsoma-speaker-selector');
+    const selector = this._getSpeakerSelectorElement();
     if (!selector) {
         return;
     }
@@ -4508,14 +4498,14 @@ SpeakerSelector._updateActorOptionInDropdown = function(actorId) {
 };
 
 SpeakerSelector._updateSpeakerDropdown = function() {
-    const selector = document.querySelector('.lichsoma-speaker-selector');
+    const selector = this._getSpeakerSelectorElement();
     if (selector) {
         // 현재 선택된 값 저장
         const currentValue = selector.querySelector('.speaker-dropdown')?.value || this._selectedSpeaker;
-        this._renderSpeakerSelector($(document));
+        this._renderSpeakerSelector(document);
         // 선택 값 복원 및 감정 버튼 상태 복원
         setTimeout(() => {
-            const newSelector = document.querySelector('.lichsoma-speaker-selector');
+            const newSelector = this._getSpeakerSelectorElement();
             if (newSelector && currentValue) {
                 const dropdown = newSelector.querySelector('.speaker-dropdown');
                 if (dropdown) {

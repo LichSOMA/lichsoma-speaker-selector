@@ -2,6 +2,8 @@
  * LichSOMA Chat Resizer — 사이드바 너비·채팅 입력(--chat-input-height) 드래그 조절
  */
 
+import { LichsomaChatDom } from './lichsoma-chat-dom.js';
+
 const MODULE_ID = 'lichsoma-speaker-selector';
 const SETTING_KEY_WIDTH = 'sidebarWidthPx';
 const SETTING_KEY_MIN_WIDTH = 'sidebarMinWidthPx';
@@ -16,6 +18,19 @@ const DEFAULT_CHAT_INPUT_HEIGHT = 78;
 
 export class ChatSidebarResizer {
     static _resizeClampTimer = null;
+
+    static _getSidebar() {
+        return LichsomaChatDom.getSidebar();
+    }
+
+    static _getSidebarContent() {
+        return LichsomaChatDom.getSidebarContent();
+    }
+
+    static _getEditorContainer() {
+        const sidebar = this._getSidebar();
+        return LichsomaChatDom.getChatEditorContainer(sidebar ?? document);
+    }
 
     static init() {
         game.settings.register(MODULE_ID, SETTING_KEY_MIN_WIDTH, {
@@ -108,14 +123,14 @@ export class ChatSidebarResizer {
     }
 
     static _applyWidth(px) {
-        const sidebar = document.querySelector('#sidebar');
+        const sidebar = this._getSidebar();
         if (!sidebar) return;
         const w = this._clampWidth(px);
         sidebar.style.setProperty('--sidebar-width', `${w}px`);
     }
 
     static _applyChatInputHeight(px) {
-        const sidebar = document.querySelector('#sidebar');
+        const sidebar = this._getSidebar();
         if (!sidebar) return;
         const h = this._clampChatInputHeight(px);
         sidebar.style.setProperty('--chat-input-height', `${h}px`);
@@ -161,7 +176,7 @@ export class ChatSidebarResizer {
     }
 
     static _installSidebarHandle() {
-        const content = document.querySelector('#sidebar-content');
+        const content = this._getSidebarContent();
         if (!content || content.querySelector(':scope > .lichsoma-sidebar-resize-handle')) return;
 
         const handle = document.createElement('div');
@@ -174,7 +189,7 @@ export class ChatSidebarResizer {
 
         handle.addEventListener('pointerdown', (ev) => {
             if (ev.button !== 0) return;
-            const sidebar = document.querySelector('#sidebar');
+            const sidebar = this._getSidebar();
             if (!sidebar) return;
 
             const startX = ev.clientX;
@@ -235,7 +250,7 @@ export class ChatSidebarResizer {
         const maxAttempts = 20;
         const delayMs = 50;
 
-        const editorContainer = document.querySelector('#sidebar #chat-message > .editor-container');
+        const editorContainer = this._getEditorContainer();
         if (!editorContainer) {
             if (attempt < maxAttempts) {
                 setTimeout(() => this._installEditorHeightHandleAttempt(attempt + 1), delayMs);
@@ -243,7 +258,7 @@ export class ChatSidebarResizer {
             return;
         }
 
-        const sidebar = document.querySelector('#sidebar');
+        const sidebar = this._getSidebar();
         if (!sidebar) return;
 
         // 탭 전환 등으로 DOM이 바뀌면 핸들이 옛 부모에 남을 수 있음 — 현재 컨테이너가 아니면 제거
