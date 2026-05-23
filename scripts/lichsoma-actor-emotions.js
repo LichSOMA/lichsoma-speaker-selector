@@ -385,6 +385,16 @@ export class ActorEmotions {
                 SpeakerSelector._updateSpeakerDropdown();
             }
         }
+
+        // 다른 모듈/렌더러가 감정 변경에 반응할 수 있도록 알림.
+        // dnd5e avatar 연동은 메시지 생성 시 flags.portraitSrc를 통해 확정되지만,
+        // 이 이벤트는 향후 실시간 UI 갱신이나 프리뷰 갱신에도 사용할 수 있다.
+        document.dispatchEvent(new CustomEvent('lichsoma-speaker-selector:emotionChanged', {
+            detail: {
+                actorId,
+                emotion: this._actorEmotionMap.get(actorId) || null
+            }
+        }));
     }
 
     static async showEmotionSelector(selector, actorId) {
@@ -445,14 +455,32 @@ export class ActorEmotions {
         if (this._currentEmotionPortrait) {
             data.flags = data.flags || {};
             data.flags['lichsoma-speaker-selector'] = data.flags['lichsoma-speaker-selector'] || {};
-            data.flags['lichsoma-speaker-selector'].emotionPortrait = this._currentEmotionPortrait;
-            data.flags['lichsoma-speaker-selector'].emotionId = this._currentEmotion;
+
+            const flags = data.flags['lichsoma-speaker-selector'];
+            flags.emotionPortrait = this._currentEmotionPortrait;
+            flags.emotionId = this._currentEmotion;
+            flags.emotionName = this._currentEmotionName;
+
+            // dnd5e native header는 LichSOMA 포트레잇 컨테이너를 추가하지 않고
+            // 원본 avatar img의 src만 교체하므로, 메시지 생성 단계에서 portraitSrc도 같이 남겨둔다.
+            // 감정을 선택한 경우에는 기본 액터/토큰 이미지보다 감정 포트레잇이 우선해야 한다.
+            flags.portraitSrc = this._currentEmotionPortrait;
         }
     }
 
-    static getEmotionPortraitForMessage(message) {
+    static getEmotionDataForMessage(message) {
         const flags = message.flags?.['lichsoma-speaker-selector'];
-        return flags?.emotionPortrait || null;
+        if (!flags?.emotionPortrait) return null;
+
+        return {
+            emotionId: flags.emotionId || null,
+            emotionName: flags.emotionName || null,
+            emotionPortrait: flags.emotionPortrait
+        };
+    }
+
+    static getEmotionPortraitForMessage(message) {
+        return this.getEmotionDataForMessage(message)?.emotionPortrait || null;
     }
 }
 

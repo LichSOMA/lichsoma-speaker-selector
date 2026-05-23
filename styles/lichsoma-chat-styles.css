@@ -1,4 +1,8 @@
 /* 기본 채팅(전체) 메시지 스타일 수정 */
+.chat-message {
+    padding: 0.5rem 0.5rem 0 !important;
+}
+
 .chat-message .message-metadata {
     display: none;
 }
@@ -174,7 +178,6 @@
     display: none !important;
 }
 
-
 /* narrator-card 스타일 */
 .chat-message .message-content .narrator-card {
     font-style: italic;
@@ -195,6 +198,37 @@
     font-size: 0.65em;
     line-height: 1;
     letter-spacing: 0;
+}
+
+
+:is(.chat-popout) .message {
+    background: #0B0A13 !important;
+}
+
+:is(.chat-popout) .message .message-header {
+    margin-bottom: 0 !important;
+}
+
+:is(.chat-popout) .message .message-header .message-metadata {
+    display: none !important;
+}
+
+.chat-message .message-content img {
+    padding: 4px 0px;
+}
+
+/* Foundry VTT 13 <hr> 스타일 제거 */
+.chat-message .message-content hr,
+.chat-message hr {
+    background: none !important;
+    border-top: 1px solid currentColor !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+    height: 1px !important;
+    width: 100% !important;
+    color: rgb(255, 255, 255, 0.5) !important;
+    margin: 0.2em 0 !important;
+    padding: 0 !important;
 }
 
 /* pf2e 헤더 편집 */
@@ -273,20 +307,6 @@
     background: none !important;
 }
 
-/* Foundry VTT 13 <hr> 스타일 제거 */
-.chat-message .message-content hr,
-.chat-message hr {
-    background: none !important;
-    border-top: 1px solid currentColor !important;
-    box-shadow: none !important;
-    opacity: 1 !important;
-    height: 1px !important;
-    width: 100% !important;
-    color: rgb(255, 255, 255, 0.5) !important;
-    margin: 0.2em 0 !important;
-    padding: 0 !important;
-}
-
 /* D&D 5e native chat header / merge adjustments */
 .system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .lichsoma-chat-portrait-container,
 .system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-sender[data-lichsoma-sender="true"] {
@@ -294,6 +314,7 @@
 }
 
 .system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-header {
+    margin-bottom: 0 !important;
     display: flex;
 }
 
@@ -394,7 +415,7 @@
 
 
 .chat-scroll .chat-message {
-    margin: 0px 1px -20px 5px !important;
+    margin: 0px 1px -12px 5px !important;
 }
 
 .system-dnd5e .chat-scroll .chat-message.dnd5e2,
@@ -494,4 +515,3 @@
 .system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .card-footer.pills .pill {
     color: #e8e8e8be !important;
 }
-

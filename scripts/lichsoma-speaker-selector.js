@@ -85,10 +85,7 @@ export class SpeakerSelector {
     }
 
     static _getAlwaysUseActorSetting() {
-        // dnd5e에서는 토큰 발화 기준을 유지해야 하므로 항상 false로 취급한다.
-        return this._isDnd5eSystem()
-            ? false
-            : game.settings.get('lichsoma-speaker-selector', this.SETTINGS.ALWAYS_USE_ACTOR);
+        return game.settings.get('lichsoma-speaker-selector', this.SETTINGS.ALWAYS_USE_ACTOR);
     }
 
     static _getMessageAuthorColor(message) {
@@ -120,6 +117,219 @@ export class SpeakerSelector {
         // dnd5e 기본 헤더의 subtitle은 대체로 메시지 작성자 이름이다.
         // author 이름을 얻지 못한 경우에도 subtitle 요소 자체는 유지해 헤더 높이를 통일한다.
         return this._getMessageAuthorName(message) || '\u00A0';
+    }
+
+    static _getDnd5eTitleAlias(message) {
+        if (!message) return '';
+
+        const flags = message.flags?.['lichsoma-speaker-selector'] || {};
+        if (flags.senderAlias) return flags.senderAlias;
+
+        const speaker = message.speaker || {};
+        const actorId = flags.actorId || speaker.actor || null;
+        const actor = actorId ? game.actors?.get(actorId) : null;
+
+        // 셀렉터가 액터 발화로 저장한 메시지이거나, "항상 액터로 말하기"가 켜져 있거나,
+        // speaker.token이 없는 actor speaker라면 dnd5e 원본 name-stacked title도 actor 이름을 우선한다.
+        // 반대로 토큰 발화는 senderAlias가 저장되어 있으면 그 값을 쓰고, 없으면 dnd5e 기본 alias를 유지한다.
+        if (this._isDnd5eSystem() && actor?.name) {
+            const mergeType = flags.mergeSpeakerType || null;
+            const shouldPreferActorName = this._getAlwaysUseActorSetting()
+                || mergeType === 'actor'
+                || !speaker.token;
+
+            if (shouldPreferActorName) return actor.name;
+        }
+
+        return speaker.alias
+            || message.alias
+            || actor?.name
+            || this._getMessageAuthorName(message)
+            || '';
+    }
+
+    static _applyDnd5eNameStackedTitleAlias(message, html) {
+        if (!this._isDnd5eNativeHeaderMessage(message, html)) return;
+
+        const messageElement = LichsomaChatDom.getChatMessageElement(html);
+        if (!messageElement) return;
+
+        const header = messageElement.querySelector('.message-header');
+        const sender = header?.querySelector('.message-sender');
+        if (!sender) return;
+
+        let nameStacked = sender.querySelector('.name-stacked');
+        let title = nameStacked?.querySelector('.title') || null;
+
+        if (!nameStacked) {
+            const avatar = sender.querySelector(':scope > .avatar');
+            const existingTitleText = Array.from(sender.childNodes)
+                .filter((node) => node !== avatar)
+                .map((node) => node.textContent || '')
+                .join(' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            Array.from(sender.childNodes).forEach((node) => {
+                if (node !== avatar) node.remove();
+            });
+
+            nameStacked = document.createElement('span');
+            nameStacked.classList.add('name-stacked');
+
+            title = document.createElement('span');
+            title.classList.add('title');
+            title.textContent = existingTitleText || '\u00A0';
+
+            nameStacked.appendChild(title);
+            sender.appendChild(nameStacked);
+        } else if (!title) {
+            title = document.createElement('span');
+            title.classList.add('title');
+            title.textContent = '\u00A0';
+            nameStacked.insertBefore(title, nameStacked.firstChild);
+        }
+
+        const alias = this._getDnd5eTitleAlias(message);
+        if (alias && title) {
+            title.textContent = alias;
+            title.dataset.lichsomaSenderAlias = 'true';
+        }
+    }
+
+    static _scheduleDnd5eTitleAliasApply(message, html) {
+        if (!this._isDnd5eNativeHeaderMessage(message, html)) return;
+
+        const messageElement = LichsomaChatDom.getChatMessageElement(html);
+        if (!messageElement) return;
+
+        const apply = () => {
+            this._applyDnd5eNameStackedTitleAlias(message, messageElement);
+        };
+
+        // dnd5e/core가 첫 렌더 직후 name-stacked title을 다시 정리하는 경우가 있어,
+        // avatar와 동일하게 여러 타이밍에서 title alias를 재적용한다.
+        apply();
+
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(apply);
+        }
+
+        setTimeout(apply, 0);
+        setTimeout(apply, 50);
+        setTimeout(apply, 150);
+        setTimeout(apply, 300);
+    }
+
+    static _getRenderedChatMessageElement(message) {
+        const messageId = message?.id || message?._id || null;
+        if (!messageId) return null;
+
+        return document.querySelector(`[data-message-id="${messageId}"]`)
+            || document.querySelector(`li.chat-message[data-message-id="${messageId}"]`)
+            || null;
+    }
+
+    static _scheduleRenderedDnd5eHeaderEnhancements(message, srcOverride = null) {
+        if (!this._isDnd5eSystem() || !message) return;
+
+        const apply = () => {
+            const messageElement = this._getRenderedChatMessageElement(message);
+            if (!messageElement) return;
+
+            this._scheduleDnd5eTitleAliasApply(message, messageElement);
+            this._scheduleDnd5eAvatarPortraitApply(message, messageElement, srcOverride);
+        };
+
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(apply);
+        }
+
+        setTimeout(apply, 0);
+        setTimeout(apply, 50);
+        setTimeout(apply, 150);
+        setTimeout(apply, 300);
+    }
+
+    static _getDnd5eAvatarPortraitSrc(message, fallbackSrc = null) {
+        if (!message) return fallbackSrc || null;
+
+        const flags = message.flags?.['lichsoma-speaker-selector'] || {};
+
+        // 감정 포트레잇은 dnd5e 원본 avatar가 참조해야 할 최우선 이미지다.
+        // portraitSrc가 다른 경로에서 기본 액터/토큰 이미지로 덮인 경우에도 emotionPortrait가 우선한다.
+        try {
+            const emotionPortrait = ActorEmotions?.getEmotionPortraitForMessage?.(message);
+            if (emotionPortrait) return emotionPortrait;
+        } catch (e) {
+            // 감정 포트레잇 확인 실패 시 저장된 portraitSrc / fallback으로 진행
+        }
+
+        if (flags.emotionPortrait) return flags.emotionPortrait;
+        if (flags.portraitSrc) return flags.portraitSrc;
+        if (fallbackSrc) return fallbackSrc;
+
+        const portraitData = this._getMessageImageSync(message.speaker, message.author?.id);
+        return portraitData?.src || null;
+    }
+
+    static _applyDnd5eAvatarPortrait(message, html, srcOverride = null) {
+        if (!this._isDnd5eNativeHeaderMessage(message, html)) return;
+
+        const messageElement = LichsomaChatDom.getChatMessageElement(html);
+        if (!messageElement) return;
+
+        const avatar = messageElement.querySelector('.message-header .message-sender .avatar');
+        const img = avatar?.querySelector?.('img');
+        if (!avatar || !img) return;
+
+        const portraitSrc = this._getDnd5eAvatarPortraitSrc(message, srcOverride);
+        if (!portraitSrc) return;
+
+        if (!img.dataset.lichsomaOriginalSrc) {
+            img.dataset.lichsomaOriginalSrc = img.getAttribute('src') || '';
+        }
+
+        if (img.getAttribute('src') !== portraitSrc) {
+            img.setAttribute('src', portraitSrc);
+        }
+        img.dataset.lichsomaPortraitSrc = portraitSrc;
+        avatar.dataset.lichsomaPortraitSrc = portraitSrc;
+
+        const alias = this._getDnd5eTitleAlias(message) || message?.speaker?.alias || '';
+        if (alias) img.setAttribute('alt', alias);
+
+        // dnd5e 원본 avatar에도 LichSOMA 포트레잇 프리뷰를 연결한다.
+        if (ChatUI && typeof ChatUI._attachPortraitPreview === 'function') {
+            try {
+                ChatUI._attachPortraitPreview(avatar, portraitSrc);
+            } catch (e) {
+                // 프리뷰 연결 실패는 표시 자체에 영향을 주지 않으므로 무시
+            }
+        }
+    }
+
+    static _scheduleDnd5eAvatarPortraitApply(message, html, srcOverride = null) {
+        if (!this._isDnd5eNativeHeaderMessage(message, html)) return;
+
+        const messageElement = LichsomaChatDom.getChatMessageElement(html);
+        if (!messageElement) return;
+
+        const apply = () => {
+            this._applyDnd5eAvatarPortrait(message, messageElement, srcOverride);
+        };
+
+        // 첫 렌더 직후 dnd5e/core가 header avatar를 다시 정리하는 경우가 있어,
+        // 즉시 1회 + 다음 프레임 + 짧은 지연 재적용으로 첫 입력 시점의 누락을 막는다.
+        apply();
+
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(apply);
+        }
+
+        setTimeout(apply, 0);
+        setTimeout(apply, 50);
+        setTimeout(apply, 150);
     }
 
     static _ensureDnd5eNameStackedSubtitle(message, html) {
@@ -295,10 +505,18 @@ export class SpeakerSelector {
                 if (speakerData) {
                     const portraitData = this._getMessageImageSync(speakerData, message.author?.id);
                     const actorId = speakerData.actor || null;
-                    const extraFlags = this._addMergeSpeakerFlags({ portraitSrc: portraitData.src, userId: message.author?.id, actorId }, speakerData, message.author?.id);
+                    const extraFlags = this._addMergeSpeakerFlags(
+                        { portraitSrc: portraitData.src, userId: message.author?.id, actorId, senderAlias: speakerData.alias },
+                        speakerData,
+                        message.author?.id
+                    );
                     const existingFlags = message.flags?.['lichsoma-speaker-selector'] || {};
                     const mergedFlags = foundry.utils.mergeObject(existingFlags, extraFlags, { inplace: false });
                     message.updateSource({ flags: { 'lichsoma-speaker-selector': mergedFlags } });
+                    if (isDnd5eNativeHeader) {
+                        this._scheduleDnd5eTitleAliasApply(message, messageElement);
+                        this._scheduleDnd5eAvatarPortraitApply(message, messageElement, portraitData.src);
+                    }
                 }
             }
             
@@ -373,12 +591,9 @@ export class SpeakerSelector {
             if (game.settings.get('lichsoma-speaker-selector', this.SETTINGS.SHOW_PORTRAIT) !== false) {
                 updates.push(game.settings.set('lichsoma-speaker-selector', this.SETTINGS.SHOW_PORTRAIT, false));
             }
-            if (game.settings.get('lichsoma-speaker-selector', this.SETTINGS.ALWAYS_USE_ACTOR) !== false) {
-                updates.push(game.settings.set('lichsoma-speaker-selector', this.SETTINGS.ALWAYS_USE_ACTOR, false));
-            }
             if (updates.length) await Promise.all(updates);
         } catch (e) {
-            // 설정 강제 비활성화 실패 시 런타임 helper가 false로 처리하므로 무시
+            // 설정 강제 비활성화 실패 시 런타임 helper가 안전하게 처리하므로 무시
         }
     }
 
@@ -710,7 +925,7 @@ export class SpeakerSelector {
             name: game.i18n.localize('SPEAKERSELECTOR.Settings.AlwaysUseActor.Name'),
             hint: game.i18n.localize('SPEAKERSELECTOR.Settings.AlwaysUseActor.Hint'),
             scope: 'world',
-            config: !this._isDnd5eSystem(),
+            config: true,
             restricted: true,
             type: Boolean,
             default: false,
@@ -1271,6 +1486,12 @@ export class SpeakerSelector {
 
         // 액터/토큰 없는 Public as User 계열 메시지도 dnd5e name-stacked 높이를 유지하도록 subtitle을 보강한다.
         this._ensureDnd5eNameStackedSubtitle(message, messageElement);
+
+        // 셀렉터가 저장한 senderAlias / speaker.alias를 dnd5e 원본 name-stacked title에 반영한다.
+        this._scheduleDnd5eTitleAliasApply(message, messageElement);
+
+        // 감정 포트레잇/저장된 portraitSrc를 dnd5e 원본 avatar 이미지에 반영한다.
+        this._scheduleDnd5eAvatarPortraitApply(message, messageElement);
 
         // CSS가 dnd5e 원본 title/sender에 유저 색상을 적용할 수 있도록 색상 값만 변수로 전달한다.
         const header = messageElement.querySelector('.message-header');
@@ -2737,7 +2958,7 @@ export class SpeakerSelector {
                 if (speakerData) {
                     const portraitData = this._getMessageImageSync(speakerData, userId);
                     const actorId = speakerData.actor || null;
-                    const extraFlags = { portraitSrc: portraitData.src, userId, actorId };
+                    const extraFlags = { portraitSrc: portraitData.src, userId, actorId, senderAlias: speakerData.alias };
                     
                     // speaker를 보완한 경우 실제 메시지에도 적용
                     if (needsSpeakerUpdate) {
@@ -2903,7 +3124,7 @@ export class SpeakerSelector {
                     const actorId = characterSpeakerData.actor || null;
                     const extraFlags = foundry.utils.mergeObject(
                         updateData.flags?.['lichsoma-speaker-selector'] || {},
-                        { portraitSrc: portraitData.src, userId, actorId },
+                        { portraitSrc: portraitData.src, userId, actorId, senderAlias: characterSpeakerData.alias },
                         { inplace: false }
                     );
                     this._applySpeakerData(doc, data, characterSpeakerData, extraFlags);
@@ -2935,7 +3156,7 @@ export class SpeakerSelector {
                     const actorId = actorSpeakerData.actor || null;
                     const extraFlags = foundry.utils.mergeObject(
                         updateData.flags?.['lichsoma-speaker-selector'] || {},
-                        { portraitSrc: portraitData.src, userId, actorId },
+                        { portraitSrc: portraitData.src, userId, actorId, senderAlias: actorSpeakerData.alias },
                         { inplace: false }
                     );
                     this._applySpeakerData(doc, data, actorSpeakerData, extraFlags);
@@ -3062,7 +3283,13 @@ export class SpeakerSelector {
                 return;
             }
             
-            // 채팅 입력 필드가 포커스되어 있고, 입력 필드의 값이 메시지 내용과 일치하면 _fromChatInput을 true로 설정
+                        // create 훅 내부에서 speaker/flags를 보정한 뒤 렌더된 dnd5e 헤더에도 다시 반영한다.
+            // setTimeout으로 훅의 나머지 updateSource 처리 이후 실행되게 한다.
+            if (this._isDnd5eSystem()) {
+                setTimeout(() => this._scheduleRenderedDnd5eHeaderEnhancements(message), 0);
+            }
+
+// 채팅 입력 필드가 포커스되어 있고, 입력 필드의 값이 메시지 내용과 일치하면 _fromChatInput을 true로 설정
             // (↑ 키로 이전 메시지 불러올 때 대응)
             const chatInput = this._getChatInputElement();
             const chatInputFocused = this._isChatInputFocused(chatInput);
@@ -3151,7 +3378,7 @@ export class SpeakerSelector {
                 if (speakerData) {
                     const portraitData = this._getMessageImageSync(speakerData, message.author?.id);
                     const actorId = speakerData.actor || null;
-                    const extraFlags = { portraitSrc: portraitData.src, userId: message.author?.id, actorId };
+                    const extraFlags = { portraitSrc: portraitData.src, userId: message.author?.id, actorId, senderAlias: speakerData.alias };
                     const existingFlags = message.flags?.['lichsoma-speaker-selector'] || {};
                     const mergedFlags = foundry.utils.mergeObject(existingFlags, extraFlags, { inplace: false });
                     message.updateSource({ flags: { 'lichsoma-speaker-selector': mergedFlags } });

@@ -92,6 +92,114 @@
     });
   }
 
+  function getMessageAuthorName(message) {
+    if (!message) return '';
+
+    if (message.author && typeof message.author === 'object' && 'name' in message.author) {
+      return message.author.name || '';
+    }
+
+    const authorId = message.author?.id || message.user?.id || message.user || null;
+    if (!authorId) return '';
+
+    return game.users?.get(authorId)?.name || '';
+  }
+
+  function getDnd5eExportTitleAlias(message) {
+    if (!message) return '';
+
+    const flags = message.flags?.['lichsoma-speaker-selector'] || {};
+    return flags.senderAlias
+      || message.speaker?.alias
+      || message.alias
+      || getMessageAuthorName(message)
+      || '';
+  }
+
+  function applyDnd5eExportNameStackedTitleAlias(message, messageEl) {
+    if (!isDnd5eExportMessage(messageEl)) return;
+
+    const header = messageEl.querySelector?.('.message-header');
+    const sender = header?.querySelector?.('.message-sender');
+    if (!sender) return;
+
+    let nameStacked = sender.querySelector('.name-stacked');
+    let title = nameStacked?.querySelector('.title') || null;
+
+    if (!nameStacked) {
+      const avatar = sender.querySelector(':scope > .avatar');
+      const existingTitleText = Array.from(sender.childNodes)
+        .filter((node) => node !== avatar)
+        .map((node) => node.textContent || '')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      Array.from(sender.childNodes).forEach((node) => {
+        if (node !== avatar) node.remove();
+      });
+
+      nameStacked = document.createElement('span');
+      nameStacked.classList.add('name-stacked');
+
+      title = document.createElement('span');
+      title.classList.add('title');
+      title.textContent = existingTitleText || '\u00A0';
+
+      nameStacked.appendChild(title);
+      sender.appendChild(nameStacked);
+    } else if (!title) {
+      title = document.createElement('span');
+      title.classList.add('title');
+      title.textContent = '\u00A0';
+      nameStacked.insertBefore(title, nameStacked.firstChild);
+    }
+
+    const alias = getDnd5eExportTitleAlias(message);
+    if (alias && title) {
+      title.textContent = alias;
+      title.dataset.lichsomaSenderAlias = 'true';
+    }
+  }
+
+  function getDnd5eExportAvatarPortraitSrc(message, messageEl) {
+    if (!message) return null;
+
+    const flags = message.flags?.['lichsoma-speaker-selector'] || {};
+
+    // 감정 포트레잇이 있으면 export HTML의 dnd5e 원본 avatar도 반드시 감정 포트레잇을 사용한다.
+    if (flags.emotionPortrait) return flags.emotionPortrait;
+    if (flags.portraitSrc) return flags.portraitSrc;
+
+    const renderedAvatar = messageEl?.querySelector?.('.message-header .message-sender .avatar img');
+    const renderedSrc = renderedAvatar?.getAttribute?.('src');
+    if (renderedSrc) return renderedSrc;
+
+    return null;
+  }
+
+  function applyDnd5eExportAvatarPortrait(message, messageEl) {
+    if (!isDnd5eExportMessage(messageEl)) return;
+
+    const avatar = messageEl.querySelector?.('.message-header .message-sender .avatar');
+    const img = avatar?.querySelector?.('img');
+    if (!avatar || !img) return;
+
+    const portraitSrc = getDnd5eExportAvatarPortraitSrc(message, messageEl);
+    if (!portraitSrc) return;
+
+    if (!img.dataset.lichsomaOriginalSrc) {
+      img.dataset.lichsomaOriginalSrc = img.getAttribute('src') || '';
+    }
+
+    img.setAttribute('src', portraitSrc);
+    img.dataset.lichsomaPortraitSrc = portraitSrc;
+    avatar.dataset.lichsomaPortraitSrc = portraitSrc;
+
+    const alias = getDnd5eExportTitleAlias(message);
+    if (alias) img.setAttribute('alt', alias);
+  }
+
   /**
    * ChatMerge._getMergeMeta와 같은 목적의 내보내기용 머지 메타.
    * - token/actor 플래그가 있으면 해당 기준
@@ -105,7 +213,12 @@
     const userId = flags.userId || message?.author?.id || null;
 
     const portraitImg = messageEl?.querySelector?.('.lichsoma-chat-portrait');
-    const portraitSrc = flags.portraitSrc || portraitImg?.getAttribute?.('src') || null;
+    const dnd5eAvatarImg = messageEl?.querySelector?.('.message-header .message-sender .avatar img');
+    const portraitSrc = flags.emotionPortrait
+      || flags.portraitSrc
+      || portraitImg?.getAttribute?.('src')
+      || dnd5eAvatarImg?.getAttribute?.('src')
+      || null;
 
     const alwaysUseActor = game.settings.get('lichsoma-speaker-selector', 'alwaysUseActor') === true;
     const tokenId = flags.tokenId || speaker.token || null;
@@ -410,6 +523,12 @@
           prevMeta = null;
           return;
         }
+
+        // dnd5e HTML 내보내기에서도 셀렉터가 저장한 senderAlias / speaker.alias를 name-stacked title에 반영한다.
+        applyDnd5eExportNameStackedTitleAlias(message, messageEl);
+
+        // dnd5e HTML 내보내기에서도 감정 포트레잇/portraitSrc를 원본 avatar img에 반영한다.
+        applyDnd5eExportAvatarPortrait(message, messageEl);
 
         // dnd5e HTML 내보내기에서는 접을 수 있는 chat-card를 기본적으로 닫힌 상태로 만든다.
         collapseDnd5eExportChatCards(messageEl);

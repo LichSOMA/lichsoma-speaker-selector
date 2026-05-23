@@ -37,6 +37,7 @@ body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender {
 
 body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-sender .avatar,
 body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender .avatar {
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.85);
     flex: 0 0 38px;
     width: 38px;
     height: 38px;
