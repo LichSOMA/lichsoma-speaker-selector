@@ -20,6 +20,7 @@
         "scripts/lichsoma-actor-emotions.js",
         "scripts/lichsoma-chat-system-registry.js",
         "scripts/apps/lichsoma-chat-dx3rd.js",
+        "scripts/apps/lichsoma-chat-dnd5e.js",
         "scripts/lichsoma-chat-merge.js",
         "scripts/lichsoma-chat-notification.js",
         "scripts/lichsoma-chat-log-export.js",

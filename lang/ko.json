@@ -93,11 +93,11 @@
             },
             "ChatLogExportBasePath": {
                 "Name": "채팅 로그 내보내기 기본 경로",
-                "Hint": "HTML로 저장되는 채팅 로그에서 이미지 경로 앞에 붙일 기본 경로입니다. HTTP 서버: http://localhost:30000 또는 로컬 파일: file:///C:/Users/YourName/AppData/Local/FoundryVTT/Data"
+                "Hint": "HTML로 저장되는 채팅 로그에서 이미지 경로 앞에 붙일 기본 경로입니다.\nHTTP 서버: http://localhost:30000"
             },
             "ChatLogExportUseBase64": {
                 "Name": "이미지를 Base64로 저장",
-                "Hint": "활성화하면 채팅 로그 내보내기 시 이미지를 링크 대신 Base64 Data URL로 저장합니다. 이렇게 하면 HTML 파일 하나만으로 이미지가 포함된 채팅 로그를 볼 수 있습니다. (주의: 이미지가 많으면 HTML 파일 크기가 매우 커질 수 있습니다)"
+                "Hint": "이미지를 링크 대신 Base64 Data URL로 저장합니다.(주의: 용량이 매우 커질 수 있습니다.)"
             },
             "ChatLogExportCustomCSS": {
                 "Name": "채팅 로그 내보내기 커스텀 CSS",
@@ -114,6 +114,18 @@
             "ChatUtilsForIC": {
                 "Name": "IC 모드에서 토큰 미 선택 시 OOC로 전송",
                 "Hint": "Public as Character 모드에서 토큰을 선택하지 않고 채팅을 전송할 경우 자동으로 OOC로 전송합니다."
+            },
+            "Dnd5eTitleFont": {
+                "Name": "D&D 5e 헤더 이름 폰트",
+                "Hint": "D&D 5e 채팅 헤더의 이름(title)에 적용할 폰트입니다."
+            },
+            "Dnd5eSubtitleFont": {
+                "Name": "D&D 5e 헤더 보조 정보 폰트",
+                "Hint": "D&D 5e 채팅 헤더의 보조 정보(subtitle)에 적용할 폰트입니다."
+            },
+            "ChatLogExportHideCoreButton": {
+                "Name": "기본 채팅 로그 출력 버튼 숨김",
+                "Hint": "Foundry VTT의 기본 채팅 로그 출력 버튼을 숨깁니다."
             }
         },
         "DeleteButton": {
@@ -189,6 +201,10 @@
                 "Empty": "저장할 채팅 메시지가 없습니다.",
                 "PartialLoad": "일부 메시지만 로드되었습니다. ({rendered}/{total}개 메시지)",
                 "CountMismatch": "메시지 수가 일치하지 않습니다. ({rendered}/{total}개 메시지)"
+            },
+            "Button": {
+                "Title": "채팅 로그 HTML 출력",
+                "AriaLabel": "채팅 로그 HTML 출력"
             }
         },
         "ChatLogArchive": {
@@ -237,4 +253,3 @@
         }
     }
 }
-

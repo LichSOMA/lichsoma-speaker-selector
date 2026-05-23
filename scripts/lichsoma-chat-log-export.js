@@ -62,6 +62,36 @@
     return message?.flags?.['lichsoma-fvtt-smartphone']?.type === 'messenger-message';
   }
 
+  function isDnd5eExportMessage(messageEl) {
+    if (game.system?.id !== 'dnd5e') return false;
+    if (!messageEl) return false;
+
+    const header = messageEl.querySelector?.('.message-header');
+    if (!header) return false;
+
+    return messageEl.classList.contains('dnd5e2')
+      || messageEl.classList.contains('lichsoma-dnd5e-native-header')
+      || !!header.querySelector?.('.message-sender .name-stacked')
+      || !!header.querySelector?.('.message-sender .avatar')
+      || !!header.querySelector?.('h4.message-sender')
+      || !!header.querySelector?.('.message-sender');
+  }
+
+  function collapseDnd5eExportChatCards(messageEl) {
+    if (!isDnd5eExportMessage(messageEl)) return;
+
+    messageEl.querySelectorAll?.('.chat-card .description.collapsible').forEach((description) => {
+      description.classList.add('collapsed');
+      description.setAttribute('aria-expanded', 'false');
+
+      const summary = description.querySelector('.summary');
+      summary?.setAttribute('aria-expanded', 'false');
+
+      const details = description.querySelector('.details');
+      details?.setAttribute('aria-hidden', 'true');
+    });
+  }
+
   /**
    * ChatMerge._getMergeMeta와 같은 목적의 내보내기용 머지 메타.
    * - token/actor 플래그가 있으면 해당 기준
@@ -380,6 +410,9 @@
           prevMeta = null;
           return;
         }
+
+        // dnd5e HTML 내보내기에서는 접을 수 있는 chat-card를 기본적으로 닫힌 상태로 만든다.
+        collapseDnd5eExportChatCards(messageEl);
 
         const currentMeta = getExportMergeMeta(message, messageEl);
 
@@ -859,40 +892,181 @@ ${separatedChatLogHTML}
     }
   }
   
-  // ========== 채팅 로그 저장 기능 차단 및 HTML 출력 ========== //
-  
-  // capture phase에서 이벤트 차단 (가장 먼저 실행)
-  document.addEventListener('click', async function(event) {
-    // 모든 클릭 대상 확인
-    const target = event.target;
-    const button = target.closest('button, a');
-    
-    if (!button) return;
-    
-    // fa-floppy-disk 아이콘 확인
-    const hasFloppyDisk = button.querySelector('.fa-floppy-disk') || 
-                          button.classList.contains('fa-floppy-disk');
-    
-    if (hasFloppyDisk) {
-      // 채팅 관련 영역인지 확인
-      const chatArea = button.closest('section#chat, .chat-sidebar, .chat-scroll, [data-tab="chat"]');
-      
-      if (chatArea) {
-        // 이벤트 완전히 차단
+  // ========== HTML 로그 출력 버튼 추가 및 기본 로그 출력 버튼 표시 제어 ========== //
+
+  const MODULE_ID = 'lichsoma-speaker-selector';
+  const HIDE_CORE_EXPORT_BUTTON_SETTING = 'chatLogExportHideCoreButton';
+
+  function localizeOrFallback(key, fallback) {
+    try {
+      const value = game.i18n.localize(key);
+      return value && value !== key ? value : fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function getChatForms(root = document) {
+    const base = root?.jquery ? root[0] : root;
+    const forms = new Set();
+
+    if (base?.matches?.('#chat-form, .chat-form, form[data-application-part="chat-form"]')) {
+      forms.add(base);
+    }
+
+    base?.querySelectorAll?.('#chat-form, .chat-form, form[data-application-part="chat-form"]')
+      ?.forEach((form) => forms.add(form));
+
+    const sidebarForm = document.querySelector('#chat-form, .chat-form, form[data-application-part="chat-form"]');
+    if (sidebarForm) forms.add(sidebarForm);
+
+    return Array.from(forms).filter(Boolean);
+  }
+
+  function getChatControls(chatForm) {
+    if (!chatForm) return null;
+
+    return chatForm.querySelector('.control-buttons')
+      || chatForm.querySelector('#chat-controls .control-buttons')
+      || chatForm.querySelector('#chat-controls')
+      || chatForm.querySelector('.chat-controls')
+      || document.querySelector('#chat-controls .control-buttons')
+      || document.querySelector('#chat-controls')
+      || null;
+  }
+
+  function isChatExportControl(button) {
+    if (!button) return false;
+
+    const isExportButton = button.matches?.('button[data-action="export"], a[data-action="export"]')
+      || button.querySelector?.('.fa-floppy-disk')
+      || button.classList?.contains('fa-floppy-disk');
+
+    if (!isExportButton) return false;
+
+    return !!button.closest?.('section#chat, #chat-form, .chat-form, #chat-controls, .chat-sidebar, [data-tab="chat"]');
+  }
+
+  function getCoreChatLogExportButtons(root = document) {
+    const base = root?.jquery ? root[0] : root;
+    const buttons = new Set();
+
+    base?.querySelectorAll?.('button[data-action="export"], a[data-action="export"], button, a')
+      ?.forEach((button) => {
+        if (isChatExportControl(button) && !button.classList.contains('lichsoma-html-export-btn')) {
+          buttons.add(button);
+        }
+      });
+
+    document.querySelectorAll?.('button[data-action="export"], a[data-action="export"], button, a')
+      ?.forEach((button) => {
+        if (isChatExportControl(button) && !button.classList.contains('lichsoma-html-export-btn')) {
+          buttons.add(button);
+        }
+      });
+
+    return Array.from(buttons);
+  }
+
+  function shouldHideCoreChatLogExportButton() {
+    try {
+      return game.settings.get(MODULE_ID, HIDE_CORE_EXPORT_BUTTON_SETTING) === true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function syncCoreChatLogExportButtonVisibility(root = document) {
+    const shouldHide = shouldHideCoreChatLogExportButton();
+    getCoreChatLogExportButtons(root).forEach((button) => {
+      if (shouldHide) {
+        if (!button.dataset.lichsomaOriginalDisplay) {
+          button.dataset.lichsomaOriginalDisplay = button.style.display || '';
+        }
+        button.style.display = 'none';
+        button.setAttribute('aria-hidden', 'true');
+      } else {
+        if (button.dataset.lichsomaOriginalDisplay !== undefined) {
+          button.style.display = button.dataset.lichsomaOriginalDisplay;
+          delete button.dataset.lichsomaOriginalDisplay;
+        } else {
+          button.style.removeProperty('display');
+        }
+        button.removeAttribute('aria-hidden');
+      }
+    });
+  }
+
+  function renderHtmlExportButton(root = document) {
+    if (!game.user?.isGM) return;
+
+    const title = localizeOrFallback('SPEAKERSELECTOR.ChatLogExport.Button.Title', 'Export Chat Log as HTML');
+    const ariaLabel = localizeOrFallback('SPEAKERSELECTOR.ChatLogExport.Button.AriaLabel', title);
+
+    for (const chatForm of getChatForms(root)) {
+      const controls = getChatControls(chatForm);
+      if (!controls) continue;
+
+      if (controls.querySelector?.('.lichsoma-html-export-btn')) continue;
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'ui-control icon lichsoma-html-export-btn';
+      button.dataset.tooltip = 'SPEAKERSELECTOR.ChatLogExport.Button.Title';
+      button.title = title;
+      button.setAttribute('aria-label', ariaLabel);
+      button.innerHTML = '<i class="fa-solid fa-file-code"></i>';
+
+      button.addEventListener('click', async (event) => {
         event.preventDefault();
         event.stopPropagation();
-        event.stopImmediatePropagation();
-        
-        // HTML 저장 함수 호출
         await exportChatLogAsHTML();
-        
-        return false;
-      }
+      });
+
+      const coreExportButton = Array.from(controls.querySelectorAll?.('button, a') || [])
+        .find((candidate) => isChatExportControl(candidate));
+
+      if (coreExportButton) coreExportButton.insertAdjacentElement('beforebegin', button);
+      else controls.appendChild(button);
     }
-  }, true); // capture phase - 가장 먼저 실행
-  
+  }
+
+  function updateChatExportButtons(root = document) {
+    renderHtmlExportButton(root);
+    syncCoreChatLogExportButtonVisibility(root);
+  }
+
+  document.addEventListener('lichsoma-speaker-selector:updateChatExportButtons', () => {
+    setTimeout(() => updateChatExportButtons(document), 0);
+  });
+
+  Hooks.on('renderSidebarTab', (app, html) => {
+    if (app?.tabName === 'chat' || app?.id === 'chat') {
+      setTimeout(() => updateChatExportButtons(html), 50);
+    }
+  });
+
+  Hooks.on('renderChatLog', (app, html) => {
+    setTimeout(() => updateChatExportButtons(html), 50);
+  });
+
   Hooks.once('ready', () => {
-    // 채팅 로그 내보내기 기능 초기화 완료
+    setTimeout(() => updateChatExportButtons(document), 250);
+
+    // 채팅 컨트롤은 시스템/테마/사이드바 재렌더에 따라 다시 만들어질 수 있으므로,
+    // 가벼운 MutationObserver로 버튼 상태를 보정한다.
+    const observer = new MutationObserver(() => {
+      if (observer._lichsomaPending) return;
+      observer._lichsomaPending = true;
+      setTimeout(() => {
+        observer._lichsomaPending = false;
+        updateChatExportButtons(document);
+      }, 100);
+    });
+
+    if (document.body) {
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
   });
 })();
 

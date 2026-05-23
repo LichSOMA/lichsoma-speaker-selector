@@ -128,25 +128,9 @@ export class ChatUI {
     static setupPortraitPreview() {
         // renderChatMessageHTML 훅에서 포트레잇이 추가된 후 프리뷰 연결
         Hooks.on('renderChatMessageHTML', (message, html, data) => {
-            // 포트레잇이 비동기로 추가될 수 있으므로 약간의 지연 후 확인
             setTimeout(() => {
-                const $html = $(html);
-                const portraitContainer = $html.find('.lichsoma-chat-portrait-container');
-                
-                if (portraitContainer.length) {
-                    const img = portraitContainer.find('.lichsoma-chat-portrait');
-                    if (img.length) {
-                        const imgSrc = img.attr('src');
-                        if (imgSrc) {
-                            // 이미 프리뷰가 연결되어 있는지 확인
-                            const container = portraitContainer[0];
-                            if (!container.hasAttribute('data-preview-attached')) {
-                                this._attachPortraitPreview(container, imgSrc);
-                                container.setAttribute('data-preview-attached', 'true');
-                            }
-                        }
-                    }
-                }
+                const root = LichsomaChatDom.asElement(html);
+                this._attachPortraitPreviewsInRoot(root);
             }, 50);
         });
         
@@ -154,17 +138,34 @@ export class ChatUI {
         Hooks.on('renderChatLog', (app, html, data) => {
             setTimeout(() => {
                 const root = LichsomaChatDom.asElement(html);
-                const portraitContainers = LichsomaChatDom.queryAll('.lichsoma-chat-portrait-container', root);
-                portraitContainers.forEach((container) => {
-                    if (container.hasAttribute('data-preview-attached')) return;
-                    const img = container.querySelector('.lichsoma-chat-portrait');
-                    const imgSrc = img?.getAttribute('src');
-                    if (imgSrc) {
-                        this._attachPortraitPreview(container, imgSrc);
-                        container.setAttribute('data-preview-attached', 'true');
-                    }
-                });
+                this._attachPortraitPreviewsInRoot(root);
             }, 100);
+        });
+    }
+
+    static _attachPortraitPreviewsInRoot(root) {
+        if (!root) return;
+
+        // LichSOMA 커스텀 포트레잇
+        const portraitContainers = LichsomaChatDom.queryAll('.lichsoma-chat-portrait-container', root);
+        portraitContainers.forEach((container) => {
+            if (container.hasAttribute('data-preview-attached')) return;
+            const img = container.querySelector('.lichsoma-chat-portrait');
+            const imgSrc = img?.getAttribute('src');
+            if (imgSrc) {
+                this._attachPortraitPreview(container, imgSrc);
+            }
+        });
+
+        // dnd5e 원본 avatar 포트레잇
+        const dnd5eAvatars = LichsomaChatDom.queryAll('.chat-message.dnd5e2 .message-header .message-sender .avatar', root);
+        dnd5eAvatars.forEach((avatar) => {
+            if (avatar.hasAttribute('data-preview-attached')) return;
+            const img = avatar.querySelector('img[src]');
+            const imgSrc = img?.getAttribute('src');
+            if (imgSrc) {
+                this._attachPortraitPreview(avatar, imgSrc);
+            }
         });
     }
     

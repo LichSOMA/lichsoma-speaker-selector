@@ -1,0 +1,466 @@
+/* D&D 5e 전용 LichSOMA 채팅 보정
+   - 원본 dnd5e header/avatar/name-stacked 구조 유지
+   - LichSOMA 머지 표시와 dnd5e 카드형 채팅 외피의 충돌 보정
+   - HTML 내보내기 시 scripts/apps/lichsoma-chat-dnd5e.js가 이 파일을 추가 CSS로 포함
+*/
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .lichsoma-chat-portrait-container,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .lichsoma-chat-portrait-container,
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-sender[data-lichsoma-sender="true"],
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender[data-lichsoma-sender="true"] {
+    display: none !important;
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-header,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 6px;
+    row-gap: 0;
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-sender,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: auto !important;
+    min-height: 0 !important;
+    line-height: normal !important;
+    margin: 0 !important;
+    min-width: 0;
+    flex: 1 1 auto;
+    color: var(--lichsoma-dnd5e-title-color, inherit);
+    filter: none !important;
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-sender .avatar,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender .avatar {
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    max-width: 38px;
+    max-height: 38px;
+    overflow: hidden;
+    display: block;
+    cursor: pointer;
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-sender .avatar img,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender .avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 38px;
+    max-height: 38px;
+    object-fit: cover;
+    object-position: center;
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-sender .name-stacked,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender .name-stacked {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    min-width: 0;
+    line-height: 1.1;
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-sender .name-stacked .title,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender .name-stacked .title {
+    color: var(--lichsoma-dnd5e-title-color, inherit);
+    border: none !important;
+    border-image: none !important;
+    padding-inline: 0 !important;
+    text-shadow:
+        0 0 1px rgba(192, 192, 192, 0.2),
+        1px 0 0 rgba(128, 128, 128, 0.1),
+        -1px 0 0 rgba(128, 128, 128, 0.1),
+        0 1px 0 rgba(128, 128, 128, 0.1),
+        0 -1px 0 rgba(128, 128, 128, 0.1);
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-sender .name-stacked .subtitle,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender .name-stacked .subtitle {
+    color: rgba(255, 255, 255, 0.5) !important;
+    font-size: 11px;
+    line-height: 1.1;
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-header .flavor-text,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-header .flavor-text {
+    order: 2;
+    flex: 0 0 100%;
+    width: 100%;
+    margin: 0 !important;
+    color: rgba(255, 255, 255, 0.5) !important;
+    font-size: 12px;
+    line-height: 1.1;
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-metadata,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-metadata {
+    display: none;
+}
+
+/* D&D 5e chat-card, card-buttons, card-footer, pills, unlist */
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    color: var(--color-text-primary, #e8e8e8);
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card + .dice-roll,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .dice-roll + .chat-card {
+    margin-block-start: 0.375rem;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description {
+    padding: 0.5rem;
+    border: 1px solid var(--dnd5e-color-gold, #9f9275);
+    border-radius: 3px;
+    background: var(--dnd5e-color-card, rgba(255, 255, 255, 0.04));
+    overflow: hidden;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description .summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description .summary > img {
+    width: 32px;
+    height: 32px;
+    max-width: 32px;
+    max-height: 32px;
+    border: none;
+    object-fit: cover;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description .summary .name-stacked {
+    flex: 1;
+    padding-right: 0.5rem;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description .summary > i {
+    font-size: var(--font-size-14, 0.875rem);
+    color: var(--color-text-secondary, rgba(255, 255, 255, 0.5));
+    margin-right: 8px;
+    transition: all 250ms ease;
+}
+
+/* D&D 5e chat-card summary header */
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description > .summary,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description header.summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 32px;
+    margin: 0;
+    padding: 0;
+    line-height: normal;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description > .summary > img,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description header.summary > img,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description > .summary > .gold-icon,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description header.summary > .gold-icon {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    max-width: 32px;
+    max-height: 32px;
+    object-fit: cover;
+    object-position: center;
+    border: 1px solid var(--dnd5e-color-gold, #9f9275);
+    border-radius: 3px;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description > .summary .name-stacked,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description header.summary .name-stacked {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    line-height: 1.1;
+    padding-inline-end: 0.5rem;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description > .summary .name-stacked .title,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description header.summary .name-stacked .title {
+    color: var(--color-text-primary, #e8e8e8);
+    font-weight: 700;
+    font-size: var(--font-size-14, 0.875rem);
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description > .summary .name-stacked .subtitle,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description header.summary .name-stacked .subtitle {
+    color: rgba(255, 255, 255, 0.45) !important;
+    font-size: var(--font-size-11, 0.6875rem);
+    font-weight: 400;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description > .summary > i,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description header.summary > i {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+    margin-inline-end: 0;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: var(--font-size-14, 0.875rem);
+    transition: transform 250ms ease;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description.collapsible > .summary,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description.collapsible header.summary {
+    cursor: pointer;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description.collapsed > .summary > i,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description.collapsed header.summary > i {
+    transform: rotate(-90deg);
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description .details {
+    font-family: var(--dnd5e-font-roboto, var(--font-primary, sans-serif));
+    font-size: var(--font-size-11, 0.6875rem);
+    padding: 0;
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: all 250ms ease;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description .details > .wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    overflow: hidden;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description .details > .wrapper > *,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description .details p {
+    margin-block: 0;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description .details p:first-child {
+    padding-top: 0.5rem;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description.critical {
+    border-width: 3px;
+    border-style: double;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description.critical .summary .subtitle {
+    color: var(--dnd5e-color-success, #3ba55d);
+    text-transform: uppercase;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description.collapsible .summary {
+    cursor: pointer;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description.collapsed .summary > i {
+    transform: rotate(-90deg);
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .description.collapsed .details {
+    grid-template-rows: 0fr;
+    opacity: 0;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .card-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .card-buttons [hidden] {
+    display: none !important;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .card-buttons button {
+    min-height: 30px;
+}
+
+/* card-footer는 dnd5e 원본 CSS에 별도 블록이 없으므로, footer 내부 pills/unlist 레이아웃을 보강한다. */
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .card-footer {
+    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    font-size: var(--font-size-11, 0.6875rem);
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .unlist,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) ul.unlist,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) ol.unlist {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .unlist li {
+    margin: 0;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills .pill,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .card-footer .pill {
+    font-family: var(--dnd5e-font-roboto, var(--font-primary, sans-serif));
+    font-weight: bold;
+    font-size: var(--font-size-10, 0.625rem);
+    line-height: 1;
+    text-transform: uppercase;
+    border: var(--pill-border, 1px solid rgba(255, 255, 255, 0.35));
+    border-radius: 3px;
+    background: var(--dnd5e-background-card, rgba(255, 255, 255, 0.04));
+    padding: 0.1875rem 0.375rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin: 0;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills .pill.green,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills .pill.maroon,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .card-footer .pill.green,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .card-footer .pill.maroon {
+    color: var(--pill-colored-text-color, #ffffff);
+    border: var(--pill-colored-border, 1px solid rgba(255, 255, 255, 0.35));
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills .pill.green,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .card-footer .pill.green {
+    background-color: var(--pill-background-green, rgba(32, 91, 21, 0.75));
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills .pill.maroon,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .card-footer .pill.maroon {
+    background-color: var(--pill-background-maroon, rgba(116, 27, 43, 0.75));
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills .pill.transparent,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills .pill.pill-sm,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .card-footer .pill.transparent,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .card-footer .pill.pill-sm {
+    color: var(--pill-transparent-color, rgba(255, 255, 255, 0.75));
+    border: var(--pill-border-dotted, 1px dotted rgba(255, 255, 255, 0.35));
+    background-color: transparent;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills .pill.pill-xs,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .card-footer .pill.pill-xs {
+    font-size: var(--font-size-9, 0.5625rem);
+    padding: 2px 4px;
+    gap: 3px;
+}
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .pills .pill > .separator,
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .card-footer .pill > .separator {
+    color: var(--color-text-tertiary, rgba(255, 255, 255, 0.45));
+}
+
+/* card-footer pills/unlist horizontal layout */
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat-card .card-footer.pills {
+    display: flex;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.375rem;
+    padding: 0;
+    list-style: none;
+}
+
+/* 내보내기 HTML에는 .chat-scroll이 없을 수 있어 .chat-log 기준 보정도 같이 둔다. */
+body.system-dnd5e .chat-log .chat-message.dnd5e2,
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header {
+    margin: 0px 1px -2px 5px !important;
+}
+
+body.system-dnd5e .chat-log .chat-message .message-content .dice-roll {
+    padding-bottom: 4px;
+}
+
+/* 머지된 dnd5e 메시지는 dnd5e의 카드 외피를 제거해 앞 메시지에 이어 붙은 것처럼 보이게 한다. */
+body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged,
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged {
+    margin-block-start: 0 !important;
+    padding-block-start: 0 !important;
+    padding-block-end: 0 !important;
+    border-color: transparent !important;
+    border-block-end-width: 0 !important;
+    border-radius: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+}
+
+body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged::before,
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged::before {
+    content: none !important;
+    display: none !important;
+}
+
+body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-header,
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-header {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-sender,
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-sender {
+    display: none !important;
+}
+
+body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-header:not(:has(.flavor-text)),
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-header:not(:has(.flavor-text)) {
+    display: none !important;
+}
+
+body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-header:has(.flavor-text),
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-header:has(.flavor-text) {
+    display: block !important;
+}
+
+body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-header .flavor-text,
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-header .flavor-text {
+    display: block;
+    margin: 0.25rem 0 !important;
+    color: rgba(255, 255, 255, 0.5) !important;
+    font-size: 12px;
+    line-height: 1.1;
+}
+
+body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-content,
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-content {
+    margin-block-start: 0 !important;
+}
+
+body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-content > :first-child,
+body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-content > :first-child {
+    margin-block-start: 0 !important;
+}
+
+
+body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) effect-application:has(> option):not(:has(> button, > input, > select, > textarea, > a, > span, > div)) {
+    display: none;
+}
