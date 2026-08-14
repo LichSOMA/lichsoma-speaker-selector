@@ -123,6 +123,13 @@ body :is(#chat-log, .chat-log, .chat-scroll, .chat-popout)
     background: var(--background-color, var(--color-cool-5)) !important;
 }
 
+/* FVTT v13: overflow의 theme-light가 --background-color를 밝게 덮어쓰므로
+   일반 채팅 로그에는 영향 없이 overflow 카드만 Speaker Selector 테마로 고정한다. */
+body.lichsoma-fvtt13-chat .overflow .chat-message {
+    background: var(--color-cool-5) !important;
+    padding-bottom: 4px !important;
+}
+
 /* 채팅 헤더 스타일 */
 .lichsoma-chat-header {
     position: relative;
@@ -383,4 +390,34 @@ body:not(.system-lancer):not(.system-dx3rd-fvtt) .chat-scroll .chat-message .mes
   > .chat-message[data-message-id]:not(:nth-last-child(-n+12)) {
     content-visibility: auto;
     contain-intrinsic-size: auto 120px;
+}
+
+/* FVTT v13: chat notifications 안에서 알림 메시지는 위, 채팅 입력은 아래에 둔다.
+   절대 위치나 고정 높이를 사용하지 않고 flex의 남은 공간만 overflow가 사용한다. */
+body.lichsoma-fvtt13-chat #chat-notifications {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-end !important;
+    min-height: 0;
+}
+
+body.lichsoma-fvtt13-chat #chat-notifications > .overflow {
+    position: static !important;
+    inset: auto !important;
+    order: 0;
+    flex: 1 1 auto;
+    width: 100% !important;
+    max-width: none !important;
+    align-self: stretch !important;
+    box-sizing: border-box;
+    min-height: 0;
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+body.lichsoma-fvtt13-chat #chat-notifications > .chat-form {
+    order: 1;
+    flex: 0 0 auto;
 }
