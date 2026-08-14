@@ -1,0 +1,301 @@
+{
+  "SPEAKERSELECTOR": {
+    "Settings": {
+      "ShowPortrait": {
+        "Name": "Show Portrait",
+        "Hint": "Displays the actor portrait in chat messages."
+      },
+      "PortraitSize": {
+        "Name": "Portrait Size",
+        "Hint": "Sets the size of portrait images."
+      },
+      "AlwaysUseCharacter": {
+        "Name": "Always Speak as Assigned Character",
+        "Hint": "Sets messages typed directly into the chat input to always be spoken as the assigned character."
+      },
+      "AlwaysUseActor": {
+        "Name": "Always Speak as Actor",
+        "Hint": "Speak as the token's actor even when a token is selected."
+      },
+      "PreventOtherUserCharacter": {
+        "Name": "Prevent Speaking as Player Characters",
+        "Hint": "Prevents the GM from speaking as player characters."
+      },
+      "ApplyUserColor": {
+        "Name": "Apply User Color",
+        "Hint": "Applies the user color to the sender name in chat message headers."
+      },
+      "EnableChatMerge": {
+        "Name": "Enable Chat Merge",
+        "Hint": "Hides the header on consecutive messages from the same user with the same portrait."
+      },
+      "SidebarMinWidth": {
+        "Name": "Minimum Sidebar Width",
+        "Hint": "Sets the minimum width when resizing the sidebar by dragging. (312-400px)"
+      },
+      "ChatHeaderWebfontCSS": {
+        "Name": "Chat Header Webfont CSS",
+        "Hint": "Webfont CSS shared by in-game chat headers and exported chat log HTML. The first font-family and single font-weight, font-style, and font-variation-settings values are applied automatically. When empty, Foundry’s inherited font is used with a default weight of 900.",
+        "EditButton": "Edit Header Webfont CSS",
+        "Saved": "Chat header webfont CSS has been saved."
+      },
+      "Dnd5eTitleWebfontCSS": {
+        "Name": "D&D 5e Header Name Webfont CSS",
+        "Hint": "Webfont CSS applied to the D&D 5e chat header title in-game and in exported HTML. Supplied font-family, font-weight, font-style, and font-variation-settings values take priority.",
+        "EditButton": "Edit D&D 5e Name Webfont CSS",
+        "Saved": "D&D 5e header name webfont CSS has been saved."
+      },
+      "Dnd5eSubtitleWebfontCSS": {
+        "Name": "D&D 5e Header Subtitle Webfont CSS",
+        "Hint": "Webfont CSS applied to D&D 5e chat header subtitle information in-game and in exported HTML. Supplied font-family, font-weight, font-style, and font-variation-settings values take priority.",
+        "EditButton": "Edit D&D 5e Subtitle Webfont CSS",
+        "Saved": "D&D 5e header subtitle webfont CSS has been saved."
+      },
+      "ChatMessageWebfontCSS": {
+        "Name": "Chat Message Webfont CSS",
+        "Hint": "Webfont CSS shared by in-game chat content and exported chat log HTML. The first font-family and single font-weight, font-style, and font-variation-settings values are applied automatically. When empty, Foundry’s inherited font is used with a default weight of 500.",
+        "EditButton": "Edit Message Webfont CSS",
+        "Saved": "Chat message webfont CSS has been saved."
+      },
+      "ChatDiceWebfontCSS": {
+        "Name": "Chat Dice Webfont CSS",
+        "Hint": "Webfont CSS shared by in-game dice areas and exported chat log HTML. Supplied font-family, font-weight, font-style, and font-variation-settings values take priority.",
+        "EditButton": "Edit Dice Webfont CSS",
+        "Saved": "Chat dice webfont CSS has been saved."
+      },
+      "NarratorWebfontCSS": {
+        "Name": "Narrator Webfont CSS",
+        "Hint": "Webfont CSS applied to the narrator bar and narrator chat cards, including exported HTML. When empty, Foundry’s inherited font is used; the narrator bar defaults to 900 italic and narrator cards to 500 italic.",
+        "EditButton": "Edit Narrator Webfont CSS",
+        "Saved": "Narrator webfont CSS has been saved."
+      },
+      "ChatHeaderFontSize": {
+        "Name": "Header Font Size",
+        "Hint": "Sets the font size of chat headers."
+      },
+      "ChatMessageFontSize": {
+        "Name": "Message Font Size",
+        "Hint": "Sets the font size of chat message content."
+      },
+      "NarratorFontSize": {
+        "Name": "Narrator Font Size",
+        "Hint": "Sets the font size of text displayed in narrator mode."
+      },
+      "NarratorTypingSound": {
+        "Name": "Narrator Typing Sound",
+        "Hint": "Sets the sound file to play during the typing effect in narrator mode. It plays when non-space characters are entered."
+      },
+      "NarratorTypingSpeed": {
+        "Name": "Narrator Typing Speed",
+        "Hint": "Sets the speed at which text appears one character at a time in narrator mode. Smaller values display text faster. (10ms: very fast, 50ms: normal, 200ms: slow)"
+      },
+      "NarratorChatCard": {
+        "Name": "Narrator Chat Card",
+        "Hint": "Applies a separate style to chat messages sent in narrator mode."
+      },
+      "ChatLogExportBasePath": {
+        "Name": "Chat Log Export Base Path",
+        "Hint": "The base path to prepend to image paths in chat logs saved as HTML.\nHTTP server: http://localhost:30000"
+      },
+      "ChatLogExportUseBase64": {
+        "Name": "Save Images as Base64",
+        "Hint": "Embeds images up to 500 KB in HTML exports. Identical images are stored once by their final Data URL, while images over 500 KB keep an absolute URL."
+      },
+      "ChatLogExportCustomCSS": {
+        "Name": "Chat Log Export Custom CSS",
+        "Hint": "Additional CSS to apply to chat logs saved as HTML. It is applied together with the default CSS.",
+        "EditButton": "Edit CSS",
+        "Saved": "CSS has been saved."
+      },
+      "ChatLogExportShowDiceTooltip": {
+        "Name": "Show Dice Tooltip",
+        "Hint": "When enabled, dice tooltips (detailed roll information) are shown when exporting chat logs."
+      },
+      "ChatUtilsForIC": {
+        "Name": "Send as OOC When No Token Is Selected in IC Mode",
+        "Hint": "In Public as Character mode, automatically sends the message as OOC if chat is sent without selecting a token."
+      },
+      "ChatLogExportHideCoreButton": {
+        "Name": "Hide Default Chat Log Export Button",
+        "Hint": "Hides Foundry VTT's default chat log export button."
+      },
+      "ChatLogSaveHtmlOnDelete": {
+        "Name": "Save HTML Log When Deleting Chat Log",
+        "Hint": "When enabled, saves the current chat log as an HTML file before deleting the chat log."
+      },
+      "ChatRenderLimit": {
+        "Name": "Rendered Chat Limit",
+        "Hint": "When the chat log is near the bottom, old chat DOM nodes are removed to limit the number of rendered messages. Stored chat documents are not deleted. Scrolling upward first restores the contiguous history pruned by this module; older history is then handled by Foundry VTT's native history loader.",
+        "Choices": {
+          "Disabled": "Disabled",
+          "Keep100": "Keep Recent 100",
+          "Keep200": "Keep Recent 200"
+        }
+      },
+      "ActorGridActors": {
+        "Name": "Registered Speaker Actors",
+        "Hint": "Actor list displayed in Speaker Selector (internal setting)"
+      }
+    },
+    "DeleteButton": {
+      "AriaLabel": "Delete Message",
+      "Title": "Delete Message"
+    },
+    "Notifications": {
+      "DeleteOwnOnly": "You can only delete your own messages.",
+      "SelectActorFirst": "Select an actor first.",
+      "ChatInputNotFound": "Could not find the chat input.",
+      "InsertImageMenuNotFound": "Could not find the image insertion menu.",
+      "ActorRemovedFromGrid": "{actorName} was removed from the grid.",
+      "CssSaveFailed": "An error occurred while saving CSS: {error}"
+    },
+    "Selector": {
+      "Label": "Speaker Selection",
+      "OOC": "OOC (Out of Character)"
+    },
+    "Narrator": {
+      "Button": {
+        "Title": "Narrator Mode",
+        "AriaLabel": "Toggle Narrator Mode"
+      },
+      "Keybinding": {
+        "Name": "Toggle Narrator Mode",
+        "Hint": "Toggle Narrator Mode. The default keybinding is Shift+Space."
+      }
+    },
+    "SpeakerSetting": {
+      "Button": {
+        "Title": "Speaker Settings",
+        "AriaLabel": "Open Speaker Settings"
+      },
+      "Notifications": {
+        "GMOnly": "Only the GM can use this.",
+        "NoActor": "No world actor linked to this token could be found.",
+        "NoEmptySlot": "There are no empty speaker setting slots."
+      },
+      "Dialog": {
+        "Title": "Speaker Settings",
+        "DropHint": "Drop an actor here",
+        "AvailableActors": "Available Actors",
+        "SearchPlaceholder": "Search by name...",
+        "SearchPlaceholderWithTags": "Search by name or tag..."
+      },
+      "TokenHUD": {
+        "Title": "Register/Remove Speaker",
+        "AriaLabel": "Register or remove this token's actor from speaker settings"
+      }
+    },
+    "Emotion": {
+      "Label": "Emotion",
+      "SelectTitle": "Select Emotion",
+      "Default": "Default",
+      "Manage": "Manage Emotions",
+      "ManageWindowTitle": "{manage}: {actorName}",
+      "Add": "Add Emotion",
+      "Save": "Save",
+      "Cancel": "Cancel",
+      "SaveError": "An error occurred while saving emotions.",
+      "NamePlaceholder": "Emotion name",
+      "PortraitPlaceholder": "Portrait path",
+      "ChoosePortrait": "Choose Portrait",
+      "Delete": "Delete",
+      "NewEmotionAlt": "New emotion",
+      "Empty": "No emotions are registered.",
+      "FilePickerUnavailable": "The file picker is unavailable in this Foundry version."
+    },
+    "ChatPortraitToken": {
+      "Title": "Chat Portrait Token Image Settings",
+      "PreviewAlt": "Token image preview based on Image Path",
+      "PreviewInteractHint": "Wheel: zoom in/out (1-3) - Drag: anchor",
+      "Scale": "Scale",
+      "AnchorX": "Anchor X",
+      "AnchorY": "Anchor Y"
+    },
+    "ChatLogExport": {
+      "Success": "Chat log HTML has been saved. ({count} messages)",
+      "Error": {
+        "ExportFailed": "An error occurred while saving the chat log.",
+        "FlushBackupFailed": "Chat log deletion was stopped because the HTML backup could not be saved."
+      },
+      "Warning": {
+        "Empty": "There are no chat messages to save.",
+        "CountMismatch": "Message count does not match. ({rendered}/{total} messages)"
+      },
+      "Button": {
+        "Title": "Export Chat Log as HTML",
+        "AriaLabel": "Export Chat Log as HTML"
+      }
+    },
+    "ChatLogArchive": {
+      "Button": {
+        "OpenArchive": "Open Archive"
+      },
+      "Title": "Chat Log Archive",
+      "Close": "Close",
+      "Back": "Back",
+      "Loading": "Loading...",
+      "NoFiles": "No files found.",
+      "Search": {
+        "Placeholder": "Search logs...",
+        "PlaceholderInLog": "Search within log...",
+        "NoResults": "No search results found.",
+        "Next": "Next",
+        "Previous": "Previous"
+      },
+      "Error": {
+        "LoadFailed": "Failed to load folder contents."
+      }
+    },
+    "ChatSenderEdit": {
+      "ContextMenu": "Edit Speaker",
+      "Title": "Edit Speaker",
+      "UserLabel": "Edit User",
+      "ActorLabel": "Character",
+      "ActorNone": "OOC / No Character",
+      "SpeakModeActor": "Actor",
+      "SpeakModeToken": "Token",
+      "SpeakModeToggleHint": "Click to toggle between speaking as actor and speaking as token",
+      "Save": "Apply",
+      "Notifications": {
+        "GMOnly": "Only the GM can perform this action.",
+        "Success": "Message sender has been updated.",
+        "UpdateFailed": "Failed to update the message",
+        "NoTokenOnScene": "No token for this actor was found in the active scene, so it was saved as if spoken by the actor."
+      }
+    },
+    "Typing": {
+      "Single": "{name} is typing",
+      "Multiple": "Multiple users are typing"
+    },
+    "LancerCategory": {
+      "Pilot": "Pilot",
+      "Mech": "Mech",
+      "Deployable": "Deployable"
+    },
+    "ChatReviser": {
+      "Notifications": {
+        "EditOwnOnly": "You can only edit your own messages.",
+        "Success": "Message updated.",
+        "Error": "An error occurred while editing the message."
+      }
+    },
+    "ActorTree": {
+      "NoFolder": "No Folder"
+    },
+    "Resizer": {
+      "Sidebar": {
+        "AriaLabel": "Resize Sidebar Width",
+        "Title": "Drag to resize the sidebar width. Double-click to reset to the default width."
+      },
+      "ChatInput": {
+        "AriaLabel": "Resize Chat Input Height",
+        "Title": "Drag to resize the chat input height. Double-click to reset to the default height."
+      }
+    },
+    "Common": {
+      "CSSCode": "CSS Code",
+      "Save": "Save",
+      "Cancel": "Cancel"
+    }
+  }
+}

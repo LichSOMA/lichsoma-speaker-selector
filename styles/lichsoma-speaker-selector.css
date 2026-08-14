@@ -292,3 +292,48 @@
     flex-direction: column;
 }
 
+
+/* Token HUD speaker toggle button */
+#token-hud .control-icon.lichsoma-token-hud-speaker-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 0;
+}
+
+#token-hud .control-icon.lichsoma-token-hud-speaker-toggle > i {
+    display: block;
+    margin: 0;
+    width: auto;
+    height: auto;
+    line-height: 1;
+    text-align: center;
+    pointer-events: none;
+}
+
+
+/* 나레이터 바 기본 타이포그래피 — 폰트 패밀리는 Foundry 값을 상속한다. */
+.lichsoma-narrator-text {
+    font-weight: 900;
+    font-style: italic;
+}
+
+/* 나레이터 타이핑 중 루비를 하나의 연속된 주석으로 유지한다. */
+.lichsoma-narrator-text .lichsoma-narrator-ruby-reading-shell {
+    position: relative;
+    display: inline-block;
+    white-space: nowrap;
+}
+
+.lichsoma-narrator-text .lichsoma-narrator-ruby-reading-ghost {
+    visibility: hidden;
+    white-space: nowrap;
+}
+
+.lichsoma-narrator-text .lichsoma-narrator-ruby-reading-visible {
+    position: absolute;
+    inset: 0 auto auto 0;
+    white-space: nowrap;
+}
+

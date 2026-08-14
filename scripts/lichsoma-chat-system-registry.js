@@ -77,10 +77,3 @@ export const ChatSystemBridge = {
         }
     }
 };
-
-// `lichsoma-chat-log-export.js` 등 비 ESModule 스크립트에서 접근
-globalThis.LichsomaChatSystemRegistry = {
-    registerChatSystemModule,
-    unregisterChatSystemModule,
-    ChatSystemBridge
-};

@@ -4,6 +4,7 @@
  */
 
 import { LichsomaChatDom } from './lichsoma-chat-dom.js';
+import { registerChatRenderProcessor } from './lichsoma-chat-render-pipeline.js';
 
 export class ChatReviser {
     static _editingMessageId = null;
@@ -48,7 +49,7 @@ export class ChatReviser {
 
     // 메시지 렌더링 훅 설정
     static _setupRenderHook() {
-        Hooks.on('renderChatMessageHTML', (message, html, data) => {
+        registerChatRenderProcessor('editing-state', 300, (message, html, data) => {
             try {
                 const li = this._getMessageElement(html);
                 if (!li) return;
@@ -63,7 +64,7 @@ export class ChatReviser {
             } catch (e) {
                 // 오류 발생 시 무시
             }
-        });
+        }, { runInExport: false });
     }
 
     // 더블클릭 이벤트 핸들러 설정
@@ -94,7 +95,7 @@ export class ChatReviser {
                 // 권한 체크: 소유자 또는 GM만 수정 가능
                 const canEdit = game.user.isGM || (message.author?.id === game.user.id);
                 if (!canEdit) {
-                    ui.notifications.warn("자신의 메시지만 수정할 수 있습니다.");
+                    ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatReviser.Notifications.EditOwnOnly'));
                     return;
                 }
 
@@ -110,7 +111,7 @@ export class ChatReviser {
     static _startEditingMode(message) {
         // 이미 편집 중이면 종료
         if (this._editingMessageId) {
-            this._stopEditingMode();
+            this._stopEditingMode({ focusChatInput: false });
         }
 
         this._editingMessageId = message.id;
@@ -304,6 +305,26 @@ export class ChatReviser {
         this._cleanupObservers();
     }
 
+    // 수정 완료/취소 후 기본 채팅 입력창으로 포커스 복귀
+    static _focusChatInput() {
+        requestAnimationFrame(() => {
+            const chatInput = this._getChatInput();
+            if (!chatInput) return;
+
+            const proseMirrorRoot = LichsomaChatDom.getProseMirrorRoot(chatInput);
+            const nativeInput = chatInput.matches?.('textarea, input, [contenteditable="true"]')
+                ? chatInput
+                : chatInput.querySelector?.('textarea, input, [contenteditable="true"]');
+            const focusTarget = proseMirrorRoot ?? nativeInput ?? chatInput;
+
+            try {
+                focusTarget.focus({ preventScroll: true });
+            } catch (e) {
+                focusTarget.focus?.();
+            }
+        });
+    }
+
     // 메시지 저장
     static async _saveMessage(message, newContent) {
         if (!message || !this._editingMessageId || message.id !== this._editingMessageId) {
@@ -317,15 +338,15 @@ export class ChatReviser {
             // 수정 모드 종료
             this._stopEditingMode();
 
-            ui.notifications.info("메시지가 수정되었습니다.");
+            ui.notifications.info(game.i18n.localize('SPEAKERSELECTOR.ChatReviser.Notifications.Success'));
         } catch (e) {
             // 오류 발생 시 알림
-            ui.notifications.error("메시지 수정 중 오류가 발생했습니다.");
+            ui.notifications.error(game.i18n.localize('SPEAKERSELECTOR.ChatReviser.Notifications.Error'));
         }
     }
 
     // 수정 모드 종료
-    static _stopEditingMode() {
+    static _stopEditingMode({ focusChatInput = true } = {}) {
         // 편집 하이라이트 제거
         try {
             if (this._editingMessageId) {
@@ -345,6 +366,10 @@ export class ChatReviser {
 
         this._editingMessageId = null;
         this._removeOverlay();
+
+        if (focusChatInput) {
+            this._focusChatInput();
+        }
     }
 
     // ESC 키로 수정 취소

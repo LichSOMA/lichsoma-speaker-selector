@@ -20,13 +20,25 @@ body {
 }
 
 .chat-log {
+  --lichsoma-chat-line-gap: 5px;
+  --lichsoma-chat-message-gap: 0px;
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.chat-log .chat-message {
-  margin: 0px 1px -6px 5px !important;
+/* Flavor text 안에 포함된 HTML 출력용 chat-message는 일반 메시지의 음수 하단 마진을 쓰지 않는다. */
+.chat-log .flavor-text .chat-message {
+  margin: 0px 1px 0px 5px !important;
+  padding: 0px !important;
+}
+
+/* Foundry 기본 dice-tooltip 박스 스타일 제거 */
+.chat-message .dice-tooltip {
+  background: none !important;
+  background-color: transparent !important;
+  padding: 0px !important;
+  border-radius: 0px !important;
 }
 
 .log-title {
@@ -55,7 +67,6 @@ body {
 }
 
 .message-header {
-  font-weight: bold;
   margin-top: 6px;
   color: var(--export-border-color);
 }
@@ -92,19 +103,20 @@ body {
   column-gap: 10px;
   row-gap: 0px;
   font-size: 24px;
-  font-weight: 700;
   margin-bottom: 0px;
 }
 
 .lichsoma-chat-portrait-container {
-  flex-shrink: 0;
+  flex: 0 0 36px;
   height: 36px;
   width: 36px;
   max-height: 36px;
   max-width: 36px;
+  aspect-ratio: 1 / 1;
   margin-top:4px;
   margin-bottom: 2px;
   background: rgba(115, 115, 115, 0.25);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -112,13 +124,16 @@ body {
 }
 
 .lichsoma-chat-portrait {
-  height: 36px;
+  display: block;
+  flex: 0 0 auto;
+  height: 100%;
   width: auto;
-  max-width: 36px;
+  max-height: none;
+  max-width: none;
   border-radius: 0px;
-  object-fit: cover;
+  object-fit: fill;
   object-position: center;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
+  box-shadow: none;
   transform: scale(var(--portrait-scale-x, 1), var(--portrait-scale-y, 1));
   transform-origin: center center;
 }
@@ -138,7 +153,6 @@ body {
 .message-sender {
 height: 36px;
 line-height: 36px;
-margin-top: 4px;
 margin-top: 2px;
 margin-bottom: 0px;
   color: var(--export-text-color);
@@ -268,86 +282,13 @@ border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding: 4px;
   text-align: center;
   color: var(--export-text-color);
-  font-size: 14px;
+  font-size: 18px;
+  line-height: 24px;
   font-weight: bold;
   margin: 0;
 }
 
-/* 스마트폰 모듈 관련 CSS */
-
-/* 연락처 관련 CSS */
-.chat-log .contact-chat-card {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  gap: 10px;
-  max-height: 72px;
-  max-width: 400px;
-  margin: 4px 0px;
-}
-
-.chat-log .contact-chat-avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.chat-log .contact-chat-avatar.contact-avatar-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chat-log .contact-chat-avatar.contact-avatar-icon i {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 24px;
-}
-
-.chat-log .contact-chat-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.chat-log .contact-chat-name {
-  font-size: 14px;
-  font-weight: bold;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.2;
-  margin: 0;
-  padding: 0;
-}
-
-.chat-log .contact-chat-phone {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  line-height: 1.2;
-  margin: 0;
-  padding: 0;
-  transition: color 0.2s ease;
-}
-
-.chat-log .contact-chat-status {
-  font-size: 12px;
-  color: #ff4444;
-}
-
-.chat-log .chat-message .message-content .dice-roll {
+body:not(.system-dx3rd-fvtt) .chat-log .chat-message .message-content .dice-roll {
   padding-bottom: 4px;
 }
 
@@ -371,4 +312,46 @@ a.content-link {
     color: #ffc800 !important;
     fill: #ffc800 !important;
     stroke: #ffc800 !important;
+}
+/* LichSOMA exported chat spacing normalization
+   Keep merged-message spacing equal to normal wrapped-line spacing. */
+.chat-log .chat-message {
+  margin: 0px 1px var(--lichsoma-chat-message-gap) 5px !important;
+}
+
+.chat-log .chat-message .message-content,
+.chat-log .message-content {
+  line-height: calc(1em + var(--lichsoma-chat-line-gap)) !important;
+}
+
+.chat-log .chat-message .message-content > p,
+.chat-log .message-content > p {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  line-height: inherit !important;
+}
+
+.chat-log .chat-message.lichsoma-merged {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.chat-log .chat-message.lichsoma-merged .lichsoma-chat-header:not(:has(.flavor-text)),
+.chat-log .chat-message.lichsoma-merged .message-header:not(:has(.flavor-text)) {
+  display: none !important;
+}
+
+.chat-log .chat-message.lichsoma-merged:not(.dx3rd-sheet-roll-message) .message-content {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.chat-log .chat-message.lichsoma-merged .message-content > :first-child:not(.dx3rd-info):not(.dx3rd-system):not(.dx3rd-box):not(.dx3rd-combat-msg):not(.dx3rd-open-scene-msg) {
+  margin-top: 0 !important;
+}
+
+.chat-log .chat-message.lichsoma-merged .message-content > :last-child:not(.dx3rd-box):not(.dx3rd-info):not(.dx3rd-system):not(.dx3rd-combat-msg):not(.dx3rd-open-scene-msg):not(.dice-roll) {
+  margin-bottom: 0 !important;
 }

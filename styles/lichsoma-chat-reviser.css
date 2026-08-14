@@ -1,7 +1,7 @@
 /* 채팅 메시지 수정 오버레이 */
 .lichsoma-chat-reviser-overlay {
     position: absolute;
-    background: var(--background-color, var(--color-cool-5)); /* 반투명 녹색 */
+    background: var(--color-cool-5, #0b0a13);
     border: 2px solid var(--border-color, var(--color-cool-4));
     border-radius: 4px;
     z-index: 1000;
@@ -18,7 +18,6 @@
     width: 100%;
     height: 100%;
     padding: var(--chat-message-spacing);
-    font-family: var(--font-body);
     margin: 0;
     border: none;
     background: transparent;
@@ -39,6 +38,32 @@
 }
 
 .chat-scroll .chat-log.plain.theme-light .chat-message.lichsoma-editing-message .message-content {
-    color: #ff4444 !important;
+    color: #ffd700 !important;
 }
 
+
+/* FVTT v13: message edit overlay must remain dark even if core light-theme variables are inherited. */
+body.lichsoma-fvtt13-chat .lichsoma-chat-reviser-overlay {
+    background: var(--color-cool-5, #0b0a13) !important;
+    border-color: var(--color-cool-4, rgba(255, 255, 255, 0.25)) !important;
+    color: #ffffff !important;
+    color-scheme: dark;
+}
+
+body.lichsoma-fvtt13-chat .lichsoma-chat-reviser-content {
+    background: var(--color-cool-5, #0b0a13) !important;
+    color: #ffffff !important;
+    caret-color: #ffffff !important;
+    line-height: calc(1em + 6px) !important;
+}
+
+body.lichsoma-fvtt13-chat .lichsoma-chat-reviser-content :is(p, div) {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    line-height: calc(1em + 6px) !important;
+}
+
+body.lichsoma-fvtt13-chat .lichsoma-chat-reviser-content * {
+    color: inherit !important;
+    background: transparent !important;
+}

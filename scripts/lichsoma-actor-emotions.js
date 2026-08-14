@@ -1,3 +1,6 @@
+import { SpeakerSelectorCompat } from './lichsoma-speaker-selector-compat.js';
+import { getModuleApi } from './lichsoma-module-api.js';
+
 /**
  * LichSOMA Actor Emotions
  * 액터 감정 포트레잇 선택 기능
@@ -20,7 +23,11 @@ export class ActorEmotions {
 
     /** Foundry v13+ — 전역 `FilePicker` 대신 namespaced 구현 사용 */
     static _openImageFilePicker({ current, callback }) {
-        const FilePickerImpl = foundry.applications.apps.FilePicker.implementation;
+        const FilePickerImpl = SpeakerSelectorCompat.FilePicker;
+        if (!FilePickerImpl) {
+            ui.notifications?.warn?.(game.i18n.localize('SPEAKERSELECTOR.Emotion.FilePickerUnavailable'));
+            return;
+        }
         new FilePickerImpl({
             type: 'image',
             current: current || '',
@@ -51,8 +58,8 @@ export class ActorEmotions {
 
         if (windowHeader.find('.lichsoma-emotion-manage-btn').length) return;
 
-        const manageTitle = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage') || '감정 관리';
-        const emotionLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Label') || '감정';
+        const manageTitle = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage');
+        const emotionLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Label');
         // <a>는 헤더 창 드래그와 동일 레이어로 처리되어 클릭이 먹히지 않는 경우가 많음 — 코어와 동일한 header-control 버튼 사용
         const button = $(`
             <button type="button" class="header-control lichsoma-emotion-manage-btn" title="${manageTitle}" aria-label="${manageTitle}">
@@ -152,19 +159,23 @@ export class ActorEmotions {
             portrait: data.portrait || ''
         }));
 
-        const addLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Add') || '감정 추가';
+        const addLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Add');
+        const namePlaceholder = game.i18n.localize('SPEAKERSELECTOR.Emotion.NamePlaceholder');
+        const portraitPlaceholder = game.i18n.localize('SPEAKERSELECTOR.Emotion.PortraitPlaceholder');
+        const choosePortrait = game.i18n.localize('SPEAKERSELECTOR.Emotion.ChoosePortrait');
+        const deleteLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Delete');
         const itemsHTML = items.map(emotion => `
             <div class="lichsoma-emotion-manager-item" data-emotion-id="${emotion.id}">
                 <img src="${emotion.portrait || actor.img}" alt="${emotion.name}" />
                 <div class="lichsoma-emotion-manager-item-info">
-                    <input type="text" class="lichsoma-emotion-name" value="${emotion.name}" placeholder="감정 이름" />
-                    <input type="text" class="lichsoma-emotion-portrait" value="${emotion.portrait}" placeholder="포트레잇 경로" />
+                    <input type="text" class="lichsoma-emotion-name" value="${emotion.name}" placeholder="${namePlaceholder}" />
+                    <input type="text" class="lichsoma-emotion-portrait" value="${emotion.portrait}" placeholder="${portraitPlaceholder}" />
                 </div>
                 <div class="lichsoma-emotion-manager-item-actions">
-                    <button type="button" class="lichsoma-emotion-edit-portrait" title="포트레잇 선택">
+                    <button type="button" class="lichsoma-emotion-edit-portrait" title="${choosePortrait}">
                         <i class="fa-solid fa-image"></i>
                     </button>
-                    <button type="button" class="lichsoma-emotion-delete" title="삭제">
+                    <button type="button" class="lichsoma-emotion-delete" title="${deleteLabel}">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </div>
@@ -261,20 +272,26 @@ export class ActorEmotions {
         if (!listContainer) return;
 
         const newId = foundry.utils.randomID();
+        const newEmotionAlt = game.i18n.localize('SPEAKERSELECTOR.Emotion.NewEmotionAlt');
+        const namePlaceholder = game.i18n.localize('SPEAKERSELECTOR.Emotion.NamePlaceholder');
+        const portraitPlaceholder = game.i18n.localize('SPEAKERSELECTOR.Emotion.PortraitPlaceholder');
+        const choosePortrait = game.i18n.localize('SPEAKERSELECTOR.Emotion.ChoosePortrait');
+        const deleteLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Delete');
+        const emptyLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Empty');
         const item = document.createElement('div');
         item.className = 'lichsoma-emotion-manager-item';
         item.dataset.emotionId = newId;
         item.innerHTML = `
-            <img src="${actor?.img || 'icons/svg/mystery-man.svg'}" alt="새 감정" />
+            <img src="${actor?.img || 'icons/svg/mystery-man.svg'}" alt="${newEmotionAlt}" />
             <div class="lichsoma-emotion-manager-item-info">
-                <input type="text" class="lichsoma-emotion-name" value="" placeholder="감정 이름" />
-                <input type="text" class="lichsoma-emotion-portrait" value="" placeholder="포트레잇 경로" />
+                <input type="text" class="lichsoma-emotion-name" value="" placeholder="${namePlaceholder}" />
+                <input type="text" class="lichsoma-emotion-portrait" value="" placeholder="${portraitPlaceholder}" />
             </div>
             <div class="lichsoma-emotion-manager-item-actions">
-                <button type="button" class="lichsoma-emotion-edit-portrait" title="포트레잇 선택">
+                <button type="button" class="lichsoma-emotion-edit-portrait" title="${choosePortrait}">
                     <i class="fa-solid fa-image"></i>
                 </button>
-                <button type="button" class="lichsoma-emotion-delete" title="삭제">
+                <button type="button" class="lichsoma-emotion-delete" title="${deleteLabel}">
                     <i class="fa-solid fa-trash"></i>
                 </button>
             </div>
@@ -301,7 +318,7 @@ export class ActorEmotions {
             item.remove();
             // 모든 항목이 삭제되면 빈 메시지 표시
             if (listContainer.querySelectorAll('.lichsoma-emotion-manager-item').length === 0) {
-                listContainer.innerHTML = '<p class="lichsoma-emotion-manager-empty">등록된 감정이 없습니다.</p>';
+                listContainer.innerHTML = `<p class="lichsoma-emotion-manager-empty">${emptyLabel}</p>`;
             }
         });
 
@@ -341,7 +358,7 @@ export class ActorEmotions {
             await actor.setFlag(this.MODULE_ID, this.EMOTIONS_USE_MODULE_FLAG, true);
         } catch (err) {
             // 감정 저장 실패
-            ui.notifications.error(game.i18n.localize('SPEAKERSELECTOR.Emotion.SaveError') || '감정 저장 중 오류가 발생했습니다.');
+            ui.notifications.error(game.i18n.localize('SPEAKERSELECTOR.Emotion.SaveError'));
         }
     }
 
@@ -377,13 +394,11 @@ export class ActorEmotions {
             this._actorEmotionMap.delete(actorId);
         }
 
-        const SpeakerSelector = window.SpeakerSelector;
-        if (SpeakerSelector) {
-            if (SpeakerSelector._updateActorOptionInDropdown) {
-                SpeakerSelector._updateActorOptionInDropdown(actorId);
-            } else if (SpeakerSelector._updateSpeakerDropdown) {
-                SpeakerSelector._updateSpeakerDropdown();
-            }
+        const speakerSelector = getModuleApi()?.SpeakerSelector;
+        if (speakerSelector?._updateActorOptionInDropdown) {
+            speakerSelector._updateActorOptionInDropdown(actorId);
+        } else if (speakerSelector?._updateSpeakerDropdown) {
+            speakerSelector._updateSpeakerDropdown();
         }
 
         // 다른 모듈/렌더러가 감정 변경에 반응할 수 있도록 알림.
@@ -487,7 +502,7 @@ export class ActorEmotions {
 /**
  * 감정 선택 — ApplicationV2
  */
-class LichsomaEmotionSelectorApp extends foundry.applications.api.ApplicationV2 {
+class LichsomaEmotionSelectorApp extends SpeakerSelectorCompat.ApplicationV2 {
     static DEFAULT_OPTIONS = {
         id: 'lichsoma-emotion-selector',
         classes: ['lichsoma-emotion-selector-app'],
@@ -517,7 +532,7 @@ class LichsomaEmotionSelectorApp extends foundry.applications.api.ApplicationV2 
         const { actor: _a, selector: _s, actorId: _i, emotions: _e, ...rest } = options;
         const base = foundry.utils.mergeObject(LichsomaEmotionSelectorApp.DEFAULT_OPTIONS, rest);
         base.window = foundry.utils.mergeObject(base.window, {
-            title: `${actor.name} — ${game.i18n.localize('SPEAKERSELECTOR.Emotion.SelectTitle') || '감정 선택'}`
+            title: `${actor.name} — ${game.i18n.localize('SPEAKERSELECTOR.Emotion.SelectTitle')}`
         });
         super(base);
         this.actor = actor;
@@ -538,8 +553,8 @@ class LichsomaEmotionSelectorApp extends foundry.applications.api.ApplicationV2 
             name: data?.name || '',
             portrait: data?.portrait || ''
         }));
-        const defaultLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Default') || '기본';
-        const manageLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage') || '감정 관리';
+        const defaultLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Default');
+        const manageLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage');
 
         const wrap = document.createElement('div');
         wrap.className = 'lichsoma-emotion-selector-app-inner';
@@ -615,7 +630,7 @@ class LichsomaEmotionSelectorApp extends foundry.applications.api.ApplicationV2 
 /**
  * 감정 관리 — ApplicationV2 (스피커 액터 격자 설정과 동일 패턴)
  */
-class LichsomaEmotionManagerApp extends foundry.applications.api.ApplicationV2 {
+class LichsomaEmotionManagerApp extends SpeakerSelectorCompat.ApplicationV2 {
     static DEFAULT_OPTIONS = {
         id: 'lichsoma-emotion-manager',
         classes: ['lichsoma-emotion-manager-app'],
@@ -638,7 +653,7 @@ class LichsomaEmotionManagerApp extends foundry.applications.api.ApplicationV2 {
         const actor = options.actor;
         if (!actor) throw new Error('LichsomaEmotionManagerApp requires an actor');
         const { actor: _a, ...rest } = options;
-        const manageLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage') || '감정 관리';
+        const manageLabel = game.i18n.localize('SPEAKERSELECTOR.Emotion.Manage');
         const title = game.i18n.format('SPEAKERSELECTOR.Emotion.ManageWindowTitle', {
             manage: manageLabel,
             actorName: actor.name

@@ -1,7 +1,26 @@
+import {
+  escapeCssString,
+  extractWebfontPresentation,
+  uint8ArrayToBase64
+} from './lichsoma-shared-utils.js';
+import {
+  applyDnd5eTitleAlias,
+  isDnd5eMessageElement
+} from './lichsoma-dnd5e-header.js';
+
+import { ChatSystemBridge } from './lichsoma-chat-system-registry.js';
+import { withChatRenderContext } from './lichsoma-chat-render-pipeline.js';
+import { SpeakerSelector } from './lichsoma-speaker-selector.js';
 // LichSOMA Speaker Selector - Chat Log Export
 // 채팅 로그를 HTML로 저장하는 기능
 (function() {
   'use strict';
+
+  const MAX_EMBEDDED_IMAGE_BYTES = 500 * 1024;
+  const IMAGE_REGISTRY_ID = 'lichsoma-image-registry';
+  let chatExportObserver = null;
+  let observedChatExportContainer = null;
+  let chatLogExportInProgress = false;
   
   // 문자열을 간단한 해시로 변환하는 함수
   function simpleHash(str) {
@@ -20,15 +39,131 @@
 
   /** @see scripts/lichsoma-chat-system-registry.js — 시스템 모듈이 등록한 내보내기 머지 제외 규칙 */
   function chatSystemExportExcludeCurrent(message, element) {
-    const bridge = globalThis.LichsomaChatSystemRegistry?.ChatSystemBridge?.export;
-    return bridge?.excludeCurrent?.(message, element) === true;
+    return ChatSystemBridge.export.excludeCurrent(message, element) === true;
   }
 
   function chatSystemExportExcludePrevious(message, element) {
-    const bridge = globalThis.LichsomaChatSystemRegistry?.ChatSystemBridge?.export;
-    return bridge?.excludePrevious?.(message, element) === true;
+    return ChatSystemBridge.export.excludePrevious(message, element) === true;
   }
-  
+
+
+  function getSettingSafe(key, fallback = '') {
+    try {
+      return game.settings.get('lichsoma-speaker-selector', key) ?? fallback;
+    } catch (e) {
+      return fallback;
+    }
+  }
+
+  function getHookCallback(hookEntry) {
+    if (typeof hookEntry === 'function') return hookEntry;
+    if (typeof hookEntry?.fn === 'function') return hookEntry.fn;
+    if (typeof hookEntry?.callback === 'function') return hookEntry.callback;
+    return null;
+  }
+
+  async function runHookEntry(hookEntry, ...args) {
+    const fn = getHookCallback(hookEntry);
+    if (!fn) return undefined;
+    const result = fn(...args);
+    if (result && typeof result.then === 'function') return await result;
+    return result;
+  }
+
+  function buildChatLogExportWebfontCSS() {
+    const settings = {
+      header: getSettingSafe('chatHeaderWebfontCSS', ''),
+      dnd5eTitle: getSettingSafe('dnd5eTitleWebfontCSS', ''),
+      dnd5eSubtitle: getSettingSafe('dnd5eSubtitleWebfontCSS', ''),
+      message: getSettingSafe('chatMessageWebfontCSS', ''),
+      dice: getSettingSafe('chatDiceWebfontCSS', ''),
+      narrator: getSettingSafe('narratorWebfontCSS', '')
+    };
+
+    const parts = [];
+    const uniqueCSS = [...new Set(Object.values(settings).map(css => String(css ?? '').trim()).filter(Boolean))];
+    if (uniqueCSS.length) {
+      parts.push(`/* Shared in-game/export webfonts */\n${uniqueCSS.join('\n\n')}`);
+    }
+
+    const profiles = Object.fromEntries(
+      Object.entries(settings).map(([key, css]) => [key, extractWebfontPresentation(css)])
+    );
+    const rules = [];
+    const declarationsFor = (profile, defaults = {}, { family = true } = {}) => {
+      const declarations = [];
+      if (family && profile?.family) declarations.push(`font-family: "${escapeCssString(profile.family)}", sans-serif`);
+      const weight = profile?.weight || defaults.weight || '';
+      const style = profile?.style || defaults.style || '';
+      if (weight) declarations.push(`font-weight: ${weight}`);
+      if (style) declarations.push(`font-style: ${style}`);
+      if (profile?.variationSettings) declarations.push(`font-variation-settings: ${profile.variationSettings}`);
+      return declarations;
+    };
+    const addRule = (selectors, declarations) => {
+      if (!declarations.length) return;
+      rules.push(`${selectors} {\n  ${declarations.map(value => `${value} !important`).join(';\n  ')};\n}`);
+    };
+
+    const headerFamilySelectors = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header > .message-sender,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header > h4.message-sender,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header .message-sender,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .lichsoma-chat-header,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .lichsoma-chat-header :where(span, strong, em, ruby, rb, rt)`;
+    const headerStyleSelectors = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header > .message-sender,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header > h4.message-sender,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .lichsoma-chat-header .message-sender`;
+    addRule(headerFamilySelectors, declarationsFor(profiles.header, {}, { family: true }).filter(value => value.startsWith('font-family:')));
+    addRule(headerStyleSelectors, declarationsFor(profiles.header, { weight: '900', style: 'normal' }, { family: false }));
+
+    addRule(
+      `body.lichsoma-chat-log-export.system-dnd5e .chat-log.chat-log .chat-message .message-header .name-stacked .title`,
+      declarationsFor(profiles.dnd5eTitle)
+    );
+    addRule(
+      `body.lichsoma-chat-log-export.system-dnd5e .chat-log.chat-log .chat-message .message-header .name-stacked .subtitle`,
+      declarationsFor(profiles.dnd5eSubtitle)
+    );
+
+    const messageFamilySelectors = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content :where(p, h1, h2, h3, h4, h5, h6, div, span, strong, em, b, i:not([class^="fa-"]):not([class*=" fa-"]):not([class^="cci-"]):not([class*=" cci-"]), li, ul, ol, table, thead, tbody, tr, th, td, blockquote, ruby, rb, rt, section, article)`;
+    const messageStyleSelector = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content`;
+    addRule(messageFamilySelectors, declarationsFor(profiles.message, {}, { family: true }).filter(value => value.startsWith('font-family:')));
+    addRule(messageStyleSelector, declarationsFor(profiles.message, { weight: '500', style: 'normal' }, { family: false }));
+
+    addRule(
+      `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .dice-roll,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .dice-roll :where(.dice-formula, .dice-total, .dice-tooltip, .dice-tooltip *, .dice-result)`,
+      declarationsFor(profiles.dice)
+    );
+
+    const narratorFamilySelectors = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content .narrator-card,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content .narrator-card :where(p, h1, h2, h3, h4, h5, h6, div, span, strong, em, b, i, li, ul, ol, blockquote, ruby, rb, rt)`;
+    const narratorStyleSelector = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content .narrator-card`;
+    addRule(narratorFamilySelectors, declarationsFor(profiles.narrator, {}, { family: true }).filter(value => value.startsWith('font-family:')));
+    addRule(narratorStyleSelector, declarationsFor(profiles.narrator, { weight: '500', style: 'italic' }, { family: false }));
+
+    if (rules.length) parts.push(`/* Shared webfont application */\n${rules.join('\n\n')}`);
+    return parts.length ? `\n\n/* HTML 내보내기 웹폰트 */\n${parts.join('\n\n')}` : '';
+  }
+
+  function buildCainAlterExportFontPriorityCSS() {
+    if (game.system?.id !== 'cain-alter') return '';
+
+    const builder = game.cainAlter?.buildChatExportFontPriorityCSS;
+    if (typeof builder !== 'function') return '';
+
+    try {
+      const css = builder();
+      if (!css || typeof css !== 'string' || !css.trim()) return '';
+      return `\n\n/* Cain Alter HTML export font priority */\n${css.trim()}`;
+    } catch (error) {
+      console.warn('[lichsoma-speaker-selector] Cain Alter export font priority CSS failed:', error);
+      return '';
+    }
+  }
+
   /** ChatMerge._isOnlyHrMessage 와 동일: ProseMirror의 `<p><hr></p>` 등도 구분선 전용으로 처리 */
   function isOnlyHrMessageContent(messageEl) {
     const messageContent = messageEl.querySelector('.message-content');
@@ -59,22 +194,12 @@
   }
 
   function isMessengerMessage(message) {
-    return message?.flags?.['lichsoma-fvtt-smartphone']?.type === 'messenger-message';
+    const type = message?.flags?.['lichsoma-fvtt-smartphone']?.type;
+    return type === 'messenger-message' || type === 'sns-dm-message';
   }
 
   function isDnd5eExportMessage(messageEl) {
-    if (game.system?.id !== 'dnd5e') return false;
-    if (!messageEl) return false;
-
-    const header = messageEl.querySelector?.('.message-header');
-    if (!header) return false;
-
-    return messageEl.classList.contains('dnd5e2')
-      || messageEl.classList.contains('lichsoma-dnd5e-native-header')
-      || !!header.querySelector?.('.message-sender .name-stacked')
-      || !!header.querySelector?.('.message-sender .avatar')
-      || !!header.querySelector?.('h4.message-sender')
-      || !!header.querySelector?.('.message-sender');
+    return isDnd5eMessageElement(messageEl);
   }
 
   function collapseDnd5eExportChatCards(messageEl) {
@@ -92,74 +217,37 @@
     });
   }
 
-  function getMessageAuthorName(message) {
-    if (!message) return '';
 
-    if (message.author && typeof message.author === 'object' && 'name' in message.author) {
-      return message.author.name || '';
+
+  function getExportBodyClasses() {
+    const classes = ['lichsoma-chat-log-export'];
+
+    const systemId = game.system?.id || '';
+    if (systemId) classes.push(`system-${systemId}`);
+
+    const generation = Number(game.release?.generation ?? game.version?.split?.('.')?.[0] ?? 0);
+    if (generation && generation <= 13) {
+      classes.push('lichsoma-fvtt13-chat');
+    } else if (generation >= 14) {
+      classes.push('lichsoma-fvtt14-chat');
     }
 
-    const authorId = message.author?.id || message.user?.id || message.user || null;
-    if (!authorId) return '';
+    try {
+      for (const cls of document.body?.classList || []) {
+        if (/^theme-/.test(cls) || cls === 'lancer-simple-fonts') {
+          classes.push(cls);
+        }
+      }
+    } catch (e) {
+      // body class 수집 실패 시 기본 class만 사용한다.
+    }
 
-    return game.users?.get(authorId)?.name || '';
-  }
-
-  function getDnd5eExportTitleAlias(message) {
-    if (!message) return '';
-
-    const flags = message.flags?.['lichsoma-speaker-selector'] || {};
-    return flags.senderAlias
-      || message.speaker?.alias
-      || message.alias
-      || getMessageAuthorName(message)
-      || '';
+    return Array.from(new Set(classes.filter(Boolean))).join(' ');
   }
 
   function applyDnd5eExportNameStackedTitleAlias(message, messageEl) {
     if (!isDnd5eExportMessage(messageEl)) return;
-
-    const header = messageEl.querySelector?.('.message-header');
-    const sender = header?.querySelector?.('.message-sender');
-    if (!sender) return;
-
-    let nameStacked = sender.querySelector('.name-stacked');
-    let title = nameStacked?.querySelector('.title') || null;
-
-    if (!nameStacked) {
-      const avatar = sender.querySelector(':scope > .avatar');
-      const existingTitleText = Array.from(sender.childNodes)
-        .filter((node) => node !== avatar)
-        .map((node) => node.textContent || '')
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      Array.from(sender.childNodes).forEach((node) => {
-        if (node !== avatar) node.remove();
-      });
-
-      nameStacked = document.createElement('span');
-      nameStacked.classList.add('name-stacked');
-
-      title = document.createElement('span');
-      title.classList.add('title');
-      title.textContent = existingTitleText || '\u00A0';
-
-      nameStacked.appendChild(title);
-      sender.appendChild(nameStacked);
-    } else if (!title) {
-      title = document.createElement('span');
-      title.classList.add('title');
-      title.textContent = '\u00A0';
-      nameStacked.insertBefore(title, nameStacked.firstChild);
-    }
-
-    const alias = getDnd5eExportTitleAlias(message);
-    if (alias && title) {
-      title.textContent = alias;
-      title.dataset.lichsomaSenderAlias = 'true';
-    }
+    applyDnd5eTitleAlias(message, messageEl);
   }
 
   function getDnd5eExportAvatarPortraitSrc(message, messageEl) {
@@ -322,37 +410,154 @@
     throw lastErr;
   }
   
-  // 이미지 URL을 Base64 Data URL로 변환하는 함수
-  async function imageUrlToBase64(imageUrl, localHost) {
+  function isSvgResponse(imageUrl, response) {
+    const contentType = response?.headers?.get?.('content-type') || '';
+    if (/image\/svg\+xml/i.test(contentType)) return true;
+
     try {
-      // 이미 Base64인 경우 그대로 반환
+      const path = new URL(normalizeImageUrl(imageUrl, window.location.origin)).pathname;
+      return /\.svg$/i.test(path);
+    } catch (e) {
+      return /\.svg(?:[?#]|$)/i.test(String(imageUrl || ''));
+    }
+  }
+
+  function svgTextToBase64DataUrl(svgText) {
+    const bytes = new TextEncoder().encode(svgText || '');
+    return `data:image/svg+xml;base64,${uint8ArrayToBase64(bytes)}`;
+  }
+
+  function estimateDataUrlByteSize(dataUrl) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return 0;
+
+    const commaIndex = dataUrl.indexOf(',');
+    if (commaIndex < 0) return 0;
+
+    const metadata = dataUrl.slice(0, commaIndex);
+    const payload = dataUrl.slice(commaIndex + 1);
+
+    if (/;base64(?:;|$)/i.test(metadata)) {
+      const compact = payload.replace(/\s+/g, '');
+      const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
+      return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
+    }
+
+    try {
+      return new TextEncoder().encode(decodeURIComponent(payload)).byteLength;
+    } catch (e) {
+      return new TextEncoder().encode(payload).byteLength;
+    }
+  }
+
+  function readBlobAsDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  // 500KB 이하 이미지만 내보내기용 Data URL로 변환한다.
+  // 초과 이미지는 HTML에 중복 Base64를 넣지 않고 절대 URL을 유지한다.
+  async function imageUrlToEmbeddedRecord(imageUrl, localHost, maxBytes = MAX_EMBEDDED_IMAGE_BYTES) {
+    try {
       if (imageUrl.startsWith('data:')) {
-        return imageUrl;
+        return {
+          dataUrl: imageUrl,
+          byteSize: estimateDataUrlByteSize(imageUrl),
+          absoluteUrl: imageUrl
+        };
       }
-      
+
       const fullUrl = normalizeImageUrl(imageUrl, localHost);
-      if (!fullUrl) return imageUrl;
-      
-      // 이미지 fetch
+      if (!fullUrl) {
+        return { dataUrl: '', byteSize: 0, absoluteUrl: imageUrl };
+      }
+
       const response = await fetchWithRetry(fullUrl, { retries: 4, timeoutMs: 25000, backoffMs: 600 });
       if (!response.ok) {
         console.warn(`이미지 로드 실패: ${fullUrl}`);
-        return imageUrl; // 실패 시 원본 URL 반환
+        return { dataUrl: '', byteSize: 0, absoluteUrl: fullUrl };
       }
-      
+
+      const contentLength = Number(response.headers?.get?.('content-length'));
+      if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+        try {
+          await response.body?.cancel?.();
+        } catch (e) {
+          // 이미 완료되었거나 취소를 지원하지 않는 응답은 그대로 둔다.
+        }
+        return {
+          dataUrl: '',
+          byteSize: contentLength,
+          absoluteUrl: fullUrl
+        };
+      }
+
+      if (isSvgResponse(fullUrl, response)) {
+        const svgText = await response.text();
+        const byteSize = new TextEncoder().encode(svgText).byteLength;
+        if (byteSize > maxBytes) {
+          return {
+            dataUrl: '',
+            byteSize,
+            absoluteUrl: fullUrl
+          };
+        }
+
+        return {
+          dataUrl: svgTextToBase64DataUrl(svgText),
+          byteSize,
+          absoluteUrl: fullUrl
+        };
+      }
+
       const blob = await response.blob();
-      
-      // Blob을 Base64로 변환
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+      if (blob.size > maxBytes) {
+        return {
+          dataUrl: '',
+          byteSize: blob.size,
+          absoluteUrl: fullUrl
+        };
+      }
+
+      return {
+        dataUrl: await readBlobAsDataUrl(blob),
+        byteSize: blob.size,
+        absoluteUrl: fullUrl
+      };
     } catch (error) {
       console.warn(`Base64 변환 실패: ${imageUrl}`, error);
-      return imageUrl; // 오류 시 원본 URL 반환
+      return {
+        dataUrl: '',
+        byteSize: 0,
+        absoluteUrl: normalizeImageUrl(imageUrl, localHost) || imageUrl
+      };
     }
+  }
+
+  function getOrCreateImageRegistryKey(dataUrl, registry, reverseRegistry) {
+    const existingKey = reverseRegistry.get(dataUrl);
+    if (existingKey) return existingKey;
+
+    const baseKey = simpleHash(dataUrl) || 'image';
+    let key = baseKey;
+    let suffix = 2;
+    while (registry.has(key) && registry.get(key) !== dataUrl) {
+      key = `${baseKey}-${suffix++}`;
+    }
+
+    registry.set(key, dataUrl);
+    reverseRegistry.set(dataUrl, key);
+    return key;
+  }
+
+  function serializeImageRegistry(registry) {
+    return JSON.stringify(Object.fromEntries(registry))
+      .replace(/</g, '\\u003c')
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029');
   }
   
   // game.messages의 ChatMessage 문서를 기준으로 내보내기용 HTML을 새로 렌더링한다.
@@ -448,51 +653,79 @@
         return renderFallbackChatMessageElement(message);
       }
 
-      const rendered = await message.renderHTML({
+      // Isolate this render from all live-ChatLog-only processors. The context is
+      // associated with this specific ChatMessage object, so live messages which render
+      // concurrently are not affected.
+      const rendered = await withChatRenderContext(message, { mode: 'export' }, () => message.renderHTML({
         canDelete: false,
         canClose: false
-      });
-      return normalizeRenderedChatMessageElement(rendered, message)
+      }));
+
+      const element = normalizeRenderedChatMessageElement(rendered, message)
         || renderFallbackChatMessageElement(message);
+
+      // Apply the presentation required by the standalone export explicitly and await it.
+      // This removes the old race where portrait work continued in timers/promises after
+      // message.renderHTML() had already returned.
+      try {
+        await SpeakerSelector.prepareMessageElementForExport(message, element);
+      } catch (error) {
+        console.warn('[lichsoma-speaker-selector] Export presentation preparation failed:', message?.id, error);
+      }
+
+      return element;
     } catch (error) {
       console.warn('[lichsoma-speaker-selector] ChatMessage.renderHTML() 실패, fallback HTML 사용:', message?.id, error);
       return renderFallbackChatMessageElement(message);
     }
   }
 
-  async function buildChatLogHTMLFromMessages() {
+  async function buildChatLogDOMFromMessages() {
     const messages = getSortedChatMessages();
-    const htmlParts = [];
+    const container = document.createElement('div');
+    let count = 0;
 
-    for (const message of messages) {
+    for (let index = 0; index < messages.length; index++) {
+      const message = messages[index];
       const element = await renderChatMessageForExport(message);
-      if (!element) continue;
-      htmlParts.push(element.outerHTML);
+      if (element) {
+        container.appendChild(element);
+        count += 1;
+      }
+
+      // Large logs can contain several thousand messages. Yield periodically so the
+      // browser can service rendering/input and does not look permanently frozen.
+      if ((index + 1) % 50 === 0) await new Promise(resolve => setTimeout(resolve, 0));
     }
 
     return {
-      html: htmlParts.join('\n'),
-      count: htmlParts.length,
+      container,
+      count,
       total: messages.length
     };
   }
 
   // 채팅 로그 HTML로 저장하는 함수
-  async function exportChatLogAsHTML() {
+  async function exportChatLogAsHTML({ notifyFailure = true } = {}) {
+    // A several-thousand-message export is intentionally long-running. Prevent a second
+    // click (or a flush-backup request) from starting another full render in parallel.
+    if (chatLogExportInProgress) return false;
+    chatLogExportInProgress = true;
+
     try {
       // game.messages의 ChatMessage 문서를 기준으로 내보내기용 HTML을 새로 렌더링한다.
       const totalMessageCount = game.messages.size;
       if (totalMessageCount === 0) {
         ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Warning.Empty'));
-        return;
+        return false;
       }
 
-      const renderedLog = await buildChatLogHTMLFromMessages();
-      let chatLogHTML = renderedLog.html;
+      const renderedLog = await buildChatLogDOMFromMessages();
+      const logContainer = renderedLog.container;
 
-      if (!chatLogHTML || chatLogHTML.trim().length === 0) {
+      if (!logContainer || renderedLog.count === 0) {
         ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Warning.Empty'));
-        return;
+        return false;
       }
 
       if (renderedLog.count < renderedLog.total) {
@@ -502,10 +735,9 @@
         }));
       }
 
-      // 챗 머지 처리: 추출된 HTML에서 머지 조건 확인 및 클래스 추가
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = chatLogHTML;
-      const messages = tempDiv.querySelectorAll('.chat-message');
+      // 챗 머지 처리: 이미 detached DOM으로 렌더된 메시지를 그대로 사용한다.
+      // 전체 HTML 문자열을 만들었다가 다시 parse하던 구형 경로를 제거한다.
+      const messages = logContainer.querySelectorAll('.chat-message');
 
       let prevMeta = null;
 
@@ -582,9 +814,6 @@
         prevMeta = isValidExportMergeMeta(currentMeta) ? currentMeta : null;
       });
 
-      // 처리된 HTML 다시 가져오기
-      chatLogHTML = tempDiv.innerHTML;
-      
       // 설정 확인
       const useBase64 = game.settings.get('lichsoma-speaker-selector', 'chatLogExportUseBase64') || false;
       let basePath = game.settings.get('lichsoma-speaker-selector', 'chatLogExportBasePath') || '';
@@ -595,191 +824,137 @@
         basePath = localHost;
       }
       
-      // Base64 변환이 활성화된 경우 이미지를 Base64로 변환
-      let imageBase64CSS = ''; // CSS 변수로 저장할 base64 이미지들 (헤더 이미지용)
-      let imageClassCSS = ''; // 각 이미지 클래스에 대한 CSS 규칙 (헤더 이미지용)
+      // Base64 변환이 활성화된 경우 500KB 이하 이미지를 단일 레지스트리로 통합한다.
+      const imageRegistry = new Map();
+      let imageRegistryJSON = '{}';
       if (useBase64) {
-        // 모든 이미지 태그 찾기
-        const tempDiv2 = document.createElement('div');
-        tempDiv2.innerHTML = chatLogHTML;
-        const images = tempDiv2.querySelectorAll('img[src]');
-        
-        // 이미지 URL -> Base64 변환 결과 캐시 (같은 이미지 중복 변환 방지)
-        const imageCache = new Map();
-        // 이미지 URL -> 해시 매핑 (헤더 이미지용, CSS 변수 참조)
-        const imageHashMap = new Map();
-        // 이미 추가된 CSS 클래스 추적 (중복 방지)
-        const addedCSSClasses = new Set();
-        
-        // 동시 처리 제한 (너무 많은 fetch를 한꺼번에 날리면 일부가 실패/타임아웃될 수 있음)
+        const images = Array.from(logContainer.querySelectorAll('img[src]'));
+
+        // URL별 Promise를 캐시해 같은 파일을 중복 fetch/변환하지 않는다.
+        const imageResultCache = new Map();
+        // 최종 Data URL 기준으로 하나의 레지스트리 키만 생성한다.
+        const reverseImageRegistry = new Map();
         const MAX_CONCURRENT_IMAGE_FETCHES = 6;
-        
+
         async function runWithConcurrencyLimit(items, limit, worker) {
           const queue = Array.from(items);
-          const workers = Array.from({ length: Math.max(1, limit) }, async () => {
-            while (queue.length) {
-              const item = queue.shift();
+          let nextIndex = 0;
+          const workers = Array.from({ length: Math.min(Math.max(1, limit), Math.max(1, queue.length)) }, async () => {
+            while (nextIndex < queue.length) {
+              const item = queue[nextIndex++];
               try {
                 await worker(item);
               } catch (e) {
-                // worker 내부에서 로그/폴백 처리하므로 여기서는 무시
+                // worker 내부에서 로그/폴백 처리한다.
               }
             }
           });
           await Promise.all(workers);
         }
-        
-        // 각 이미지를 Base64로 변환 (캐시 활용)
-        const processOneImage = async (img) => {
-          const src = img.getAttribute('src');
-          if (!src) return;
-          
-          // 이미 base64인 경우 처리
-          const isAlreadyBase64 = src.startsWith('data:');
-          
-          // 부모 요소 확인: 헤더 내 이미지 또는 message-content .item/.chat-card/.messenger-chat-message 내 이미지 또는 pf2e.chat-card 내 이미지인지 체크
-          const parent = img.parentElement;
-          const isInMessageContentItem = img.closest('.message-content .item') !== null;
-          const isInMessageContentChatCard = img.closest('.message-content .chat-card') !== null;
-          const isInMessageContentMessengerChatMessage = img.closest('.message-content .messenger-chat-message') !== null;
-          const isInPf2eChatCard = img.closest('.pf2e.chat-card') !== null;
-          const isHeaderImage = parent && (
-            isInMessageContentItem ||
-            isInMessageContentChatCard ||
-            isInMessageContentMessengerChatMessage ||
-            isInPf2eChatCard ||
-            parent.closest('.message-header') ||
-            parent.closest('.lichsoma-chat-header') ||
-            parent.closest('.item-header') ||
-            parent.classList.contains('message-header') ||
-            parent.classList.contains('lichsoma-chat-header') ||
-            parent.classList.contains('item-header')
-          );
-          /* Chat Portrait(앵커·스케일)는 <img>의 transform/object-fit 유지 — 배경화 최적화 경로 제외 */
-          const isTokenFramedPortrait = img.classList.contains('lichsoma-chat-portrait--token-framed');
 
+        function normalizeImageCssLength(value) {
+          const text = String(value ?? '').trim();
+          if (!text) return '';
+          return /^-?\d+(?:\.\d+)?$/.test(text) ? `${text}px` : text;
+        }
+
+        function preserveImageDimensions(img) {
+          const originalWidth = img.getAttribute('width') || img.style.width || (img.offsetWidth > 0 ? `${img.offsetWidth}px` : null);
+          const originalHeight = img.getAttribute('height') || img.style.height || (img.offsetHeight > 0 ? `${img.offsetHeight}px` : null);
+          const widthStyle = normalizeImageCssLength(originalWidth);
+          const heightStyle = normalizeImageCssLength(originalHeight);
+
+          if (originalWidth) {
+            img.setAttribute('data-width', originalWidth);
+            if (!img.style.width && widthStyle) img.style.width = widthStyle;
+          }
+          if (originalHeight) {
+            img.setAttribute('data-height', originalHeight);
+            if (!img.style.height && heightStyle) img.style.height = heightStyle;
+          }
+        }
+
+        async function getImageRecord(src) {
+          const cacheKey = src.startsWith('data:') ? src : normalizeImageUrl(src, localHost);
+          if (!imageResultCache.has(cacheKey)) {
+            imageResultCache.set(
+              cacheKey,
+              imageUrlToEmbeddedRecord(src, localHost, MAX_EMBEDDED_IMAGE_BYTES)
+            );
+          }
+          return await imageResultCache.get(cacheKey);
+        }
+
+        // Group repeated portrait/card URLs first. Thousands of chat messages often reuse
+        // the same few images, so convert each unique source only once and then apply the
+        // resulting registry key to every matching <img>.
+        const imagesBySource = new Map();
+        for (const img of images) {
+          const src = img.getAttribute('src');
+          if (!src) continue;
+          if (!imagesBySource.has(src)) imagesBySource.set(src, []);
+          imagesBySource.get(src).push(img);
+        }
+
+        const processImageGroup = async ([src, groupedImages]) => {
           try {
-            let base64Url;
-            const normalizedSrcForCache = isAlreadyBase64 ? src : normalizeImageUrl(src, localHost);
-            
-            if (isAlreadyBase64) {
-              base64Url = src;
-            } else {
-              // 이미 처리된 URL인지 확인
-              if (imageCache.has(normalizedSrcForCache)) {
-                // 이미 변환된 경우 캐시에서 가져오기
-                base64Url = imageCache.get(normalizedSrcForCache);
-              } else {
-                // 새로 변환
-                base64Url = await imageUrlToBase64(src, localHost);
-                imageCache.set(normalizedSrcForCache, base64Url);
-              }
+            const record = await getImageRecord(src);
+            let imageKey = null;
+            if (record?.dataUrl && typeof record.dataUrl === 'string' && record.dataUrl.startsWith('data:')) {
+              imageKey = getOrCreateImageRegistryKey(record.dataUrl, imageRegistry, reverseImageRegistry);
             }
-            
-            // Base64 변환에 실패했으면(base64가 아닌 값이 돌아오면) CSS 변수로 넣지 말고,
-            // 저장된 HTML에서도 동작하도록 절대 URL로 강제하고 종료
-            if (!base64Url || typeof base64Url !== 'string' || !base64Url.startsWith('data:')) {
-              const abs = normalizeImageUrl(src, basePath || localHost);
-              if (abs) img.setAttribute('src', abs);
-              return;
-            }
-            
-            // 원본 크기 정보 유지
-            const originalWidth = img.getAttribute('width') || img.style.width || (img.offsetWidth > 0 ? img.offsetWidth + 'px' : null);
-            const originalHeight = img.getAttribute('height') || img.style.height || (img.offsetHeight > 0 ? img.offsetHeight + 'px' : null);
-            
-            // Base64 문자열 크기 확인 (실제 데이터 부분만)
-            // Base64는 원본보다 약 33% 크므로, Base64 문자열 길이로 원본 크기 추정
-            // data:image/...;base64, 부분을 제외한 실제 데이터 길이 확인
-            const base64DataMatch = base64Url.match(/^data:image\/[^;]+;base64,(.+)$/);
-            const base64DataLength = base64DataMatch ? base64DataMatch[1].length : base64Url.length;
-            // Base64 문자열 길이 * 3/4 = 원본 바이너리 크기 (대략)
-            // 500KB 원본 = 약 666,667 바이트 Base64 데이터
-            const estimatedOriginalSize = (base64DataLength * 3) / 4;
-            const isLargeImage = estimatedOriginalSize >= 500 * 1024; // 500KB 이상
-            
-            if (isHeaderImage && !isLargeImage && !isTokenFramedPortrait) {
-              // 헤더 이미지 (500KB 미만): CSS 변수 + background-image로 처리 (중복 제거)
-              let imageHash;
-              
-              if (imageHashMap.has(base64Url)) {
-                imageHash = imageHashMap.get(base64Url);
-              } else {
-                // 해시 생성 (base64 URL 기반)
-                imageHash = simpleHash(base64Url);
-                imageHashMap.set(base64Url, imageHash);
-                
-                // CSS 변수 정의 추가 (한 번만)
-                const cssVarName = `--img-${imageHash}`;
-                imageBase64CSS += `\n            ${cssVarName}: url("${base64Url}");`;
+
+            for (const img of groupedImages) {
+              preserveImageDimensions(img);
+
+              if (!imageKey) {
+                const absoluteUrl = normalizeImageUrl(src, basePath || localHost) || record?.absoluteUrl;
+                if (absoluteUrl) img.setAttribute('src', absoluteUrl);
+                continue;
               }
-              
-              // 이미지에 클래스 추가
-              const className = `base64-img-${imageHash}`;
-              img.classList.add(className);
-              
-              // CSS 규칙 추가 (한 번만)
-              if (!addedCSSClasses.has(className)) {
-                addedCSSClasses.add(className);
-                const widthStyle = originalWidth ? `width: ${originalWidth.toString().includes('px') ? originalWidth : originalWidth + 'px'};` : '';
-                const heightStyle = originalHeight ? `height: ${originalHeight.toString().includes('px') ? originalHeight : originalHeight + 'px'};` : '';
-                imageClassCSS += `\n        .${className} {\n            background-image: var(--img-${imageHash});\n            background-size: contain;\n            background-repeat: no-repeat;\n            background-position: center;\n            display: inline-block;${widthStyle ? '\n            ' + widthStyle : ''}${heightStyle ? '\n            ' + heightStyle : ''}\n        }`;
-              }
-              
-              // 크기 정보 저장
-              if (originalWidth) {
-                img.setAttribute('data-width', originalWidth);
-                if (!img.style.width) img.style.width = originalWidth.toString().includes('px') ? originalWidth : originalWidth + 'px';
-              }
-              if (originalHeight) {
-                img.setAttribute('data-height', originalHeight);
-                if (!img.style.height) img.style.height = originalHeight.toString().includes('px') ? originalHeight : originalHeight + 'px';
-              }
-              
-              // 1x1 투명 픽셀을 src로 설정 (background-image가 보이도록)
-              img.setAttribute('src', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
-            } else {
-              // 일반 이미지 또는 헤더 이미지(500KB 이상): src에 직접 Base64 설정
-              img.setAttribute('src', base64Url);
-              
-              // 원본 크기 정보 유지
-              if (originalWidth) {
-                img.setAttribute('data-width', originalWidth);
-                if (!img.style.width) img.style.width = originalWidth.toString().includes('px') ? originalWidth : originalWidth + 'px';
-              }
-              if (originalHeight) {
-                img.setAttribute('data-height', originalHeight);
-                if (!img.style.height) img.style.height = originalHeight.toString().includes('px') ? originalHeight : originalHeight + 'px';
+
+              // All embedded images use the same registry-key -> <img src> restoration path.
+              img.setAttribute('data-lichsoma-image-src-key', imageKey);
+              img.removeAttribute('src');
+
+              const exportHeader = img.closest('.message-header, .lichsoma-chat-header, .item-header');
+              if (exportHeader) {
+                // Standalone logs do not need preview/source metadata or fallback alt text
+                // once the image is successfully embedded.
+                img.removeAttribute('alt');
+                exportHeader.querySelectorAll('[data-lichsoma-portrait-src]').forEach((el) => {
+                  el.removeAttribute('data-lichsoma-portrait-src');
+                });
+                exportHeader.querySelectorAll('[data-lichsoma-original-src]').forEach((el) => {
+                  el.removeAttribute('data-lichsoma-original-src');
+                });
+                const portraitContainer = img.closest('.lichsoma-chat-portrait-container');
+                portraitContainer?.removeAttribute('data-preview-attached');
               }
             }
           } catch (error) {
             console.warn(`이미지 Base64 변환 실패: ${src}`, error);
-            // 실패 시 원본 URL 유지하거나 basePath 추가
-            if (!src.startsWith('http') && !src.startsWith('//') && !src.startsWith('data:')) {
-              const fullPath = src.startsWith('/') ? src : '/' + src;
-              img.setAttribute('src', `${basePath}${fullPath}`);
+            const absoluteUrl = normalizeImageUrl(src, basePath || localHost);
+            for (const img of groupedImages) {
+              if (absoluteUrl) img.setAttribute('src', absoluteUrl);
             }
           }
         };
-        
-        // 모든 이미지 변환 완료 대기 (동시성 제한 적용)
-        await runWithConcurrencyLimit(images, MAX_CONCURRENT_IMAGE_FETCHES, processOneImage);
-        chatLogHTML = tempDiv2.innerHTML;
+
+        await runWithConcurrencyLimit(imagesBySource.entries(), MAX_CONCURRENT_IMAGE_FETCHES, processImageGroup);
+        imageRegistryJSON = serializeImageRegistry(imageRegistry);
       } else {
-        // Base64 변환이 비활성화된 경우 기존 방식대로 링크 처리
-        chatLogHTML = chatLogHTML.replace(
-          /src="([^"]*)"/g, 
-          (match, srcPath) => {
-            // 이미 절대 URL이거나 로컬 호스트가 포함된 경우 그대로 유지
-            if (srcPath.startsWith('http') || srcPath.startsWith('//') || srcPath.includes(localHost) || srcPath.startsWith('data:')) {
-              return match;
-            }
-            // 상대 경로인 경우 설정된 경로 추가
-            const fullPath = srcPath.startsWith('/') ? srcPath : '/' + srcPath;
-            return `src="${basePath}${fullPath}"`;
-          }
-        );
+        // Base64가 꺼져 있어도 detached DOM에서 이미지 URL만 정규화한다.
+        for (const img of logContainer.querySelectorAll('img[src]')) {
+          const srcPath = img.getAttribute('src') || '';
+          if (!srcPath || srcPath.startsWith('http') || srcPath.startsWith('//') || srcPath.includes(localHost) || srcPath.startsWith('data:')) continue;
+          const fullPath = srcPath.startsWith('/') ? srcPath : '/' + srcPath;
+          img.setAttribute('src', `${basePath}${fullPath}`);
+        }
       }
+
+      // Serialize once after all per-message DOM work and image processing are complete.
+      let chatLogHTML = logContainer.innerHTML;
       
       // FoundryVTT의 CSS 변수에서 색상 가져오기
       const computedStyle = getComputedStyle(document.documentElement);
@@ -821,13 +996,16 @@
       // 커스텀 CSS 가져오기
       let customCSS = '';
       try {
-        customCSS = game.settings.get('lichsoma-speaker-selector', 'chatLogExportCustomCSS') || '';
+        customCSS = getSettingSafe('chatLogExportCustomCSS', '') || '';
         if (customCSS.trim()) {
           customCSS = `\n\n/* 커스텀 CSS */\n${customCSS}`;
         }
       } catch (e) {
         // 커스텀 CSS 로드 실패 (무시)
       }
+
+      const exportWebfontCSS = buildChatLogExportWebfontCSS();
+      const cainAlterExportFontPriorityCSS = buildCainAlterExportFontPriorityCSS();
       
       // 확장 모듈 CSS 수집
       let extensionCSS = '';
@@ -838,11 +1016,7 @@
         if (hookFunctions.length > 0) {
           const cssPromises = hookFunctions.map(async (hookFn) => {
             try {
-              const result = hookFn.fn();
-              // Promise인 경우 await
-              if (result && typeof result.then === 'function') {
-                return await result;
-              }
+              const result = await runHookEntry(hookFn);
               return result || '';
             } catch (error) {
               console.warn('확장 모듈 CSS 훅 실행 오류:', error);
@@ -871,11 +1045,8 @@
           // 각 훅 함수를 순차적으로 적용 (이전 결과를 다음 훅에 전달)
           for (const hookFn of htmlHookFunctions) {
             try {
-              const result = hookFn.fn(chatLogHTML);
-              // Promise인 경우 await
-              if (result && typeof result.then === 'function') {
-                chatLogHTML = await result;
-              } else if (result && typeof result === 'string') {
+              const result = await runHookEntry(hookFn, chatLogHTML);
+              if (result && typeof result === 'string') {
                 chatLogHTML = result;
               }
               // 결과가 없거나 유효하지 않은 경우 기존 HTML 유지
@@ -892,49 +1063,30 @@
       
       // 각 <li></li> 단위로 자르고 주석으로 구분
       function splitChatMessagesByLi(html) {
-        // 임시 div로 파싱
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
-        
-        // 모든 <li> 요소 찾기
-        const liElements = tempDiv.querySelectorAll('li.chat-message');
-        
-        if (liElements.length === 0) {
-          // <li> 요소가 없으면 원본 반환
-          return html;
-        }
-        
-        // 각 <li> 요소를 문자열로 변환하고 주석 추가
-        let result = '';
+        const liElements = Array.from(tempDiv.querySelectorAll('li.chat-message'));
+
+        if (liElements.length === 0) return { html, count: 0 };
+
+        const parts = [];
         liElements.forEach((li, index) => {
-          // 메시지 ID 추출
           const messageId = li.getAttribute('data-message-id') || '';
           const messageIndex = index + 1;
-          
-          // 주석 추가 (첫 번째 메시지가 아니면 앞에 주석 추가)
-          if (index > 0) {
-            result += `\n            <!-- ========== 메시지 ${messageIndex} (ID: ${messageId}) ========== -->\n`;
-          } else {
-            result += `            <!-- ========== 메시지 ${messageIndex} (ID: ${messageId}) ========== -->\n`;
-          }
-          
-          // <li> 요소를 문자열로 변환
-          result += '            ' + li.outerHTML;
-          
-          // 마지막 메시지가 아니면 뒤에 주석 추가
-          if (index < liElements.length - 1) {
-            result += `\n            <!-- ========== 메시지 ${messageIndex} 끝 ========== -->`;
-          } else {
-            result += `\n            <!-- ========== 메시지 ${messageIndex} 끝 ========== -->`;
-          }
+          parts.push(`            <!-- ========== 메시지 ${messageIndex} (ID: ${messageId}) ========== -->`);
+          parts.push(`            ${li.outerHTML}`);
+          parts.push(`            <!-- ========== 메시지 ${messageIndex} 끝 ========== -->`);
         });
-        
-        return result;
+
+        return { html: parts.join('\n'), count: liElements.length };
       }
       
       // chatLogHTML을 <li> 단위로 분리하고 주석 추가
-      const separatedChatLogHTML = splitChatMessagesByLi(chatLogHTML);
+      const separatedChatLog = splitChatMessagesByLi(chatLogHTML);
+      const separatedChatLogHTML = separatedChatLog.html;
       
+      const exportBodyClasses = getExportBodyClasses();
+
       // HTML 문서 생성
       const htmlContent = `
 <!DOCTYPE html>
@@ -949,10 +1101,8 @@
             --export-bg-color: ${backgroundColor};
             --export-text-color: ${textColor};
             --export-border-color: ${borderColor};
-            --export-secondary-text-color: ${secondaryTextColor};${imageBase64CSS}
+            --export-secondary-text-color: ${secondaryTextColor};
         }
-        /* 헤더 이미지를 위한 CSS 변수 참조 스타일 */
-        ${imageClassCSS}
         /* 나레이터 카드 스타일 */
         .chat-log .chat-message.lichsoma-narrator-card .lichsoma-chat-header {
           display: none !important;
@@ -962,20 +1112,43 @@
         }
         .chat-message .message-content .narrator-card {
           font-style: italic;
-          font-weight: bold;
+          font-weight: 500;
           text-align: center;
         }
-        ${customCSS}${cssContent}${extensionCSS}
+        ${customCSS}${cssContent}${extensionCSS}${exportWebfontCSS}${cainAlterExportFontPriorityCSS}
     </style>
 </head>
-<body>
+<body class="${exportBodyClasses}">
     <div class="chat-outer">
         <h1 class="log-title">Foundry VTT Chat Log</h1>
         <p class="timestamp">${new Date().toLocaleString()}</p>
-        <ol class="chat-log plain themed theme-light">
+        <ol id="chat-log" class="chat-log chat-scroll plain themed theme-light">
 ${separatedChatLogHTML}
         </ol>
     </div>
+    <script id="${IMAGE_REGISTRY_ID}" type="application/json">${imageRegistryJSON}</script>
+    <script>
+    (() => {
+      const registryElement = document.getElementById('${IMAGE_REGISTRY_ID}');
+      if (!registryElement) return;
+
+      let registry = {};
+      try {
+        registry = JSON.parse(registryElement.textContent || '{}');
+      } catch (error) {
+        console.error('LichSOMA image registry parse failed.', error);
+        return;
+      }
+
+      document.querySelectorAll('img[data-lichsoma-image-src-key]').forEach((img) => {
+        const key = img.getAttribute('data-lichsoma-image-src-key');
+        const dataUrl = registry[key];
+        if (!dataUrl) return;
+        img.setAttribute('src', dataUrl);
+        img.removeAttribute('data-lichsoma-image-src-key');
+      });
+    })();
+    </script>
 </body>
 </html>`;
       
@@ -983,11 +1156,12 @@ ${separatedChatLogHTML}
       const timestamp = new Date().toISOString().slice(0, 10);
       const fileName = `chat-log-${timestamp}.html`;
       
-      // Foundry VTT의 saveDataToFile API 사용
+      // Foundry VTT의 saveDataToFile API 사용. Promise를 반환하는 환경에서는 완료까지 대기한다.
+      let saveResult;
       if (typeof foundry !== 'undefined' && foundry.utils && foundry.utils.saveDataToFile) {
-        foundry.utils.saveDataToFile(htmlContent, 'text/html', fileName);
+        saveResult = foundry.utils.saveDataToFile(htmlContent, 'text/html', fileName);
       } else if (typeof saveDataToFile !== 'undefined') {
-        saveDataToFile(htmlContent, 'text/html', fileName);
+        saveResult = saveDataToFile(htmlContent, 'text/html', fileName);
       } else {
         // Fallback: Blob 사용
         const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
@@ -1000,14 +1174,20 @@ ${separatedChatLogHTML}
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
       }
+      if (saveResult && typeof saveResult.then === 'function') await saveResult;
       
-      // 메시지 개수 계산 (li 태그 개수)
-      const messageCount = (chatLogHTML.match(/<li class="chat-message/g) || []).length;
+      // HTML transform 훅까지 적용된 최종 메시지 개수
+      const messageCount = separatedChatLog.count || renderedLog.count;
       
       ui.notifications.info(game.i18n.format('SPEAKERSELECTOR.ChatLogExport.Success', { count: messageCount }));
+      return true;
       
     } catch (error) {
-      ui.notifications.error(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Error.ExportFailed'));
+      console.error('[lichsoma-speaker-selector] Chat log HTML export failed:', error);
+      if (notifyFailure) ui.notifications.error(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Error.ExportFailed'));
+      return false;
+    } finally {
+      chatLogExportInProgress = false;
     }
   }
   
@@ -1066,25 +1246,73 @@ ${separatedChatLogHTML}
     return !!button.closest?.('section#chat, #chat-form, .chat-form, #chat-controls, .chat-sidebar, [data-tab="chat"]');
   }
 
-  function getCoreChatLogExportButtons(root = document) {
+  function getChatExportContainers(root = document) {
     const base = root?.jquery ? root[0] : root;
+    const containers = new Set();
+    const selector = 'section#chat, #chat, .chat-sidebar, [data-tab="chat"]';
+
+    if (base?.matches?.(selector)) containers.add(base);
+    const closest = base?.closest?.(selector);
+    if (closest) containers.add(closest);
+    base?.querySelectorAll?.(selector)?.forEach((container) => containers.add(container));
+
+    if (base === document || base === document.body || !containers.size) {
+      document.querySelectorAll?.(selector)?.forEach((container) => containers.add(container));
+    }
+
+    return Array.from(containers).filter(Boolean);
+  }
+
+  function getCoreChatLogExportButtons(root = document) {
     const buttons = new Set();
 
-    base?.querySelectorAll?.('button[data-action="export"], a[data-action="export"], button, a')
-      ?.forEach((button) => {
-        if (isChatExportControl(button) && !button.classList.contains('lichsoma-html-export-btn')) {
-          buttons.add(button);
-        }
-      });
+    for (const container of getChatExportContainers(root)) {
+      container.querySelectorAll?.('button[data-action="export"], a[data-action="export"]')
+        ?.forEach((button) => {
+          if (isChatExportControl(button) && !button.classList.contains('lichsoma-html-export-btn')) {
+            buttons.add(button);
+          }
+        });
 
-    document.querySelectorAll?.('button[data-action="export"], a[data-action="export"], button, a')
-      ?.forEach((button) => {
-        if (isChatExportControl(button) && !button.classList.contains('lichsoma-html-export-btn')) {
+      container.querySelectorAll?.('.fa-floppy-disk')?.forEach((icon) => {
+        const button = icon.closest?.('button, a');
+        if (button && isChatExportControl(button) && !button.classList.contains('lichsoma-html-export-btn')) {
           buttons.add(button);
         }
       });
+    }
 
     return Array.from(buttons);
+  }
+
+  function observeChatExportContainers(root = document) {
+    const containers = getChatExportContainers(root);
+    const container = containers.find((candidate) => candidate.matches?.('section#chat, #chat, .chat-sidebar'))
+      || containers[0]
+      || null;
+    if (!container) return;
+    if (observedChatExportContainer === container && chatExportObserver) return;
+
+    chatExportObserver?.disconnect?.();
+    observedChatExportContainer = container;
+    const observer = new MutationObserver((mutations) => {
+      const relevant = mutations.some((mutation) => Array.from(mutation.addedNodes || []).some((node) => {
+        if (!(node instanceof Element)) return false;
+        return node.matches?.('#chat-form, .chat-form, #chat-controls, .chat-controls, button, a')
+          || node.querySelector?.('#chat-form, .chat-form, #chat-controls, .chat-controls, button, a');
+      }));
+      if (!relevant || observer._lichsomaPending) return;
+
+      observer._lichsomaPending = true;
+      setTimeout(() => {
+        if (chatExportObserver !== observer) return;
+        observer._lichsomaPending = false;
+        updateChatExportButtons(container);
+      }, 100);
+    });
+
+    chatExportObserver = observer;
+    observer.observe(container, { childList: true, subtree: true });
   }
 
   function shouldHideCoreChatLogExportButton() {
@@ -1153,7 +1381,73 @@ ${separatedChatLogHTML}
   function updateChatExportButtons(root = document) {
     renderHtmlExportButton(root);
     syncCoreChatLogExportButtonVisibility(root);
+    observeChatExportContainers(root);
   }
+
+  // Foundry의 전체 채팅 로그 삭제 버튼을 누르면, 기본 확인 다이얼로그보다 먼저 HTML 백업을 만든다.
+  const flushBackupBypass = new WeakSet();
+  let flushBackupInProgress = false;
+
+  function getCoreChatFlushButton(target) {
+    const button = target?.closest?.('button[data-action], a[data-action]');
+    if (!button || button.classList.contains('lichsoma-delete-btn')) return null;
+
+    const action = String(button.dataset.action || '').trim();
+    if (!['flush', 'flushChat', 'clearChat'].includes(action)) return null;
+
+    const chatRoot = button.closest?.('section#chat, #chat, .chat-sidebar, [data-tab="chat"]');
+    return chatRoot ? button : null;
+  }
+
+  async function onCoreChatFlushCapture(event) {
+    if (!game.user?.isGM) return;
+
+    const button = getCoreChatFlushButton(event.target);
+    if (!button) return;
+
+    const saveHtmlOnDelete = getSettingSafe('chatLogSaveHtmlOnDelete', true) !== false;
+    if (!saveHtmlOnDelete) return;
+
+    if (flushBackupBypass.has(button)) {
+      flushBackupBypass.delete(button);
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    if (flushBackupInProgress) return;
+    flushBackupInProgress = true;
+
+    const wasDisabled = 'disabled' in button ? button.disabled : false;
+    const previousAriaBusy = button.getAttribute('aria-busy');
+    if ('disabled' in button) button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+
+    try {
+      const exported = await exportChatLogAsHTML({ notifyFailure: false });
+      if (!exported) {
+        ui.notifications.error(localizeOrFallback(
+          'SPEAKERSELECTOR.ChatLogExport.Error.FlushBackupFailed',
+          'Chat log deletion was stopped because the HTML backup could not be saved.'
+        ));
+        return;
+      }
+
+      if ('disabled' in button) button.disabled = wasDisabled;
+      flushBackupBypass.add(button);
+      button.click();
+    } finally {
+      if ('disabled' in button) button.disabled = wasDisabled;
+      if (previousAriaBusy === null) button.removeAttribute('aria-busy');
+      else button.setAttribute('aria-busy', previousAriaBusy);
+      flushBackupInProgress = false;
+    }
+  }
+
+  // 캡처 단계에서 막아야 Foundry의 기본 flush 핸들러가 먼저 확인 창을 열지 않는다.
+  document.addEventListener('click', onCoreChatFlushCapture, true);
 
   document.addEventListener('lichsoma-speaker-selector:updateChatExportButtons', () => {
     setTimeout(() => updateChatExportButtons(document), 0);
@@ -1171,21 +1465,6 @@ ${separatedChatLogHTML}
 
   Hooks.once('ready', () => {
     setTimeout(() => updateChatExportButtons(document), 250);
-
-    // 채팅 컨트롤은 시스템/테마/사이드바 재렌더에 따라 다시 만들어질 수 있으므로,
-    // 가벼운 MutationObserver로 버튼 상태를 보정한다.
-    const observer = new MutationObserver(() => {
-      if (observer._lichsomaPending) return;
-      observer._lichsomaPending = true;
-      setTimeout(() => {
-        observer._lichsomaPending = false;
-        updateChatExportButtons(document);
-      }, 100);
-    });
-
-    if (document.body) {
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
   });
 })();
 

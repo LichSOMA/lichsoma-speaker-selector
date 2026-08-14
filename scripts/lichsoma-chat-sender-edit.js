@@ -2,6 +2,7 @@
  * GM 전용: 채팅 메시지 우클릭 → 메시지 센더(작성자 / 스피커 캐릭터) 수정
  */
 import { SpeakerSelector } from './lichsoma-speaker-selector.js';
+import { SpeakerSelectorCompat } from './lichsoma-speaker-selector-compat.js';
 
 const MODULE_FLAG = 'lichsoma-speaker-selector';
 
@@ -159,6 +160,7 @@ async function _openSenderEditDialogInner(message) {
             portraitSrc: portraitData.src,
             userId: result.userId,
             actorId: speaker.actor || null,
+            senderAlias: speaker.alias || null,
             ...(typeof SpeakerSelector._getMergeSpeakerKey === 'function'
                 ? SpeakerSelector._getMergeSpeakerKey(speaker, result.userId)
                 : {})
@@ -171,13 +173,24 @@ async function _openSenderEditDialogInner(message) {
         speaker,
         flags: { [MODULE_FLAG]: newModuleFlags }
     });
+
+    // FVTT does not always fully rebuild the already-rendered chat header after a
+    // speaker-only ChatMessage update. Refresh the visible DOM explicitly so the
+    // sender text and portrait stay in sync with the updated speaker data.
+    setTimeout(() => {
+        void SpeakerSelector._refreshRenderedMessageSpeakerPresentation?.(message, { portraitSrc: portraitData.src });
+    }, 0);
+    setTimeout(() => {
+        void SpeakerSelector._refreshRenderedMessageSpeakerPresentation?.(message, { portraitSrc: portraitData.src });
+    }, 100);
+
     ui.notifications.info(game.i18n.localize('SPEAKERSELECTOR.ChatSenderEdit.Notifications.Success'));
 }
 
 /**
  * 스피커 설정과 같은 액터 목록(폴더·검색·태그) + 사용자 선택
  */
-class LichsomaChatSenderEditApp extends foundry.applications.api.ApplicationV2 {
+class LichsomaChatSenderEditApp extends SpeakerSelectorCompat.ApplicationV2 {
     static DEFAULT_OPTIONS = {
         id: 'lichsoma-chat-sender-edit',
         classes: ['lichsoma-chat-sender-edit-app'],

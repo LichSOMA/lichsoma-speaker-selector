@@ -1,8 +1,6 @@
 /* ==========================================================================
- * LichSOMA Speaker Selector — DX3rd(fvtt) 전용 채팅 스타일
- * - 적용 범위: dx3rd-fvtt 시스템 월드에서만
- * - 목적: dx3rd-fvtt 시스템의 채팅 요소(.dx3rd-*)가 LichSOMA 채팅 UI에서도 동일하게 보이도록 보강
- * - 참고: Data/systems/dx3rd-fvtt/styles/chats/chat-log-reference.css
+ * LichSOMA Speaker Selector — DX3rd(fvtt) HTML export chat styles
+ * - Full DX3rd chat styling is kept here because exported HTML does not load the game system CSS.
  * ========================================================================== */
 
 /* DX3rd 시스템 메시지 — 머지(lichsoma-merged)와 무관하게 헤더 숨김 */
@@ -36,27 +34,12 @@ body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-info-message, form.chat
   box-sizing: border-box;
   display: block;
   width: 100%;
-  margin: 0.25em 0 0;
+  margin: 0.25rem 0 0;
   padding: 0.5rem 0.65rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.2);
   text-align: left;
-}
-
-/* 시스템 알림 본문 타이포 — 상태이상 등 공통 */
-body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-system-message, form.chat-form) .dx3rd-system {
-  display: block;
-  font-weight: 500;
-  font-size: 0.8em;
-  line-height: 1.45;
-  color: gray;
-  /* Roll.render() HTML의 개행/들여쓰기가 빈 줄로 렌더링되는 것을 막기 위해 컨테이너에는 적용하지 않음 */
-  white-space: normal;
-}
-
-/* 인포 메시지 본문 타이포 — 컨테이너 기준(굴림 카드 포함 전체 리듬) */
-body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-info-message, form.chat-form) .dx3rd-info {
   font-weight: 500;
   font-size: 0.8em;
   line-height: 1.45;
@@ -69,6 +52,20 @@ body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-info-message, form.chat
 body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-info-message, form.chat-form) .dx3rd-info__text {
   display: block;
   white-space: pre-line;
+}
+
+
+/* 정보 메시지: 라벨/설명과 Roll.render() 결과가 붙는 경우 간격 보정 */
+body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-info-message, form.chat-form)
+  .dx3rd-info__text + .dice-roll,
+body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-info-message, form.chat-form)
+  .dice-roll + .dx3rd-info__text {
+  margin-top: 0.25rem !important;
+}
+
+/* Speaker Selector 머지 상태에서도 연속된 DX3rd 정보 카드 간격 유지 */
+body.system-dx3rd-fvtt :is(.chat-scroll, .chat-log) .chat-message.dx3rd-info-message.lichsoma-merged {
+  margin-top: 0 !important;
 }
 
 /* 실패·경고(예: HP 비용 부족) — 시스템 HP 손상(`.dx3rd-system--hp-damage`)과 동일 톤의 red */
@@ -100,12 +97,18 @@ body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-system-message, form.ch
   box-sizing: border-box;
   display: block;
   width: 100%;
-  margin: 0.25em 0 0;
+  margin: 0.25rem 0 0;
   padding: 0.5rem 0.65rem;
   border: 1px solid rgba(212, 175, 55, 0.6);
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.2);
   text-align: left;
+  font-weight: 500;
+  font-size: 0.8em;
+  line-height: 1.45;
+  color: rgba(212, 175, 55, 0.95);
+  /* Roll.render() HTML의 개행/들여쓰기가 빈 줄로 렌더링되는 것을 막기 위해 컨테이너에는 적용하지 않음 */
+  white-space: normal;
 }
 
 body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-system-message, form.chat-form) .dx3rd-system__body {
@@ -160,11 +163,6 @@ body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-system-message, form.ch
 
 body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-system-message, form.chat-form) .dx3rd-system.dx3rd-system--status-remove .dx3rd-system__portrait {
   border-color: rgba(34, 197, 94, 0.5);
-}
-
-/* `chat-info.css`의 공통 타이포(회색)보다 우선해서 시스템 메시지는 골드 톤 적용 */
-body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-system-message, form.chat-form) .dx3rd-system {
-  color: rgba(212, 175, 55, 0.95);
 }
 
 body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-system-message, form.chat-form) .dx3rd-system :is(a, a:visited) {
@@ -246,13 +244,13 @@ body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-system-message, form.ch
 body.system-dx3rd-fvtt :is(.chat-log .chat-message, form.chat-form) .dx3rd-combat-msg {
   font-size: 16px;
   font-weight: bold;
-  margin: 2px 0px;
+  margin: 0.25rem 0 0;
   border-bottom: 1px solid #ffffff;
 }
 
 /* 장면 시작/세션 종료 메시지 (전투 진행 메시지 톤과 동일, 클래스만 분리) */
 body.system-dx3rd-fvtt :is(.chat-log .chat-message, form.chat-form) .dx3rd-open-scene-msg {
-  margin: 2px 0px;
+  margin: 0.25rem 0 0;
 }
 
 body.system-dx3rd-fvtt :is(.chat-log .chat-message, form.chat-form) .dx3rd-open-scene-msg__title {
@@ -279,14 +277,15 @@ body.system-dx3rd-fvtt :is(.chat-log .chat-message, form.chat-form) .dx3rd-open-
 /* ========================================================================== */
 
 /* 범용 채팅 아이템 박스 — `.dx3rd-box` */
-body.system-dx3rd-fvtt :is(.message, form.chat-form) .dx3rd-box {
+body.system-dx3rd-fvtt :is(.message, form.chat-form) .dx3rd-box,
+body.system-dx3rd-fvtt .chat-log.chat-scroll .chat-message .message-content > .dx3rd-box {
   box-sizing: border-box;
-  margin: 0.25em 0 0;
-  padding: 0.5rem 0.65rem;
+  margin: 0.25rem 0 0 !important;
+  padding: 0.5rem 0.65rem !important;
   max-width: 420px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.2) !important;
   text-align: left;
 }
 
@@ -568,6 +567,7 @@ body.system-dx3rd-fvtt .dice-tooltip .dice-rolls .clear {
     background-image: none;
     text-align: right;
     padding: 0 10px;
+    color: #fff;
 }
 
 body.system-dx3rd-fvtt .dice-rolls .dice {
@@ -593,11 +593,11 @@ body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-sheet-roll-message, for
     box-sizing: border-box;
     display: block;
     width: 100%;
-    margin: 0.25em 0 0;
-    padding: 0.5rem 0.65rem;
+    margin: 0.25rem 0 0 !important;
+    padding: 0.5rem 0.65rem !important;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.2) !important;
     text-align: left;
 }
 
@@ -606,6 +606,10 @@ body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-roll-judgment-label
     display: block;
     margin: 0;
     padding: 0;
+    font-weight: 500;
+    font-size: 0.8em;
+    line-height: 1.45;
+    color: gray;
 }
 
 /* 데미지 요약이 바로 아래 올 때 블록 간만 살짝 줄임 */
@@ -625,14 +629,6 @@ body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-roll-judgment-label
     line-height: inherit;
     color: inherit;
     white-space: pre-line;
-}
-
-/* 판정 라벨 타이포는 \"한 곳\"에서만 정의한다. */
-body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-roll-judgment-label {
-    font-weight: 500;
-    font-size: 0.8em;
-    line-height: 1.45;
-    color: gray;
 }
 
 /* 인포 메시지 컨테이너(.dx3rd-info)가 이미 0.8em이므로, 안쪽 판정 라벨은 1em으로 되돌려 2중 축소를 방지 */
@@ -673,7 +669,7 @@ body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-roll-judgment-outco
 /* 시트 판정: 자동 성공 등 \"가짜 롤 결과\" 박스 */
 body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-pseudo-roll {
     display: block;
-    margin: 2px 0px;
+    margin: 0.25rem 0 0;
     padding: 0;
 }
 
@@ -749,6 +745,12 @@ body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__apply-h
     padding: 0;
 }
 
+body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__damage {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
 /* 비공격 판정 — 판정 성공·실패 버튼 */
 body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__item-judge {
     display: flex;
@@ -760,21 +762,11 @@ body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__item-ju
 
 /* 술식 발동 버튼(성공 시만) */
 body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__spell-invoke {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
     margin: 0.5rem 0 0;
     padding: 0;
-}
-
-body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__damage {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-}
-
-body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__spell-invoke {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
 }
 
 /* 마술 폭주 / 대폭주 / 재액 */
@@ -820,7 +812,6 @@ body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__item-ju
 
 /* 클릭 후 green 표시 — 공용 */
 body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-btn--applied,
-body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__item-judge-success-btn.dx3rd-judge-btn--success-applied,
 body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__item-judge-success-btn.dx3rd-judge-btn--success-applied {
     border-color: rgba(34, 197, 94, 0.65);
     color: rgba(34, 197, 94, 0.95);
@@ -828,7 +819,6 @@ body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__item-ju
 
 /* 클릭 후 red 표시 — 공용 */
 body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-btn--failed,
-body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__item-judge-failure-btn.dx3rd-judge-btn--failure-applied,
 body.system-dx3rd-fvtt .chat-message .message-content .dx3rd-sheet-roll__item-judge-failure-btn.dx3rd-judge-btn--failure-applied {
     border-color: rgba(220, 38, 38, 0.75);
     color: rgba(220, 38, 38, 0.98);

@@ -37,7 +37,8 @@ body.lichsoma-sidebar-resize-active {
     pointer-events: none;
 }
 
-/* #chat-message > .editor-container — 상단 드래그로 --chat-input-height 조절 */
+/* 채팅 입력 상단 드래그로 --chat-input-height 조절 */
+#sidebar :is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input),
 #sidebar #chat-message > .editor-container {
     position: relative;
 }
@@ -63,10 +64,29 @@ body.lichsoma-sidebar-resize-active {
     );
 }
 
+
+
 #sidebar.lichsoma-chat-input-resizing .chat-sidebar .chat-input {
     transition: none !important;
 }
 
 #sidebar.lichsoma-chat-input-resizing #chat-message > .editor-container {
     transition: none !important;
+}
+
+/* FVTT v13: 채팅 입력의 내부 DOM이 v14와 달라서 핸들을 chat-form에 고정한다. */
+body.lichsoma-fvtt13-chat #sidebar .chat-form.lichsoma-editor-height-handle-parent {
+    position: relative !important;
+}
+
+body.lichsoma-fvtt13-chat #sidebar .lichsoma-editor-height-handle--form {
+    position: absolute !important;
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 8px;
+    z-index: 1000;
+    cursor: ns-resize;
+    pointer-events: auto;
+    touch-action: none;
 }

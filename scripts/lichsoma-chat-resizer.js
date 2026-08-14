@@ -13,8 +13,9 @@ const DEFAULT_MIN_WIDTH = 312;
 const MAX_MIN_WIDTH = 400;
 const DEFAULT_WIDTH = 312;
 
-const MIN_CHAT_INPUT_HEIGHT = 78;
-const DEFAULT_CHAT_INPUT_HEIGHT = 78;
+const MIN_CHAT_INPUT_HEIGHT = 128;
+const FVTT13_MIN_CHAT_INPUT_HEIGHT = 128;
+const DEFAULT_CHAT_INPUT_HEIGHT = 128;
 
 export class ChatSidebarResizer {
     static _resizeClampTimer = null;
@@ -30,6 +31,36 @@ export class ChatSidebarResizer {
     static _getEditorContainer() {
         const sidebar = this._getSidebar();
         return LichsomaChatDom.getChatEditorContainer(sidebar ?? document);
+    }
+
+    static _getChatForm() {
+        const sidebar = this._getSidebar();
+        return LichsomaChatDom.getSidebarChatForm(sidebar ?? document) ?? LichsomaChatDom.getChatForm(sidebar ?? document);
+    }
+
+    static _isFoundry13() {
+        return this._getFoundryGeneration() <= 13;
+    }
+
+    static _getEditorHandleParent(editorContainer = null) {
+        if (this._isFoundry13()) {
+            return this._getChatForm() ?? editorContainer;
+        }
+        return editorContainer;
+    }
+
+    static _updateEditorHandlePosition(handle = null, editorContainer = null) {
+        if (!this._isFoundry13()) return;
+        const sidebar = this._getSidebar();
+        const chatForm = this._getChatForm();
+        const editor = editorContainer ?? this._getEditorContainer();
+        const targetHandle = handle ?? sidebar?.querySelector?.('.lichsoma-editor-height-handle--form');
+        if (!chatForm || !editor || !targetHandle) return;
+
+        const formRect = chatForm.getBoundingClientRect();
+        const editorRect = editor.getBoundingClientRect();
+        const top = Math.max(0, editorRect.top - formRect.top);
+        targetHandle.style.top = `${Math.round(top)}px`;
     }
 
     static init() {
@@ -65,6 +96,7 @@ export class ChatSidebarResizer {
         });
 
         Hooks.once('ready', () => {
+            this._applyFoundryGenerationClass();
             this._applySavedWidth();
             this._applySavedChatInputHeight();
             this._installSidebarHandle();
@@ -117,9 +149,29 @@ export class ChatSidebarResizer {
         return Math.round(Math.min(max, Math.max(min, px)));
     }
 
+    static _getFoundryGeneration() {
+        const generation = Number(game?.release?.generation);
+        return Number.isFinite(generation) ? generation : 14;
+    }
+
+    static _applyFoundryGenerationClass() {
+        const generation = this._getFoundryGeneration();
+        document.body?.classList?.toggle?.('lichsoma-fvtt13-chat', generation <= 13);
+        document.body?.classList?.toggle?.('lichsoma-fvtt14-chat', generation >= 14);
+    }
+
+    static _getMinChatInputHeight() {
+        return this._getFoundryGeneration() <= 13 ? FVTT13_MIN_CHAT_INPUT_HEIGHT : MIN_CHAT_INPUT_HEIGHT;
+    }
+
+    static _getDefaultChatInputHeight() {
+        return this._getFoundryGeneration() <= 13 ? FVTT13_MIN_CHAT_INPUT_HEIGHT : DEFAULT_CHAT_INPUT_HEIGHT;
+    }
+
     static _clampChatInputHeight(px) {
-        const max = Math.max(MIN_CHAT_INPUT_HEIGHT, Math.floor(window.innerHeight / 3));
-        return Math.round(Math.min(max, Math.max(MIN_CHAT_INPUT_HEIGHT, px)));
+        const min = this._getMinChatInputHeight();
+        const max = Math.max(min, Math.floor(window.innerHeight / 3));
+        return Math.round(Math.min(max, Math.max(min, px)));
     }
 
     static _applyWidth(px) {
@@ -134,6 +186,42 @@ export class ChatSidebarResizer {
         if (!sidebar) return;
         const h = this._clampChatInputHeight(px);
         sidebar.style.setProperty('--chat-input-height', `${h}px`);
+        this._syncChatInputHeightToDom(h);
+        this._updateEditorHandlePosition();
+    }
+
+    static _syncChatInputHeightToDom(px) {
+        const sidebar = this._getSidebar();
+        if (!sidebar) return;
+        const h = this._clampChatInputHeight(px);
+        const value = `${h}px`;
+        const inputs = LichsomaChatDom.queryAll(
+            ':is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input)',
+            sidebar
+        );
+
+        for (const input of inputs) {
+            input.style.setProperty('height', value, 'important');
+            input.style.setProperty('min-height', value, 'important');
+            input.style.setProperty('flex-basis', value, 'important');
+            input.style.setProperty('flex', `0 0 ${value}`, 'important');
+            if (this._isFoundry13()) {
+                input.style.setProperty('max-height', value, 'important');
+                input.style.setProperty('overflow', 'hidden', 'important');
+            }
+        }
+
+        const innerEditors = LichsomaChatDom.queryAll(
+            ':is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input) :is(.editor-container, .ProseMirror, [contenteditable="true"])',
+            sidebar
+        );
+        for (const editor of innerEditors) {
+            editor.style.setProperty('height', '100%', 'important');
+            editor.style.setProperty('min-height', '100%', 'important');
+            editor.style.setProperty('max-height', '100%', 'important');
+            editor.style.setProperty('overflow-y', 'auto', 'important');
+            editor.style.setProperty('box-sizing', 'border-box', 'important');
+        }
     }
 
     static _applySavedWidth() {
@@ -147,7 +235,9 @@ export class ChatSidebarResizer {
         const v = game.settings.get(MODULE_ID, SETTING_KEY_CHAT_HEIGHT);
         if (typeof v === 'number' && v > 0) {
             this._applyChatInputHeight(v);
+            return;
         }
+        this._applyChatInputHeight(this._getDefaultChatInputHeight());
     }
 
     static _persistWidth(px) {
@@ -183,8 +273,8 @@ export class ChatSidebarResizer {
         handle.className = 'lichsoma-sidebar-resize-handle';
         handle.setAttribute('role', 'separator');
         handle.setAttribute('aria-orientation', 'vertical');
-        handle.setAttribute('aria-label', '사이드바 너비 조절');
-        handle.title = '사이드바 너비 조절 (드래그). 더블클릭 시 기본 너비로 초기화.';
+        handle.setAttribute('aria-label', game.i18n.localize('SPEAKERSELECTOR.Resizer.Sidebar.AriaLabel'));
+        handle.title = game.i18n.localize('SPEAKERSELECTOR.Resizer.Sidebar.Title');
         content.prepend(handle);
 
         handle.addEventListener('pointerdown', (ev) => {
@@ -261,22 +351,34 @@ export class ChatSidebarResizer {
         const sidebar = this._getSidebar();
         if (!sidebar) return;
 
+        const handleParent = this._getEditorHandleParent(editorContainer);
+        if (!handleParent) return;
+        if (this._isFoundry13()) {
+            handleParent.classList.add('lichsoma-editor-height-handle-parent');
+        }
+
         // 탭 전환 등으로 DOM이 바뀌면 핸들이 옛 부모에 남을 수 있음 — 현재 컨테이너가 아니면 제거
         for (const h of sidebar.querySelectorAll('.lichsoma-editor-height-handle')) {
-            if (h.parentElement !== editorContainer) {
+            if (h.parentElement !== handleParent) {
                 h.remove();
             }
         }
 
-        if (editorContainer.querySelector(':scope > .lichsoma-editor-height-handle')) return;
+        if (handleParent.querySelector(':scope > .lichsoma-editor-height-handle')) {
+            this._updateEditorHandlePosition(handleParent.querySelector(':scope > .lichsoma-editor-height-handle'), editorContainer);
+            this._applySavedChatInputHeight();
+            return;
+        }
 
         const handle = document.createElement('div');
-        handle.className = 'lichsoma-editor-height-handle';
+        handle.className = `lichsoma-editor-height-handle${this._isFoundry13() ? ' lichsoma-editor-height-handle--form' : ''}`;
         handle.setAttribute('role', 'separator');
         handle.setAttribute('aria-orientation', 'horizontal');
-        handle.setAttribute('aria-label', '채팅 입력 높이 조절');
-        handle.title = '채팅 입력 높이 조절 (드래그). 더블클릭 시 기본 높이로 초기화.';
-        editorContainer.prepend(handle);
+        handle.setAttribute('aria-label', game.i18n.localize('SPEAKERSELECTOR.Resizer.ChatInput.AriaLabel'));
+        handle.title = game.i18n.localize('SPEAKERSELECTOR.Resizer.ChatInput.Title');
+        handleParent.prepend(handle);
+        this._updateEditorHandlePosition(handle, editorContainer);
+        this._applySavedChatInputHeight();
 
         handle.addEventListener('pointerdown', (ev) => {
             if (ev.button !== 0) return;
@@ -284,7 +386,7 @@ export class ChatSidebarResizer {
             const startY = ev.clientY;
             const computed = getComputedStyle(sidebar).getPropertyValue('--chat-input-height').trim();
             const parsed = parseFloat(computed);
-            const startHeight = Number.isFinite(parsed) ? parsed : DEFAULT_CHAT_INPUT_HEIGHT;
+            const startHeight = Number.isFinite(parsed) ? parsed : this._getDefaultChatInputHeight();
             const scale = this._getUiScale();
 
             sidebar.classList.add('lichsoma-chat-input-resizing');
@@ -324,8 +426,9 @@ export class ChatSidebarResizer {
         handle.addEventListener('dblclick', (ev) => {
             ev.preventDefault();
             ev.stopPropagation();
-            this._applyChatInputHeight(DEFAULT_CHAT_INPUT_HEIGHT);
-            this._persistChatInputHeight(DEFAULT_CHAT_INPUT_HEIGHT);
+            const defaultHeight = this._getDefaultChatInputHeight();
+            this._applyChatInputHeight(defaultHeight);
+            this._persistChatInputHeight(defaultHeight);
         });
     }
 }

@@ -316,8 +316,12 @@ function injectAppearanceFields(app, html) {
 }
 
 Hooks.on('init', () => {
-  Hooks.on('renderApplicationV2', (app, html) => {
+  const handlePrototypeTokenConfigRender = (app, html) => {
     if (app.constructor?.name !== 'PrototypeTokenConfig') return;
     injectAppearanceFields(app, html);
-  });
+  };
+
+  Hooks.on('renderApplicationV2', handlePrototypeTokenConfigRender);
+  Hooks.on('renderApplication', handlePrototypeTokenConfigRender);
+  Hooks.on('renderPrototypeTokenConfig', (app, html) => injectAppearanceFields(app, html));
 });

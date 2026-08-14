@@ -1,0 +1,30 @@
+/* ==========================================================================
+ * LichSOMA Speaker Selector — LANCER in-game chat styles
+ * - Applies only in LANCER worlds or to LichSOMA LANCER speaker markup.
+ * - Keeps pilot name/callsign ruby display and preserves LANCER card internals.
+ * ========================================================================== */
+
+/* LANCER: 파일럿 실제 이름 + 콜사인 루비 표시 */
+.chat-message.lichsoma-lancer-pilot-speaker .message-sender .lichsoma-lancer-speaker-ruby,
+body.system-lancer .chat-message .message-sender .lichsoma-lancer-speaker-ruby {
+    display: inline-ruby;
+    ruby-position: over;
+    ruby-align: center;
+    white-space: nowrap;
+}
+
+.chat-message.lichsoma-lancer-pilot-speaker .message-sender .lichsoma-lancer-speaker-ruby rt,
+body.system-lancer .chat-message .message-sender .lichsoma-lancer-speaker-ruby rt {
+    font-size: 0.58em;
+    line-height: 1;
+    opacity: 0.85;
+}
+
+/* LANCER rich chat cards keep their own inner layout; only the outer chat rhythm is normalized. */
+body.system-lancer .chat-scroll .chat-message .message-content > :is([class^="lancer-"], [class*=" lancer-"]) {
+    line-height: normal !important;
+}
+
+body.system-lancer .chat-scroll .chat-message.lichsoma-merged .message-content > :is([class^="lancer-"], [class*=" lancer-"]) {
+    margin-top: 0 !important;
+}

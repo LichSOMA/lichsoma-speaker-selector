@@ -1,255 +1,301 @@
 {
-    "SPEAKERSELECTOR": {
-        "ModuleName": "LichSOMA의 스피커 셀렉터",
-        "ModuleDescription": "채팅 헤더 커스터마이징, 토큰 선택에 구애 받지 않는 스피커 선택, 채팅 로그의 HTML 출력을 지원하는 채팅 강화 모듈.",
-        "Settings": {
-            "ShowPortrait": {
-                "Name": "포트레잇 표시",
-                "Hint": "채팅 메시지에 액터 포트레잇을 표시합니다."
-            },
-            "PortraitSize": {
-                "Name": "포트레잇 크기",
-                "Hint": "포트레잇 이미지의 크기를 설정합니다."
-            },
-            "AlwaysUseCharacter": {
-                "Name": "항상 할당된 캐릭터로 말하기",
-                "Hint": "채팅 인풋으로 직접 입력한 메시지를 항상 할당된 캐릭터로 말하도록 설정합니다."
-            },
-            "AlwaysUseActor": {
-                "Name": "항상 액터로 말하기",
-                "Hint": "토큰을 선택해도 해당 토큰의 액터로 말합니다."
-            },
-            "PreventOtherUserCharacter": {
-                "Name": "플레이어 캐릭터로 말하기 방지",
-                "Hint": "GM이 플레이어 캐릭터로 말하는 것을 방지합니다."
-            },
-            "ApplyUserColor": {
-                "Name": "유저 색상 적용",
-                "Hint": "채팅 메시지 헤더의 발신자 이름에 유저 색상을 적용합니다."
-            },
-            "EnableChatMerge": {
-                "Name": "채팅 머지 기능 활성화",
-                "Hint": "같은 유저, 같은 포트레잇의 연속된 메시지에서 헤더를 숨깁니다."
-            },
-            "SidebarMinWidth": {
-                "Name": "사이드바 최소 넓이",
-                "Hint": "사이드바 드래그 리사이즈 시 최소 넓이를 설정합니다. (312~400px)"
-            },
-            "ChatHeaderFont": {
-                "Name": "채팅 헤더 폰트",
-                "Hint": "채팅 메시지 헤더의 발신자 폰트를 설정합니다."
-            },
-            "ChatMessageFont": {
-                "Name": "채팅 메시지 폰트",
-                "Hint": "채팅 메시지 내용의 폰트를 설정합니다."
-            },
-            "ChatHeaderChineseFont": {
-                "Name": "헤더 한자 전용 폰트",
-                "Hint": "채팅 헤더의 한자(漢字)에만 적용되는 폰트입니다."
-            },
-            "ChatMessageChineseFont": {
-                "Name": "메시지 한자 전용 폰트",
-                "Hint": "채팅 메시지 내용의 한자(漢字)에만 적용되는 폰트입니다."
-            },
-            "ChatHeaderFontSize": {
-                "Name": "헤더 폰트 크기",
-                "Hint": "채팅 헤더의 폰트 크기를 설정합니다."
-            },
-            "ChatHeaderFontWeight": {
-                "Name": "헤더 폰트 웨이트",
-                "Hint": "채팅 헤더의 발신자 이름 폰트 두께를 설정합니다. (100: 얇음, 400: 보통, 700: 굵음, 900: 매우 굵음)"
-            },
-            "ChatMessageFontSize": {
-                "Name": "메시지 폰트 크기",
-                "Hint": "채팅 메시지 내용의 폰트 크기를 설정합니다."
-            },
-            "NarratorFont": {
-                "Name": "나레이터 폰트",
-                "Hint": "나레이터 모드에서 표시되는 텍스트의 폰트를 설정합니다."
-            },
-            "NarratorFontSize": {
-                "Name": "나레이터 폰트 크기",
-                "Hint": "나레이터 모드에서 표시되는 텍스트의 폰트 크기를 설정합니다."
-            },
-            "NarratorFontWeight": {
-                "Name": "나레이터 폰트 굵기",
-                "Hint": "나레이터 모드에서 표시되는 텍스트의 폰트 두께를 설정합니다. (100: 얇음, 400: 보통, 700: 굵음, 900: 매우 굵음)"
-            },
-            "NarratorTypingSound": {
-                "Name": "나레이터 타이핑 사운드",
-                "Hint": "나레이터 모드에서 타이핑 효과 시 재생될 사운드 파일을 설정합니다. 공백을 제외한 문자 입력 시 재생됩니다."
-            },
-            "NarratorTypingSpeed": {
-                "Name": "나레이터 타이핑 속도",
-                "Hint": "나레이터 모드에서 텍스트가 한 글자씩 표시되는 속도를 설정합니다. 값이 작을수록 빠르게 표시됩니다. (10ms: 매우 빠름, 50ms: 보통, 200ms: 느림)"
-            },
-            "NarratorItalic": {
-                "Name": "나레이터 기울기 효과",
-                "Hint": "활성화하면 나레이터 바에서 이탤릭 효과가 적용됩니다."
-            },
-            "NarratorChatCard": {
-                "Name": "나레이터 채팅 카드",
-                "Hint": "나레이터 모드로 출력한 채팅 메시지에 별도의 양식을 적용합니다."
-            },
-            "ChatLogExportBasePath": {
-                "Name": "채팅 로그 내보내기 기본 경로",
-                "Hint": "HTML로 저장되는 채팅 로그에서 이미지 경로 앞에 붙일 기본 경로입니다.\nHTTP 서버: http://localhost:30000"
-            },
-            "ChatLogExportUseBase64": {
-                "Name": "이미지를 Base64로 저장",
-                "Hint": "이미지를 링크 대신 Base64 Data URL로 저장합니다.(주의: 용량이 매우 커질 수 있습니다.)"
-            },
-            "ChatLogExportCustomCSS": {
-                "Name": "채팅 로그 내보내기 커스텀 CSS",
-                "Hint": "HTML로 저장되는 채팅 로그에 추가로 적용할 CSS입니다. 기본 CSS와 함께 적용됩니다.",
-                "EditButton": "CSS 편집",
-                "Save": "저장",
-                "Cancel": "취소",
-                "Saved": "CSS가 저장되었습니다."
-            },
-            "ChatLogExportShowDiceTooltip": {
-                "Name": "주사위 툴팁 표시",
-                "Hint": "활성화하면 채팅 로그 내보내기 시 주사위 툴팁(상세 롤 정보)을 표시합니다."
-            },
-            "ChatUtilsForIC": {
-                "Name": "IC 모드에서 토큰 미 선택 시 OOC로 전송",
-                "Hint": "Public as Character 모드에서 토큰을 선택하지 않고 채팅을 전송할 경우 자동으로 OOC로 전송합니다."
-            },
-            "Dnd5eTitleFont": {
-                "Name": "D&D 5e 헤더 이름 폰트",
-                "Hint": "D&D 5e 채팅 헤더의 이름(title)에 적용할 폰트입니다."
-            },
-            "Dnd5eSubtitleFont": {
-                "Name": "D&D 5e 헤더 보조 정보 폰트",
-                "Hint": "D&D 5e 채팅 헤더의 보조 정보(subtitle)에 적용할 폰트입니다."
-            },
-            "ChatLogExportHideCoreButton": {
-                "Name": "기본 채팅 로그 출력 버튼 숨김",
-                "Hint": "Foundry VTT의 기본 채팅 로그 출력 버튼을 숨깁니다."
-            }
-        },
-        "DeleteButton": {
-            "AriaLabel": "메시지 삭제",
-            "Title": "메시지 삭제"
-        },
-        "Notifications": {
-            "DeleteOwnOnly": "자신의 메시지만 삭제할 수 있습니다."
-        },
-        "Selector": {
-            "Label": "스피커 선택",
-            "OOC": "OOC (Out of Character)"
-        },
-        "Narrator": {
-            "Button": {
-                "Title": "나레이터 모드",
-                "AriaLabel": "나레이터 모드 토글"
-            },
-            "Notifications": {
-                "GMOnly": "GM만 사용할 수 있습니다.",
-                "ModeOn": "나레이터 모드가 활성화되었습니다.",
-                "ModeOff": "나레이터 모드가 비활성화되었습니다."
-            }
-        },
-        "SpeakerSetting": {
-            "Button": {
-                "Title": "스피커 설정",
-                "AriaLabel": "스피커 열기"
-            },
-            "Notifications": {
-                "GMOnly": "GM만 사용할 수 있습니다."
-            },
-            "Dialog": {
-                "Title": "스피커 설정",
-                "AddRow": "행 추가",
-                "RemoveRow": "행 제거",
-                "Close": "닫기",
-                "DropHint": "액터를 드롭하세요",
-                "AvailableActors": "사용 가능한 액터",
-                "SearchPlaceholder": "이름으로 검색...",
-                "SearchPlaceholderWithTags": "이름 또는 태그로 검색..."
-            }
-        },
-        "Emotion": {
-            "Label": "감정",
-            "SelectTitle": "감정 선택",
-            "Default": "기본",
-            "Manage": "감정 관리",
-            "ManageWindowTitle": "{manage}: {actorName}",
-            "Add": "감정 추가",
-            "Save": "저장",
-            "Cancel": "취소",
-            "Saved": "감정이 저장되었습니다.",
-            "SaveError": "감정 저장 중 오류가 발생했습니다.",
-            "NoEmotionsRegistered": "이 액터에 등록된 감정이 없습니다. 액터 시트에서 「감정」으로 감정을 추가한 뒤 저장해 주세요."
-        },
-        "ChatPortraitToken": {
-            "Title": "채팅 포트레잇 토큰 이미지 설정",
-            "PreviewAlt": "Image Path 기준 토큰 이미지 미리보기",
-            "PreviewInteractHint": "휠: 확대·축소 (1~3) · 드래그: 앵커",
-            "Scale": "스케일",
-            "AnchorX": "앵커 X",
-            "AnchorY": "앵커 Y"
-        },
-        "ChatLogExport": {
-            "Success": "채팅 로그 HTML이 저장되었습니다. ({count}개 메시지)",
-            "Loading": "채팅 로그 로딩 중... ({current}/{total})",
-            "Error": {
-                "NotFound": "채팅 로그를 찾을 수 없습니다.",
-                "ExportFailed": "채팅 로그 저장 중 오류가 발생했습니다."
-            },
-            "Warning": {
-                "Empty": "저장할 채팅 메시지가 없습니다.",
-                "PartialLoad": "일부 메시지만 로드되었습니다. ({rendered}/{total}개 메시지)",
-                "CountMismatch": "메시지 수가 일치하지 않습니다. ({rendered}/{total}개 메시지)"
-            },
-            "Button": {
-                "Title": "채팅 로그 HTML 출력",
-                "AriaLabel": "채팅 로그 HTML 출력"
-            }
-        },
-        "ChatLogArchive": {
-            "Button": {
-                "Title": "채팅 로그 아카이브",
-                "AriaLabel": "채팅 로그 아카이브 열기",
-                "OpenArchive": "아카이브 열기"
-            },
-            "Title": "채팅 로그 아카이브",
-            "Close": "닫기",
-            "Back": "뒤로가기",
-            "Loading": "로딩 중...",
-            "NoFiles": "파일이 없습니다.",
-            "Search": {
-                "Placeholder": "로그 검색...",
-                "PlaceholderInLog": "로그 내 검색...",
-                "NoResults": "검색 결과가 없습니다.",
-                "Next": "다음",
-                "Previous": "이전",
-                "Clear": "지우기"
-            },
-            "Error": {
-                "LoadFailed": "폴더 내용을 불러오는데 실패했습니다."
-            }
-        },
-        "ChatSenderEdit": {
-            "ContextMenu": "스피커 수정",
-            "Title": "스피커 수정",
-            "UserLabel": "사용자 수정",
-            "ActorLabel": "캐릭터",
-            "ActorNone": "OOC / 캐릭터 없음",
-            "SpeakModeActor": "액터",
-            "SpeakModeToken": "토큰",
-            "SpeakModeToggleHint": "클릭할 때마다 액터 말하기 ↔ 토큰 말하기 전환",
-            "Save": "적용",
-            "Notifications": {
-                "GMOnly": "GM만 이 작업을 할 수 있습니다.",
-                "Success": "메시지 센더가 수정되었습니다.",
-                "UpdateFailed": "메시지를 업데이트하지 못했습니다",
-                "NoTokenOnScene": "활성 씬에 해당 액터의 토큰이 없어 액터로 말한 것처럼 저장했습니다."
-            }
-        },
-        "Typing": {
-            "Single": "{name}님이 입력 중입니다",
-            "Multiple": "복수의 사용자가 입력 중입니다"
+  "SPEAKERSELECTOR": {
+    "Settings": {
+      "ShowPortrait": {
+        "Name": "포트레잇 표시",
+        "Hint": "채팅 메시지에 액터 포트레잇을 표시합니다."
+      },
+      "PortraitSize": {
+        "Name": "포트레잇 크기",
+        "Hint": "포트레잇 이미지의 크기를 설정합니다."
+      },
+      "AlwaysUseCharacter": {
+        "Name": "항상 할당된 캐릭터로 말하기",
+        "Hint": "채팅 인풋으로 직접 입력한 메시지를 항상 할당된 캐릭터로 말하도록 설정합니다."
+      },
+      "AlwaysUseActor": {
+        "Name": "항상 액터로 말하기",
+        "Hint": "토큰을 선택해도 해당 토큰의 액터로 말합니다."
+      },
+      "PreventOtherUserCharacter": {
+        "Name": "플레이어 캐릭터로 말하기 방지",
+        "Hint": "GM이 플레이어 캐릭터로 말하는 것을 방지합니다."
+      },
+      "ApplyUserColor": {
+        "Name": "유저 색상 적용",
+        "Hint": "채팅 메시지 헤더의 발신자 이름에 유저 색상을 적용합니다."
+      },
+      "EnableChatMerge": {
+        "Name": "채팅 머지 기능 활성화",
+        "Hint": "같은 유저, 같은 포트레잇의 연속된 메시지에서 헤더를 숨깁니다."
+      },
+      "SidebarMinWidth": {
+        "Name": "사이드바 최소 넓이",
+        "Hint": "사이드바 드래그 리사이즈 시 최소 넓이를 설정합니다. (312~400px)"
+      },
+      "ChatHeaderWebfontCSS": {
+        "Name": "채팅 헤더 웹폰트 CSS",
+        "Hint": "게임 내부 채팅 헤더와 HTML 채팅 로그 내보내기에 함께 사용할 웹폰트 CSS입니다. 첫 번째 font-family와 단일 font-weight, font-style, font-variation-settings 값을 자동으로 적용합니다. 비어 있으면 Foundry의 기본 폰트를 사용하며, 기본 굵기는 900입니다.",
+        "EditButton": "헤더 웹폰트 CSS 편집",
+        "Saved": "채팅 헤더 웹폰트 CSS를 저장했습니다."
+      },
+      "Dnd5eTitleWebfontCSS": {
+        "Name": "D&D 5e 헤더 이름 웹폰트 CSS",
+        "Hint": "게임 내부와 HTML 내보내기에서 D&D 5e 채팅 헤더의 이름(title)에 적용할 웹폰트 CSS입니다. 입력한 font-family, font-weight, font-style, font-variation-settings 값을 우선합니다.",
+        "EditButton": "D&D 5e 이름 웹폰트 CSS 편집",
+        "Saved": "D&D 5e 헤더 이름 웹폰트 CSS를 저장했습니다."
+      },
+      "Dnd5eSubtitleWebfontCSS": {
+        "Name": "D&D 5e 헤더 보조 정보 웹폰트 CSS",
+        "Hint": "게임 내부와 HTML 내보내기에서 D&D 5e 채팅 헤더의 보조 정보(subtitle)에 적용할 웹폰트 CSS입니다. 입력한 font-family, font-weight, font-style, font-variation-settings 값을 우선합니다.",
+        "EditButton": "D&D 5e 보조 정보 웹폰트 CSS 편집",
+        "Saved": "D&D 5e 헤더 보조 정보 웹폰트 CSS를 저장했습니다."
+      },
+      "ChatMessageWebfontCSS": {
+        "Name": "채팅 메시지 웹폰트 CSS",
+        "Hint": "게임 내부 채팅 본문과 HTML 채팅 로그 내보내기에 함께 사용할 웹폰트 CSS입니다. 첫 번째 font-family와 단일 font-weight, font-style, font-variation-settings 값을 자동으로 적용합니다. 비어 있으면 Foundry의 기본 폰트를 사용하며, 기본 굵기는 500입니다.",
+        "EditButton": "본문 웹폰트 CSS 편집",
+        "Saved": "채팅 메시지 웹폰트 CSS를 저장했습니다."
+      },
+      "ChatDiceWebfontCSS": {
+        "Name": "채팅 주사위 웹폰트 CSS",
+        "Hint": "게임 내부 주사위 영역과 HTML 채팅 로그 내보내기에 함께 사용할 웹폰트 CSS입니다. 입력한 font-family, font-weight, font-style, font-variation-settings 값을 우선합니다.",
+        "EditButton": "주사위 웹폰트 CSS 편집",
+        "Saved": "채팅 주사위 웹폰트 CSS를 저장했습니다."
+      },
+      "NarratorWebfontCSS": {
+        "Name": "나레이터 웹폰트 CSS",
+        "Hint": "나레이터 바와 나레이터 채팅 카드에 적용할 웹폰트 CSS입니다. HTML 내보내기에도 같은 설정을 사용합니다. 비어 있으면 Foundry의 기본 폰트를 사용하며, 나레이터 바는 900 이탤릭, 나레이터 카드는 500 이탤릭을 사용합니다.",
+        "EditButton": "나레이터 웹폰트 CSS 편집",
+        "Saved": "나레이터 웹폰트 CSS를 저장했습니다."
+      },
+      "ChatHeaderFontSize": {
+        "Name": "헤더 폰트 크기",
+        "Hint": "채팅 헤더의 폰트 크기를 설정합니다."
+      },
+      "ChatMessageFontSize": {
+        "Name": "메시지 폰트 크기",
+        "Hint": "채팅 메시지 내용의 폰트 크기를 설정합니다."
+      },
+      "NarratorFontSize": {
+        "Name": "나레이터 폰트 크기",
+        "Hint": "나레이터 모드에서 표시되는 텍스트의 폰트 크기를 설정합니다."
+      },
+      "NarratorTypingSound": {
+        "Name": "나레이터 타이핑 사운드",
+        "Hint": "나레이터 모드에서 타이핑 효과 시 재생될 사운드 파일을 설정합니다. 공백을 제외한 문자 입력 시 재생됩니다."
+      },
+      "NarratorTypingSpeed": {
+        "Name": "나레이터 타이핑 속도",
+        "Hint": "나레이터 모드에서 텍스트가 한 글자씩 표시되는 속도를 설정합니다. 값이 작을수록 빠르게 표시됩니다. (10ms: 매우 빠름, 50ms: 보통, 200ms: 느림)"
+      },
+      "NarratorChatCard": {
+        "Name": "나레이터 채팅 카드",
+        "Hint": "나레이터 모드로 출력한 채팅 메시지에 별도의 양식을 적용합니다."
+      },
+      "ChatLogExportBasePath": {
+        "Name": "채팅 로그 내보내기 기본 경로",
+        "Hint": "HTML로 저장되는 채팅 로그에서 이미지 경로 앞에 붙일 기본 경로입니다.\nHTTP 서버: http://localhost:30000"
+      },
+      "ChatLogExportUseBase64": {
+        "Name": "이미지를 Base64로 저장",
+        "Hint": "HTML 출력 시 500KB 이하 이미지를 Base64로 포함합니다. 동일한 이미지는 최종 Data URL 기준으로 한 번만 저장하며, 500KB를 초과한 이미지는 절대 URL을 유지합니다."
+      },
+      "ChatLogExportCustomCSS": {
+        "Name": "채팅 로그 내보내기 커스텀 CSS",
+        "Hint": "HTML로 저장되는 채팅 로그에 추가로 적용할 CSS입니다. 기본 CSS와 함께 적용됩니다.",
+        "EditButton": "CSS 편집",
+        "Saved": "CSS가 저장되었습니다."
+      },
+      "ChatLogExportShowDiceTooltip": {
+        "Name": "주사위 툴팁 표시",
+        "Hint": "활성화하면 채팅 로그 내보내기 시 주사위 툴팁(상세 롤 정보)을 표시합니다."
+      },
+      "ChatUtilsForIC": {
+        "Name": "IC 모드에서 토큰 미 선택 시 OOC로 전송",
+        "Hint": "Public as Character 모드에서 토큰을 선택하지 않고 채팅을 전송할 경우 자동으로 OOC로 전송합니다."
+      },
+      "ChatLogExportHideCoreButton": {
+        "Name": "기본 채팅 로그 출력 버튼 숨김",
+        "Hint": "Foundry VTT의 기본 채팅 로그 출력 버튼을 숨깁니다."
+      },
+      "ChatLogSaveHtmlOnDelete": {
+        "Name": "로그 삭제 시 html 로그 저장",
+        "Hint": "활성화하면 채팅 로그를 삭제하기 전에 현재 로그를 HTML 파일로 저장합니다."
+      },
+      "ChatRenderLimit": {
+        "Name": "렌더된 채팅 수 제한",
+        "Hint": "채팅 로그가 하단에 있을 때 오래된 채팅 DOM을 제거해 현재 렌더된 메시지 수를 제한합니다. 실제 채팅 문서는 삭제되지 않습니다. 위로 스크롤하면 모듈이 제거했던 연속 구간을 먼저 다시 렌더링하고, 그보다 오래된 기록은 Foundry VTT의 기본 기록 로더가 처리합니다.",
+        "Choices": {
+          "Disabled": "사용 안 함",
+          "Keep100": "최근 100개 유지",
+          "Keep200": "최근 200개 유지"
         }
+      },
+      "ActorGridActors": {
+        "Name": "등록된 스피커 액터",
+        "Hint": "스피커 셀렉터에 표시될 액터 목록 (내부 설정)"
+      }
+    },
+    "DeleteButton": {
+      "AriaLabel": "메시지 삭제",
+      "Title": "메시지 삭제"
+    },
+    "Notifications": {
+      "DeleteOwnOnly": "자신의 메시지만 삭제할 수 있습니다.",
+      "SelectActorFirst": "먼저 액터를 선택해주세요.",
+      "ChatInputNotFound": "채팅 입력창을 찾지 못했습니다.",
+      "InsertImageMenuNotFound": "이미지 삽입 메뉴를 찾지 못했습니다.",
+      "ActorRemovedFromGrid": "{actorName}이(가) 그리드에서 제거되었습니다.",
+      "CssSaveFailed": "CSS 저장 중 오류가 발생했습니다: {error}"
+    },
+    "Selector": {
+      "Label": "스피커 선택",
+      "OOC": "OOC (Out of Character)"
+    },
+    "Narrator": {
+      "Button": {
+        "Title": "나레이터 모드",
+        "AriaLabel": "나레이터 모드 토글"
+      },
+      "Keybinding": {
+        "Name": "나레이터 모드 토글",
+        "Hint": "나레이터 모드를 켜거나 끕니다. 기본 단축키는 Shift+Space입니다."
+      }
+    },
+    "SpeakerSetting": {
+      "Button": {
+        "Title": "스피커 설정",
+        "AriaLabel": "스피커 열기"
+      },
+      "Notifications": {
+        "GMOnly": "GM만 사용할 수 있습니다.",
+        "NoActor": "이 토큰에 연결된 월드 액터를 찾을 수 없습니다.",
+        "NoEmptySlot": "스피커 설정에 빈 자리가 없습니다."
+      },
+      "Dialog": {
+        "Title": "스피커 설정",
+        "DropHint": "액터를 드롭하세요",
+        "AvailableActors": "사용 가능한 액터",
+        "SearchPlaceholder": "이름으로 검색...",
+        "SearchPlaceholderWithTags": "이름 또는 태그로 검색..."
+      },
+      "TokenHUD": {
+        "Title": "스피커 설정 등록/해제",
+        "AriaLabel": "이 토큰의 액터를 스피커 설정에 등록하거나 해제"
+      }
+    },
+    "Emotion": {
+      "Label": "감정",
+      "SelectTitle": "감정 선택",
+      "Default": "기본",
+      "Manage": "감정 관리",
+      "ManageWindowTitle": "{manage}: {actorName}",
+      "Add": "감정 추가",
+      "Save": "저장",
+      "Cancel": "취소",
+      "SaveError": "감정 저장 중 오류가 발생했습니다.",
+      "NamePlaceholder": "감정 이름",
+      "PortraitPlaceholder": "포트레잇 경로",
+      "ChoosePortrait": "포트레잇 선택",
+      "Delete": "삭제",
+      "NewEmotionAlt": "새 감정",
+      "Empty": "등록된 감정이 없습니다.",
+      "FilePickerUnavailable": "이 Foundry 버전에서 파일 선택기를 찾을 수 없습니다."
+    },
+    "ChatPortraitToken": {
+      "Title": "채팅 포트레잇 토큰 이미지 설정",
+      "PreviewAlt": "Image Path 기준 토큰 이미지 미리보기",
+      "PreviewInteractHint": "휠: 확대·축소 (1~3) · 드래그: 앵커",
+      "Scale": "스케일",
+      "AnchorX": "앵커 X",
+      "AnchorY": "앵커 Y"
+    },
+    "ChatLogExport": {
+      "Success": "채팅 로그 HTML이 저장되었습니다. ({count}개 메시지)",
+      "Error": {
+        "ExportFailed": "채팅 로그 저장 중 오류가 발생했습니다.",
+        "FlushBackupFailed": "HTML 백업을 저장하지 못해 채팅 로그 삭제를 중단했습니다."
+      },
+      "Warning": {
+        "Empty": "저장할 채팅 메시지가 없습니다.",
+        "CountMismatch": "메시지 수가 일치하지 않습니다. ({rendered}/{total}개 메시지)"
+      },
+      "Button": {
+        "Title": "채팅 로그 HTML 출력",
+        "AriaLabel": "채팅 로그 HTML 출력"
+      }
+    },
+    "ChatLogArchive": {
+      "Button": {
+        "OpenArchive": "아카이브 열기"
+      },
+      "Title": "채팅 로그 아카이브",
+      "Close": "닫기",
+      "Back": "뒤로가기",
+      "Loading": "로딩 중...",
+      "NoFiles": "파일이 없습니다.",
+      "Search": {
+        "Placeholder": "로그 검색...",
+        "PlaceholderInLog": "로그 내 검색...",
+        "NoResults": "검색 결과가 없습니다.",
+        "Next": "다음",
+        "Previous": "이전"
+      },
+      "Error": {
+        "LoadFailed": "폴더 내용을 불러오는데 실패했습니다."
+      }
+    },
+    "ChatSenderEdit": {
+      "ContextMenu": "스피커 수정",
+      "Title": "스피커 수정",
+      "UserLabel": "사용자 수정",
+      "ActorLabel": "캐릭터",
+      "ActorNone": "OOC / 캐릭터 없음",
+      "SpeakModeActor": "액터",
+      "SpeakModeToken": "토큰",
+      "SpeakModeToggleHint": "클릭할 때마다 액터 말하기 ↔ 토큰 말하기 전환",
+      "Save": "적용",
+      "Notifications": {
+        "GMOnly": "GM만 이 작업을 할 수 있습니다.",
+        "Success": "메시지 센더가 수정되었습니다.",
+        "UpdateFailed": "메시지를 업데이트하지 못했습니다",
+        "NoTokenOnScene": "활성 씬에 해당 액터의 토큰이 없어 액터로 말한 것처럼 저장했습니다."
+      }
+    },
+    "Typing": {
+      "Single": "{name}님이 입력 중입니다",
+      "Multiple": "복수의 사용자가 입력 중입니다"
+    },
+    "LancerCategory": {
+      "Pilot": "파일럿",
+      "Mech": "메크",
+      "Deployable": "디플로이에이블"
+    },
+    "ChatReviser": {
+      "Notifications": {
+        "EditOwnOnly": "자신의 메시지만 수정할 수 있습니다.",
+        "Success": "메시지가 수정되었습니다.",
+        "Error": "메시지 수정 중 오류가 발생했습니다."
+      }
+    },
+    "ActorTree": {
+      "NoFolder": "폴더 없음"
+    },
+    "Resizer": {
+      "Sidebar": {
+        "AriaLabel": "사이드바 너비 조절",
+        "Title": "사이드바 너비 조절 (드래그). 더블클릭 시 기본 너비로 초기화."
+      },
+      "ChatInput": {
+        "AriaLabel": "채팅 입력 높이 조절",
+        "Title": "채팅 입력 높이 조절 (드래그). 더블클릭 시 기본 높이로 초기화."
+      }
+    },
+    "Common": {
+      "CSSCode": "CSS 코드",
+      "Save": "저장",
+      "Cancel": "취소"
     }
+  }
 }

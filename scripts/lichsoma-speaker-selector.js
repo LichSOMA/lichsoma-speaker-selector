@@ -4,10 +4,35 @@
  */
 
 import { ChatUI } from './lichsoma-chat-ui.js';
+import { SpeakerSelectorCompat } from './lichsoma-speaker-selector-compat.js';
+import { getRegisteredChatRenderProcessors, initializeChatRenderPipeline, registerChatRenderProcessor } from './lichsoma-chat-render-pipeline.js';
+import { emitSocket, getRegisteredSocketTypes, registerSocketHandler } from './lichsoma-socket-router.js';
+import { installModuleApi } from './lichsoma-module-api.js';
+import { ChatSystemBridge, registerChatSystemModule, unregisterChatSystemModule } from './lichsoma-chat-system-registry.js';
 import { ActorEmotions } from './lichsoma-actor-emotions.js';
 import { ChatMerge } from './lichsoma-chat-merge.js';
 import { ChatRubyHandler } from './lichsoma-chat-handler.js';
 import { LichsomaChatDom } from './lichsoma-chat-dom.js';
+import { ChatRenderLimiter } from './lichsoma-chat-render-limiter.js';
+import {
+    escapeCssString,
+    extractFirstFontFamily,
+    extractWebfontPresentation,
+    getMessageAuthorColor,
+    getMessageAuthorName,
+    normalizeFontFamilyName,
+    quoteFontFamily
+} from './lichsoma-shared-utils.js';
+import {
+    applyDnd5eTitleAlias,
+    getDnd5eTitleAlias,
+    isDnd5eMessageElement
+} from './lichsoma-dnd5e-header.js';
+import {
+    buildActorFolderTree,
+    getAccessibleActors,
+    renderActorFolderTree
+} from './lichsoma-actor-tree.js';
 
 export class SpeakerSelector {
     static SETTINGS = {
@@ -18,31 +43,34 @@ export class SpeakerSelector {
         PREVENT_OTHER_USER_CHARACTER: 'preventOtherUserCharacter',
         APPLY_USER_COLOR: 'applyUserColor',
         ENABLE_CHAT_MERGE: 'enableChatMerge',
+        CHAT_RENDER_LIMIT: 'chatRenderLimit',
         ACTOR_GRID_ACTORS: 'actorGridActors',
-        CHAT_HEADER_FONT: 'chatHeaderFont',
-        CHAT_HEADER_CHINESE_FONT: 'chatHeaderChineseFont',
+        CHAT_HEADER_WEBFONT_CSS: 'chatHeaderWebfontCSS',
         CHAT_HEADER_FONT_SIZE: 'chatHeaderFontSize',
-        CHAT_HEADER_FONT_WEIGHT: 'chatHeaderFontWeight',
-        DND5E_TITLE_FONT: 'dnd5eTitleFont',
-        DND5E_SUBTITLE_FONT: 'dnd5eSubtitleFont',
-        CHAT_MESSAGE_FONT: 'chatMessageFont',
-        CHAT_MESSAGE_CHINESE_FONT: 'chatMessageChineseFont',
+        DND5E_TITLE_WEBFONT_CSS: 'dnd5eTitleWebfontCSS',
+        DND5E_SUBTITLE_WEBFONT_CSS: 'dnd5eSubtitleWebfontCSS',
+        CHAT_MESSAGE_WEBFONT_CSS: 'chatMessageWebfontCSS',
+        CHAT_DICE_WEBFONT_CSS: 'chatDiceWebfontCSS',
         CHAT_MESSAGE_FONT_SIZE: 'chatMessageFontSize',
-        NARRATOR_FONT: 'narratorFont',
+        NARRATOR_WEBFONT_CSS: 'narratorWebfontCSS',
         NARRATOR_FONT_SIZE: 'narratorFontSize',
-        NARRATOR_FONT_WEIGHT: 'narratorFontWeight',
         NARRATOR_TYPING_SOUND: 'narratorTypingSound',
         NARRATOR_TYPING_SPEED: 'narratorTypingSpeed',
-        NARRATOR_ITALIC: 'narratorItalic',
         NARRATOR_CHAT_CARD: 'narratorChatCard',
         CHAT_LOG_EXPORT_BASE_PATH: 'chatLogExportBasePath',
         CHAT_LOG_EXPORT_USE_BASE64: 'chatLogExportUseBase64',
         CHAT_LOG_EXPORT_CUSTOM_CSS: 'chatLogExportCustomCSS',
         CHAT_LOG_EXPORT_SHOW_DICE_TOOLTIP: 'chatLogExportShowDiceTooltip',
         CHAT_LOG_EXPORT_HIDE_CORE_BUTTON: 'chatLogExportHideCoreButton',
+        CHAT_LOG_SAVE_HTML_ON_DELETE: 'chatLogSaveHtmlOnDelete',
     };
     
-    static _fontChoicesUpdated = false;
+    static _chatInputPendingText = '';
+    static _chatInputPendingUntil = 0;
+    static _chatInputPendingUserId = null;
+    static _chatInputGlobalListenersRegistered = false;
+    static _postProcessedChatLogs = new WeakSet();
+    static _dnd5eHeaderJobs = new Map();
 
     static _getChatInputElement(root = document) {
         return LichsomaChatDom.getChatInput(root) || LichsomaChatDom.getChatInput(document);
@@ -63,6 +91,37 @@ export class SpeakerSelector {
         return (pmRoot?.innerText ?? pmRoot?.textContent ?? chatInput.textContent ?? '').trim();
     }
 
+    static _replaceTextEllipsesInHtml(content) {
+        if (typeof content !== 'string' || !content.includes('...')) return content;
+
+        const replaceEllipses = (text) => String(text ?? '').replace(/\.\.\./g, '…');
+
+        // HTML 태그가 없는 일반 텍스트는 그대로 치환한다.
+        if (!/[<>&]/.test(content)) {
+            return replaceEllipses(content);
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = content;
+
+        const walker = document.createTreeWalker(wrapper, NodeFilter.SHOW_TEXT);
+        const textNodes = [];
+        while (walker.nextNode()) {
+            textNodes.push(walker.currentNode);
+        }
+
+        let changed = false;
+        for (const node of textNodes) {
+            const nextValue = replaceEllipses(node.nodeValue);
+            if (nextValue !== node.nodeValue) {
+                node.nodeValue = nextValue;
+                changed = true;
+            }
+        }
+
+        return changed ? wrapper.innerHTML : content;
+    }
+
     static _isChatInputFocused(chatInput) {
         const active = document.activeElement;
         return !!chatInput && (active === chatInput || chatInput.contains?.(active));
@@ -77,6 +136,265 @@ export class SpeakerSelector {
         return game.system?.id === 'dnd5e';
     }
 
+    static _isLancerSystem() {
+        return game.system?.id === 'lancer';
+    }
+
+    static _isLancerPilotActor(actor) {
+        if (!actor) return false;
+        if (actor.type === 'pilot') return true;
+        try {
+            if (typeof actor.is_pilot === 'function' && actor.is_pilot()) return true;
+        } catch (e) {
+            // ignore system helper failures
+        }
+        return false;
+    }
+
+    static _isLancerMechActor(actor) {
+        if (!actor) return false;
+        if (actor.type === 'mech') return true;
+        try {
+            if (typeof actor.is_mech === 'function' && actor.is_mech()) return true;
+        } catch (e) {
+            // ignore system helper failures
+        }
+        return false;
+    }
+
+
+    static _isLancerNpcActor(actor) {
+        if (!actor) return false;
+        if (actor.type === 'npc') return true;
+        try {
+            if (typeof actor.is_npc === 'function' && actor.is_npc()) return true;
+        } catch (e) {
+            // ignore system helper failures
+        }
+        return false;
+    }
+
+    static _isLancerDeployableActor(actor) {
+        if (!actor) return false;
+        if (actor.type === 'deployable') return true;
+        try {
+            if (typeof actor.is_deployable === 'function' && actor.is_deployable()) return true;
+        } catch (e) {
+            // ignore system helper failures
+        }
+        return false;
+    }
+
+    static _getLancerSpeakerCategory(actor) {
+        if (!actor || !this._isLancerSystem()) return 'other';
+        // Deployable이 NPC 계열 헬퍼와 겹쳐도 별도 열로 빠지도록 먼저 판정한다.
+        if (this._isLancerDeployableActor(actor)) return 'deployable';
+        if (this._isLancerNpcActor(actor)) return 'npc';
+        if (this._isLancerPilotActor(actor)) return 'pilot';
+        if (this._isLancerMechActor(actor)) return 'mech';
+        return 'other';
+    }
+
+    static _getLancerSpeakerCategoryOrder() {
+        if (game.user?.isGM) return ['npc', 'pilot', 'mech', 'deployable'];
+        return ['pilot', 'mech', 'npc', 'deployable'];
+    }
+
+    static _getLancerSpeakerCategoryLabel(category) {
+        switch (category) {
+            case 'npc': return 'NPC';
+            case 'pilot': return game.i18n.localize('SPEAKERSELECTOR.LancerCategory.Pilot');
+            case 'mech': return game.i18n.localize('SPEAKERSELECTOR.LancerCategory.Mech');
+            case 'deployable': return game.i18n.localize('SPEAKERSELECTOR.LancerCategory.Deployable');
+            default: return '';
+        }
+    }
+
+    static _escapeHTML(value) {
+        const text = String(value ?? '');
+        if (foundry?.utils?.escapeHTML) return foundry.utils.escapeHTML(text);
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    static _getActorSpeakerDisplayName(actor) {
+        if (!actor) return '';
+        const savedEmotion = ActorEmotions.getSavedEmotion(actor.id);
+        return savedEmotion
+            ? `${actor.name}(${savedEmotion.emotionName})`
+            : actor.name;
+    }
+
+    static _createSpeakerOptionHTML(value, label) {
+        return `<option value="${this._escapeHTML(value)}">${this._escapeHTML(label)}</option>`;
+    }
+
+    static _createActorSpeakerOptionHTML(actor, value = null) {
+        if (!actor) return '';
+        return this._createSpeakerOptionHTML(value ?? `actor:${actor.id}`, this._getActorSpeakerDisplayName(actor));
+    }
+
+    static _groupLancerSpeakerOptions(entries, order = this._getLancerSpeakerCategoryOrder()) {
+        const buckets = new Map();
+        for (const category of order) buckets.set(category, []);
+        const other = [];
+
+        for (const entry of entries) {
+            if (!entry?.actor) continue;
+            const optionHTML = this._createActorSpeakerOptionHTML(entry.actor, entry.value);
+            if (!optionHTML) continue;
+
+            const category = this._getLancerSpeakerCategory(entry.actor);
+            if (buckets.has(category)) buckets.get(category).push(optionHTML);
+            else other.push(optionHTML);
+        }
+
+        const groups = [];
+        for (const category of order) {
+            const options = buckets.get(category) || [];
+            // 비어 있는 열은 optgroup 자체를 만들지 않아 라벨도 표시하지 않는다.
+            if (!options.length) continue;
+            const label = this._getLancerSpeakerCategoryLabel(category);
+            groups.push(`<optgroup label="${this._escapeHTML(label)}">${options.join('')}</optgroup>`);
+        }
+
+        // 예외적인 알 수 없는 LANCER actor type은 기존처럼 사라지지 않도록 라벨 없이 뒤에 붙인다.
+        if (other.length) groups.push(other.join(''));
+        return groups.join('');
+    }
+
+    static _resolveLancerPilotFromMech(actor) {
+        if (!actor || !this._isLancerMechActor(actor)) return null;
+        const pilotLink = actor.system?.pilot;
+        const candidates = [
+            pilotLink?.value,
+            pilotLink?.document,
+            pilotLink?.actor,
+            pilotLink?.id,
+            pilotLink?.uuid,
+            pilotLink
+        ];
+
+        for (const candidate of candidates) {
+            const resolved = this._resolveLancerPilotCandidate(candidate);
+            if (resolved) return resolved;
+        }
+        return null;
+    }
+
+    static _resolveLancerPilotCandidate(candidate) {
+        if (!candidate) return null;
+        if (typeof candidate === 'object') {
+            if (this._isLancerPilotActor(candidate)) return candidate;
+            if (candidate.value && candidate.value !== candidate) {
+                const nested = this._resolveLancerPilotCandidate(candidate.value);
+                if (nested) return nested;
+            }
+            if (candidate.id && game.actors?.get(candidate.id)) {
+                const actor = game.actors.get(candidate.id);
+                if (this._isLancerPilotActor(actor)) return actor;
+            }
+            if (candidate.uuid && typeof fromUuidSync === 'function') {
+                try {
+                    const actor = fromUuidSync(candidate.uuid);
+                    if (this._isLancerPilotActor(actor)) return actor;
+                } catch (e) {
+                    // ignore unresolved uuid
+                }
+            }
+            return null;
+        }
+
+        if (typeof candidate === 'string') {
+            const direct = game.actors?.get(candidate);
+            if (this._isLancerPilotActor(direct)) return direct;
+
+            if (candidate.startsWith('Actor.')) {
+                const id = candidate.split('.').pop();
+                const actor = game.actors?.get(id);
+                if (this._isLancerPilotActor(actor)) return actor;
+            }
+
+            if (typeof fromUuidSync === 'function') {
+                try {
+                    const actor = fromUuidSync(candidate);
+                    if (this._isLancerPilotActor(actor)) return actor;
+                } catch (e) {
+                    // ignore unresolved uuid
+                }
+            }
+        }
+        return null;
+    }
+
+    static _getLancerPilotForSpeaker(actor) {
+        if (!this._isLancerSystem() || !actor) return null;
+        if (this._isLancerPilotActor(actor)) return actor;
+        return this._resolveLancerPilotFromMech(actor);
+    }
+
+    static _getLancerSpeakerNameParts(actor, speaker = null) {
+        if (!this._isLancerSystem() || !actor) return null;
+
+        const alias = String(speaker?.alias || '').trim();
+
+        if (this._isLancerMechActor(actor)) {
+            const pilot = this._resolveLancerPilotFromMech(actor);
+            const displayName = String(actor.name || alias || '').trim();
+            const callsign = String(pilot?.system?.callsign || '').trim();
+            const rubyText = callsign && callsign !== displayName ? callsign : '';
+
+            if (!displayName) return null;
+            return { name: displayName, callsign: rubyText, pilot, actor };
+        }
+
+        const pilot = this._isLancerPilotActor(actor) ? actor : this._getLancerPilotForSpeaker(actor);
+        if (!pilot) return null;
+
+        const name = String(pilot.name || '').trim();
+        const callsign = String(pilot.system?.callsign || '').trim();
+
+        // LANCER의 토큰/채팅 alias는 콜사인인 경우가 많으므로,
+        // 파일럿 발화는 파일럿의 실제 이름을 우선 표시하고 콜사인은 루비로 올린다.
+        const displayName = name || alias || callsign;
+        const rubyText = callsign && callsign !== displayName ? callsign : '';
+
+        if (!displayName) return null;
+        return { name: displayName, callsign: rubyText, pilot };
+    }
+
+    static _createRubyNameElement(name, rubyText, className = 'lichsoma-lancer-speaker-ruby') {
+        const ruby = document.createElement('ruby');
+        ruby.classList.add('lichsoma-ruby', className);
+
+        const rb = document.createElement('rb');
+        rb.textContent = name || '';
+        ruby.appendChild(rb);
+
+        if (rubyText) {
+            const rt = document.createElement('rt');
+            rt.textContent = rubyText;
+            ruby.appendChild(rt);
+        }
+
+        return ruby;
+    }
+
+    static _setSenderElementDisplayName(senderElement, name, rubyText = '') {
+        if (!senderElement?.length) return;
+        const el = senderElement[0];
+        if (!el) return;
+
+        el.textContent = '';
+        if (rubyText) {
+            el.appendChild(this._createRubyNameElement(name, rubyText));
+        } else {
+            el.textContent = name || '';
+        }
+        el.dataset.lichsomaLancerNameApplied = 'true';
+    }
+
     static _getShowPortraitSetting() {
         // dnd5e는 시스템 원본 avatar를 사용한다.
         return this._isDnd5eSystem()
@@ -88,137 +406,8 @@ export class SpeakerSelector {
         return game.settings.get('lichsoma-speaker-selector', this.SETTINGS.ALWAYS_USE_ACTOR);
     }
 
-    static _getMessageAuthorColor(message) {
-        if (!message) return null;
-
-        if (message.author && typeof message.author === 'object' && 'color' in message.author) {
-            return message.author.color || null;
-        }
-
-        const authorId = message.author?.id || message.user?.id || message.user || null;
-        if (!authorId) return null;
-
-        return game.users?.get(authorId)?.color || null;
-    }
-
-    static _getMessageAuthorName(message) {
-        if (!message) return '';
-        if (message.author && typeof message.author === 'object' && 'name' in message.author) {
-            return message.author.name || '';
-        }
-
-        const authorId = message.author?.id || message.user?.id || message.user || null;
-        if (!authorId) return '';
-
-        return game.users?.get(authorId)?.name || '';
-    }
-
     static _getDnd5eSubtitleFallback(message) {
-        // dnd5e 기본 헤더의 subtitle은 대체로 메시지 작성자 이름이다.
-        // author 이름을 얻지 못한 경우에도 subtitle 요소 자체는 유지해 헤더 높이를 통일한다.
-        return this._getMessageAuthorName(message) || '\u00A0';
-    }
-
-    static _getDnd5eTitleAlias(message) {
-        if (!message) return '';
-
-        const flags = message.flags?.['lichsoma-speaker-selector'] || {};
-        if (flags.senderAlias) return flags.senderAlias;
-
-        const speaker = message.speaker || {};
-        const actorId = flags.actorId || speaker.actor || null;
-        const actor = actorId ? game.actors?.get(actorId) : null;
-
-        // 셀렉터가 액터 발화로 저장한 메시지이거나, "항상 액터로 말하기"가 켜져 있거나,
-        // speaker.token이 없는 actor speaker라면 dnd5e 원본 name-stacked title도 actor 이름을 우선한다.
-        // 반대로 토큰 발화는 senderAlias가 저장되어 있으면 그 값을 쓰고, 없으면 dnd5e 기본 alias를 유지한다.
-        if (this._isDnd5eSystem() && actor?.name) {
-            const mergeType = flags.mergeSpeakerType || null;
-            const shouldPreferActorName = this._getAlwaysUseActorSetting()
-                || mergeType === 'actor'
-                || !speaker.token;
-
-            if (shouldPreferActorName) return actor.name;
-        }
-
-        return speaker.alias
-            || message.alias
-            || actor?.name
-            || this._getMessageAuthorName(message)
-            || '';
-    }
-
-    static _applyDnd5eNameStackedTitleAlias(message, html) {
-        if (!this._isDnd5eNativeHeaderMessage(message, html)) return;
-
-        const messageElement = LichsomaChatDom.getChatMessageElement(html);
-        if (!messageElement) return;
-
-        const header = messageElement.querySelector('.message-header');
-        const sender = header?.querySelector('.message-sender');
-        if (!sender) return;
-
-        let nameStacked = sender.querySelector('.name-stacked');
-        let title = nameStacked?.querySelector('.title') || null;
-
-        if (!nameStacked) {
-            const avatar = sender.querySelector(':scope > .avatar');
-            const existingTitleText = Array.from(sender.childNodes)
-                .filter((node) => node !== avatar)
-                .map((node) => node.textContent || '')
-                .join(' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-
-            Array.from(sender.childNodes).forEach((node) => {
-                if (node !== avatar) node.remove();
-            });
-
-            nameStacked = document.createElement('span');
-            nameStacked.classList.add('name-stacked');
-
-            title = document.createElement('span');
-            title.classList.add('title');
-            title.textContent = existingTitleText || '\u00A0';
-
-            nameStacked.appendChild(title);
-            sender.appendChild(nameStacked);
-        } else if (!title) {
-            title = document.createElement('span');
-            title.classList.add('title');
-            title.textContent = '\u00A0';
-            nameStacked.insertBefore(title, nameStacked.firstChild);
-        }
-
-        const alias = this._getDnd5eTitleAlias(message);
-        if (alias && title) {
-            title.textContent = alias;
-            title.dataset.lichsomaSenderAlias = 'true';
-        }
-    }
-
-    static _scheduleDnd5eTitleAliasApply(message, html) {
-        if (!this._isDnd5eNativeHeaderMessage(message, html)) return;
-
-        const messageElement = LichsomaChatDom.getChatMessageElement(html);
-        if (!messageElement) return;
-
-        const apply = () => {
-            this._applyDnd5eNameStackedTitleAlias(message, messageElement);
-        };
-
-        // dnd5e/core가 첫 렌더 직후 name-stacked title을 다시 정리하는 경우가 있어,
-        // avatar와 동일하게 여러 타이밍에서 title alias를 재적용한다.
-        apply();
-
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(apply);
-        }
-
-        setTimeout(apply, 0);
-        setTimeout(apply, 50);
-        setTimeout(apply, 150);
-        setTimeout(apply, 300);
+        return getMessageAuthorName(message) || '\u00A0';
     }
 
     static _getRenderedChatMessageElement(message) {
@@ -230,25 +419,66 @@ export class SpeakerSelector {
             || null;
     }
 
-    static _scheduleRenderedDnd5eHeaderEnhancements(message, srcOverride = null) {
+    static _cancelDnd5eHeaderJob(jobKey) {
+        const job = this._dnd5eHeaderJobs.get(jobKey);
+        if (!job) return;
+        job.cancelled = true;
+        if (job.rafId != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(job.rafId);
+        for (const timer of job.timers || []) clearTimeout(timer);
+        this._dnd5eHeaderJobs.delete(jobKey);
+    }
+
+    static _applyDnd5eHeaderEnhancementsOnce(message, html, srcOverride = null) {
+        if (!this._isDnd5eSystem() || !message) return false;
+        const messageElement = LichsomaChatDom.getChatMessageElement(html);
+        if (!messageElement || !isDnd5eMessageElement(messageElement)) return false;
+
+        this._prepareDnd5eNativeHeader(message, messageElement);
+        applyDnd5eTitleAlias(message, messageElement, {
+            ensureSubtitle: true,
+            subtitleFallback: this._getDnd5eSubtitleFallback(message)
+        });
+        this._applyDnd5eAvatarPortrait(message, messageElement, srcOverride);
+        return true;
+    }
+
+    static _scheduleDnd5eHeaderEnhancements(message, html = null, srcOverride = null, { lookupRendered = false } = {}) {
         if (!this._isDnd5eSystem() || !message) return;
 
-        const apply = () => {
-            const messageElement = this._getRenderedChatMessageElement(message);
-            if (!messageElement) return;
+        const jobKey = message.id || message._id || message;
+        this._cancelDnd5eHeaderJob(jobKey);
 
-            this._scheduleDnd5eTitleAliasApply(message, messageElement);
-            this._scheduleDnd5eAvatarPortraitApply(message, messageElement, srcOverride);
+        const initialElement = LichsomaChatDom.getChatMessageElement(html);
+        const job = { cancelled: false, rafId: null, timers: [] };
+        this._dnd5eHeaderJobs.set(jobKey, job);
+
+        const apply = () => {
+            if (job.cancelled) return;
+            // renderChatMessageHTML receives a pending (detached) element before it is
+            // inserted into the live ChatLog. Keep operating on that exact element; falling
+            // back to document by message id can mutate an older live DOM node with the same id.
+            const element = lookupRendered
+                ? this._getRenderedChatMessageElement(message)
+                : initialElement;
+            if (!element) return;
+            this._applyDnd5eHeaderEnhancementsOnce(message, element, srcOverride);
         };
 
+        // One immediate pass, one next-frame pass, and two bounded delayed
+        // passes replace the previous nested retry fan-out.
+        apply();
         if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(apply);
+            job.rafId = requestAnimationFrame(apply);
         }
+        job.timers.push(setTimeout(apply, 100));
+        job.timers.push(setTimeout(() => {
+            apply();
+            this._dnd5eHeaderJobs.delete(jobKey);
+        }, 300));
+    }
 
-        setTimeout(apply, 0);
-        setTimeout(apply, 50);
-        setTimeout(apply, 150);
-        setTimeout(apply, 300);
+    static _scheduleRenderedDnd5eHeaderEnhancements(message, srcOverride = null) {
+        this._scheduleDnd5eHeaderEnhancements(message, null, srcOverride, { lookupRendered: true });
     }
 
     static _getDnd5eAvatarPortraitSrc(message, fallbackSrc = null) {
@@ -296,7 +526,7 @@ export class SpeakerSelector {
         img.dataset.lichsomaPortraitSrc = portraitSrc;
         avatar.dataset.lichsomaPortraitSrc = portraitSrc;
 
-        const alias = this._getDnd5eTitleAlias(message) || message?.speaker?.alias || '';
+        const alias = getDnd5eTitleAlias(message) || message?.speaker?.alias || '';
         if (alias) img.setAttribute('alt', alias);
 
         // dnd5e 원본 avatar에도 LichSOMA 포트레잇 프리뷰를 연결한다.
@@ -309,132 +539,160 @@ export class SpeakerSelector {
         }
     }
 
-    static _scheduleDnd5eAvatarPortraitApply(message, html, srcOverride = null) {
-        if (!this._isDnd5eNativeHeaderMessage(message, html)) return;
-
+    /**
+     * Apply only the presentation changes needed by standalone HTML export.
+     *
+     * This deliberately avoids live-ChatLog side effects: no updateSource(), no timers,
+     * no DOM lookup fallback, no delete-button listeners, no portrait-preview listeners,
+     * and no scroll manipulation. The supplied element may remain detached throughout.
+     */
+    static async prepareMessageElementForExport(message, html) {
         const messageElement = LichsomaChatDom.getChatMessageElement(html);
-        if (!messageElement) return;
+        if (!messageElement || !message) return messageElement || null;
 
-        const apply = () => {
-            this._applyDnd5eAvatarPortrait(message, messageElement, srcOverride);
-        };
+        const $html = $(messageElement);
+        const flags = message.flags?.['lichsoma-speaker-selector'] || {};
 
-        // 첫 렌더 직후 dnd5e/core가 header avatar를 다시 정리하는 경우가 있어,
-        // 즉시 1회 + 다음 프레임 + 짧은 지연 재적용으로 첫 입력 시점의 누락을 막는다.
-        apply();
+        if (message.author?.id) messageElement.dataset.authorId = message.author.id;
 
-        if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(apply);
-        }
+        const headerElement = messageElement.querySelector('.message-header');
+        const actorId = flags.actorId || message.speaker?.actor || null;
+        if (headerElement && actorId) headerElement.dataset.actorId = actorId;
 
-        setTimeout(apply, 0);
-        setTimeout(apply, 50);
-        setTimeout(apply, 150);
-    }
-
-    static _ensureDnd5eNameStackedSubtitle(message, html) {
-        if (!this._isDnd5eNativeHeaderMessage(message, html)) return;
-
-        const messageElement = LichsomaChatDom.getChatMessageElement(html);
-        if (!messageElement) return;
-
-        const header = messageElement.querySelector('.message-header');
-        const sender = header?.querySelector('.message-sender');
-        if (!sender) return;
-
-        let nameStacked = sender.querySelector('.name-stacked');
-        let title = nameStacked?.querySelector('.title') || null;
-
-        if (!nameStacked) {
-            const avatar = sender.querySelector(':scope > .avatar');
-            const authorName = this._getMessageAuthorName(message);
-            const titleText = Array.from(sender.childNodes)
-                .filter((node) => node !== avatar)
-                .map((node) => node.textContent || '')
-                .join(' ')
-                .replace(/\s+/g, ' ')
-                .trim()
-                || message?.speaker?.alias
-                || message?.alias
-                || authorName
-                || '\u00A0';
-
-            Array.from(sender.childNodes).forEach((node) => {
-                if (node !== avatar) node.remove();
+        const isDnd5eNativeHeader = this._isDnd5eNativeHeaderMessage(message, messageElement);
+        if (isDnd5eNativeHeader) {
+            this._prepareDnd5eNativeHeader(message, messageElement);
+            applyDnd5eTitleAlias(message, messageElement, {
+                ensureSubtitle: true,
+                subtitleFallback: this._getDnd5eSubtitleFallback(message)
             });
 
-            nameStacked = document.createElement('span');
-            nameStacked.classList.add('name-stacked');
+            const avatar = messageElement.querySelector('.message-header .message-sender .avatar');
+            const img = avatar?.querySelector?.('img');
+            const portraitSrc = this._getDnd5eAvatarPortraitSrc(message, img?.getAttribute?.('src') || null);
+            if (avatar && img && portraitSrc) {
+                img.setAttribute('src', portraitSrc);
+                img.dataset.lichsomaPortraitSrc = portraitSrc;
+                avatar.dataset.lichsomaPortraitSrc = portraitSrc;
+                const alias = getDnd5eTitleAlias(message) || message?.speaker?.alias || '';
+                if (alias) img.setAttribute('alt', alias);
+            }
 
-            title = document.createElement('span');
-            title.classList.add('title');
-            title.textContent = titleText;
+            const header = messageElement.querySelector('.message-header');
+            if (game.settings.get('lichsoma-speaker-selector', this.SETTINGS.APPLY_USER_COLOR)) {
+                const userColor = getMessageAuthorColor(message);
+                if (userColor) {
+                    messageElement.style.setProperty('--lichsoma-dnd5e-title-color', userColor);
+                    header?.style.setProperty('--lichsoma-dnd5e-title-color', userColor);
+                }
+            }
 
-            nameStacked.appendChild(title);
-            sender.appendChild(nameStacked);
-        } else if (!title) {
-            title = document.createElement('span');
-            title.classList.add('title');
-            title.textContent = message?.speaker?.alias || this._getMessageAuthorName(message) || '\u00A0';
-            nameStacked.insertBefore(title, nameStacked.firstChild);
+            this._processNarratorChatCard(message, $html);
+            return messageElement;
         }
 
-        let subtitle = nameStacked.querySelector('.subtitle');
-        if (!subtitle) {
-            subtitle = document.createElement('span');
-            subtitle.classList.add('subtitle');
-            nameStacked.appendChild(subtitle);
+        // Historical export must not depend on the current selected speaker. Prefer a
+        // senderAlias persisted with the message; otherwise retain the core-rendered alias.
+        const storedAlias = flags.senderAlias;
+        const senderElement = this._getSenderElement($html);
+        if (storedAlias && senderElement.length) {
+            this._setSenderElementDisplayName(senderElement, storedAlias);
+        } else if (this._isLancerSystem() && message.speaker?.actor && senderElement.length) {
+            const actor = game.actors?.get(message.speaker.actor);
+            const parts = this._getLancerSpeakerNameParts(actor, message.speaker);
+            if (parts) this._setSenderElementDisplayName(senderElement, parts.name, parts.callsign);
+        }
+        this._applyUserColorToSender(message, $html);
+
+        if (this._getShowPortraitSetting()) {
+            try {
+                const portraitData = await this._getMessageImage(message);
+                if (portraitData?.src && headerElement) {
+                    headerElement.querySelectorAll('.lichsoma-chat-portrait-container').forEach((el) => el.remove());
+                    const portraitContainer = this._createPortraitElement(message, portraitData.src, portraitData);
+                    headerElement.insertBefore(portraitContainer, headerElement.firstChild || null);
+                    headerElement.classList.add('lichsoma-chat-header');
+                }
+            } catch (_error) {
+                // Export keeps the core message usable even when portrait resolution fails.
+            }
         }
 
-        if (!subtitle.textContent?.trim()) {
-            subtitle.textContent = this._getDnd5eSubtitleFallback(message);
+        this._processNarratorChatCard(message, $html);
+        return messageElement;
+    }
+
+    static _normalizeFontFamilyName(name) {
+        return normalizeFontFamilyName(name);
+    }
+
+    static _extractFirstFontFamily(cssText) {
+        return extractFirstFontFamily(cssText);
+    }
+
+    static _getWebfontCSS(settingKey) {
+        try {
+            return String(game.settings.get('lichsoma-speaker-selector', settingKey) ?? '');
+        } catch (_error) {
+            return '';
         }
     }
 
-    /**
-     * `document.fonts` / 월드 설정에 들어간 패밀리 이름 앞뒤의 ASCII 따옴표 제거.
-     * 브라우저가 `"이름"` 형태로 반환하거나 저장된 경우 CSS `font-family: "이름"`과 맞추기 위함.
-     */
-    static _normalizeFontFamilyName(name) {
-        if (name == null || typeof name !== 'string') return '';
-        let s = name.trim();
-        while (s.length >= 2) {
-            const open = s[0];
-            const close = s[s.length - 1];
-            if ((open === '"' && close === '"') || (open === "'" && close === "'")) {
-                s = s.slice(1, -1).trim();
-            } else {
-                break;
-            }
-        }
-        return s;
+    static _getWebfontFamily(settingKey) {
+        return this._extractFirstFontFamily(this._getWebfontCSS(settingKey));
+    }
+
+    static _getWebfontPresentation(settingKey) {
+        return extractWebfontPresentation(this._getWebfontCSS(settingKey));
+    }
+
+    static _escapeCssString(value) {
+        return escapeCssString(value);
+    }
+
+    static _quoteFontFamily(font) {
+        return quoteFontFamily(font);
     }
 
     static initialize() {
+        initializeChatRenderPipeline();
+        installModuleApi({
+            apiVersion: 1,
+            SpeakerSelector,
+            ActorEmotions,
+            ChatMerge,
+            ChatRenderLimiter,
+            ChatSystemBridge,
+            registerChatSystemModule,
+            unregisterChatSystemModule,
+            getRegisteredChatRenderProcessors,
+            getRegisteredSocketTypes
+        });
         this.registerSettings();
+        this.registerKeybindings();
         
         // ActorEmotions 초기화
         ActorEmotions.initialize();
         
         // ChatMerge 초기화
         ChatMerge.initialize();
+
+        // 렌더된 채팅 수 제한 초기화
+        ChatRenderLimiter.initialize();
         
         // ChatRubyHandler 초기화
         ChatRubyHandler.initialize();
 
+        // Token HUD 스피커 토글 버튼 초기화
+        this._registerTokenHUDHooks();
+
         // 채팅 메시지 렌더링 훅 추가
-        Hooks.on('renderChatMessageHTML', (message, html, data) => {
+        registerChatRenderProcessor('speaker-presentation', 100, (message, html, data) => {
             // html이 HTMLElement이므로 jQuery로 변환
             const $html = $(html);
             const isDnd5eNativeHeader = this._isDnd5eNativeHeaderMessage(message, $html);
+            let dnd5ePortraitOverride = null;
 
-            if (isDnd5eNativeHeader) {
-                this._applyDnd5eNativeHeaderEnhancements(message, $html);
-            } else {
-                // dnd5e가 아닌 시스템에서만 LichSOMA 커스텀 헤더 처리를 사용
-                this._prepareDnd5eSender($html);
-            }
-            
             // 메시지 요소에 author.id를 data 속성으로 저장 (챗 머지 기능용)
             const messageElement = LichsomaChatDom.getChatMessageElement(html);
             if (messageElement && message.author?.id) {
@@ -513,15 +771,16 @@ export class SpeakerSelector {
                     const existingFlags = message.flags?.['lichsoma-speaker-selector'] || {};
                     const mergedFlags = foundry.utils.mergeObject(existingFlags, extraFlags, { inplace: false });
                     message.updateSource({ flags: { 'lichsoma-speaker-selector': mergedFlags } });
-                    if (isDnd5eNativeHeader) {
-                        this._scheduleDnd5eTitleAliasApply(message, messageElement);
-                        this._scheduleDnd5eAvatarPortraitApply(message, messageElement, portraitData.src);
-                    }
+                    if (isDnd5eNativeHeader) dnd5ePortraitOverride = portraitData.src;
                 }
             }
             
+            if (isDnd5eNativeHeader) {
+                this._applyDnd5eNativeHeaderEnhancements(message, $html, dnd5ePortraitOverride);
+            }
+
             // dnd5e는 시스템이 만든 원래 헤더(avatar + name-stacked)를 그대로 사용한다.
-            // LichSOMA 기본 헤더 처리(센더명 덮어쓰기, 유저색, 포트레잇 삽입, 헤더 한자 감싸기)는 적용하지 않는다.
+            // LichSOMA 기본 헤더 처리(센더명 덮어쓰기, 유저색, 포트레잇 삽입)는 적용하지 않는다.
             if (!isDnd5eNativeHeader) {
                 // 스피커 이름 수정 (항상 할당된 캐릭터로 말하기 설정 확인)
                 this._fixMessageSenderName(message, $html);
@@ -535,31 +794,9 @@ export class SpeakerSelector {
                 this._addPortraitToMessage(message, $html, data);
             }
 
-            // 한자 폰트 설정이 있으면 한자 감싸기 적용 (저장값 따옴표 정규화는 _applyChatFonts와 동일)
-            const headerChineseFont = this._normalizeFontFamilyName(
-                game.settings.get('lichsoma-speaker-selector', this.SETTINGS.CHAT_HEADER_CHINESE_FONT)
-            );
-            const messageChineseFont = this._normalizeFontFamilyName(
-                game.settings.get('lichsoma-speaker-selector', this.SETTINGS.CHAT_MESSAGE_CHINESE_FONT)
-            );
-
-            if (!isDnd5eNativeHeader && headerChineseFont) {
-                const senderElement = this._getSenderElement($html)[0];
-                if (senderElement) {
-                    this._wrapChineseCharacters(senderElement, 'header');
-                }
-            }
-
-            if (messageChineseFont) {
-                const contentElement = $html.find('.message-content')[0];
-                if (contentElement) {
-                    this._wrapChineseCharacters(contentElement, 'message');
-                }
-            }
-
             // 나레이터 채팅 카드 처리
             this._processNarratorChatCard(message, $html);
-        });
+        }, { runInExport: false });
 
         // 스피커 셀렉터 초기화
         this.setupSpeakerSelector();
@@ -594,165 +831,6 @@ export class SpeakerSelector {
             if (updates.length) await Promise.all(updates);
         } catch (e) {
             // 설정 강제 비활성화 실패 시 런타임 helper가 안전하게 처리하므로 무시
-        }
-    }
-
-    /**
-     * 폰트 로드 완료를 기다린 후 폰트 목록 업데이트
-     */
-    static _waitForFontsAndUpdate() {
-        // document.fonts.ready를 사용하여 폰트 로드 완료 대기
-        if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(() => {
-                // 폰트 로드 완료 후 약간의 딜레이를 두고 업데이트 (document.fonts 준비 대기)
-                setTimeout(() => {
-                    this._updateFontChoices();
-                }, 500);
-            }).catch(() => {
-                // 폰트 API 실패 시 폴백으로 일정 시간 후 업데이트
-                setTimeout(() => {
-                    this._updateFontChoices();
-                }, 1000);
-            });
-        } else {
-            // 폰트 API가 없는 경우 폴백
-            setTimeout(() => {
-                this._updateFontChoices();
-            }, 1000);
-        }
-        
-        // 최대 대기 시간 설정 (5초 후에는 강제로 업데이트)
-        setTimeout(() => {
-            this._updateFontChoices(true);
-        }, 5000);
-        
-        // 추가로 10초 후에도 한 번 더 업데이트 (늦게 로드되는 폰트 대응)
-        setTimeout(() => {
-            this._updateFontChoices(true);
-        }, 10000);
-    }
-    
-    /**
-     * 폰트 선택 옵션 업데이트
-     * @param {boolean} force - true일 경우 이미 업데이트되었어도 강제로 다시 업데이트
-     */
-    static _updateFontChoices(force = false) {
-        // 이미 업데이트된 경우 스킵 (강제 업데이트가 아닐 때만)
-        if (this._fontChoicesUpdated && !force) {
-            return;
-        }
-
-        try {
-            const availableFonts = this._getAvailableFonts();
-            
-            // 폰트 설정 키 목록
-            const fontSettings = [
-                this.SETTINGS.CHAT_HEADER_FONT,
-                this.SETTINGS.CHAT_MESSAGE_FONT,
-                this.SETTINGS.CHAT_HEADER_CHINESE_FONT,
-                this.SETTINGS.CHAT_MESSAGE_CHINESE_FONT,
-                this.SETTINGS.NARRATOR_FONT,
-                this.SETTINGS.DND5E_TITLE_FONT,
-                this.SETTINGS.DND5E_SUBTITLE_FONT
-            ];
-            
-            fontSettings.forEach(settingKey => {
-                // 현재 선택된 폰트 값 가져오기 (저장값에 따옴표가 섞인 경우 정규화해 목록 키와 맞춤)
-                const rawFont = game.settings.get('lichsoma-speaker-selector', settingKey);
-                const currentFont = this._normalizeFontFamilyName(rawFont);
-                if (currentFont && !availableFonts[currentFont]) {
-                    availableFonts[currentFont] = currentFont;
-                }
-                
-                // 설정 메뉴에서 폰트 선택 옵션 업데이트
-                const setting = game.settings.settings.get(`lichsoma-speaker-selector.${settingKey}`);
-                if (setting) {
-                    setting.choices = availableFonts;
-                }
-            });
-            
-            this._fontChoicesUpdated = true;
-        } catch (error) {
-            // 폰트 선택 옵션 업데이트 실패 (무시)
-        }
-    }
-    
-    /**
-     * 브라우저에서 사용 가능한 폰트 목록 가져오기
-     */
-    static _getAvailableFonts() {
-        try {
-            const loadedFonts = [];
-
-            try {
-                if (document.fonts && document.fonts.forEach) {
-                    document.fonts.forEach((font) => {
-                        const family = font.family;
-                        if (family && typeof family === 'string') {
-                            const n = this._normalizeFontFamilyName(family);
-                            if (n) loadedFonts.push(n);
-                        }
-                    });
-                }
-            } catch (e) {
-                // document.fonts 접근 실패 (무시)
-            }
-            
-            // 제외할 폰트들 (패턴 매칭)
-            const excludePatterns = [
-                'modesto condensed',
-                'modesto',
-                'amiri',
-                'signika',
-                'bruno ace',
-                'font awesome',
-                'fontawesome',
-                'fallback'
-            ];
-            
-            // 필터링 및 중복 제거
-            const filteredFonts = loadedFonts.filter(font => {
-                if (!font || typeof font !== 'string') return false;
-                const lowerFont = font.toLowerCase().trim();
-                return !excludePatterns.some(pattern => lowerFont.includes(pattern));
-            });
-            
-            const uniqueFonts = [...new Set(filteredFonts)];
-            
-            // 기본 폰트와 결합 (빈 문자열은 항상 포함)
-            const allFonts = ['', ...uniqueFonts.filter(f => f && f.trim() !== '')];
-            
-            // 폰트 정렬: 빈 문자열을 제외하고 한글, 영어, 숫자 순으로 정렬
-            const sortedFonts = allFonts.sort((a, b) => {
-                // 빈 문자열은 항상 맨 앞
-                if (a === '') return -1;
-                if (b === '') return 1;
-                
-                // 나머지는 localeCompare로 정렬 (한글, 영어, 숫자 순)
-                return a.localeCompare(b, ['ko', 'en'], { numeric: true, sensitivity: 'base' });
-            });
-            
-            // 폰트 선택 옵션 객체 생성
-            const fontChoices = {};
-            sortedFonts.forEach(font => {
-                if (font === '') {
-                    fontChoices[font] = '기본';
-                } else {
-                    fontChoices[font] = font;
-                }
-            });
-
-            return fontChoices;
-        } catch (error) {
-            // 폰트 목록 가져오기 실패 시 기본값 반환
-            return {
-                '': '기본',
-                'Arial': 'Arial',
-                'Times New Roman': 'Times New Roman',
-                'Courier New': 'Courier New',
-                'Verdana': 'Verdana',
-                'Georgia': 'Georgia'
-            };
         }
     }
 
@@ -806,6 +884,45 @@ export class SpeakerSelector {
         }
     }
 
+    static registerKeybindings() {
+        game.keybindings.register('lichsoma-speaker-selector', 'toggleNarratorMode', {
+            name: game.i18n.localize('SPEAKERSELECTOR.Narrator.Keybinding.Name'),
+            hint: game.i18n.localize('SPEAKERSELECTOR.Narrator.Keybinding.Hint'),
+            editable: [
+                {
+                    key: 'Space',
+                    modifiers: ['SHIFT']
+                }
+            ],
+            onDown: context => {
+                if (!game.user?.isGM) return false;
+                const event = context?.event;
+                if (event?.isComposing || context?.repeat) return false;
+
+                // 편집 요소는 Foundry의 일반 Keybinding 처리에서 제외한다.
+                // 실제 채팅 입력창은 아래 capture fallback이 현재 사용자 바인딩으로 처리한다.
+                if (event?.target instanceof Element) {
+                    const editable = event.target.closest([
+                        'input',
+                        'textarea',
+                        'select',
+                        '[contenteditable="true"]',
+                        '[contenteditable=""]',
+                        'prose-mirror',
+                        '.cm-editor',
+                        '.CodeMirror'
+                    ].join(','));
+                    if (editable) return false;
+                }
+
+                void this._toggleNarratorMode();
+                return true;
+            },
+            restricted: true,
+            precedence: CONST.KEYBINDING_PRECEDENCE.NORMAL
+        });
+    }
+
     static registerSettings() {
         // 채팅 로그 Export 커스텀 CSS 설정 (메뉴 버튼)
         game.settings.registerMenu('lichsoma-speaker-selector', 'chatLogExportCustomCSSMenu', {
@@ -828,6 +945,87 @@ export class SpeakerSelector {
             onChange: () => {
                 // CSS 변경 시 특별한 처리는 필요 없음 (내보낼 때만 사용)
             }
+        });
+
+        const registerWebfontCSSSetting = ({
+            menuKey,
+            settingKey,
+            i18nKey,
+            icon,
+            editorType,
+            showMenu = true,
+            onChange = null
+        }) => {
+            if (showMenu) {
+                game.settings.registerMenu('lichsoma-speaker-selector', menuKey, {
+                    name: game.i18n.localize(`SPEAKERSELECTOR.Settings.${i18nKey}.Name`),
+                    label: game.i18n.localize(`SPEAKERSELECTOR.Settings.${i18nKey}.EditButton`),
+                    hint: game.i18n.localize(`SPEAKERSELECTOR.Settings.${i18nKey}.Hint`),
+                    icon,
+                    type: editorType,
+                    restricted: true
+                });
+            }
+
+            game.settings.register('lichsoma-speaker-selector', settingKey, {
+                name: game.i18n.localize(`SPEAKERSELECTOR.Settings.${i18nKey}.Name`),
+                hint: game.i18n.localize(`SPEAKERSELECTOR.Settings.${i18nKey}.Hint`),
+                scope: 'world',
+                config: false,
+                restricted: true,
+                type: String,
+                default: '',
+                onChange: value => {
+                    this._applyChatFonts();
+                    onChange?.(value);
+                }
+            });
+        };
+
+        registerWebfontCSSSetting({
+            menuKey: 'chatHeaderWebfontCSSMenu',
+            settingKey: this.SETTINGS.CHAT_HEADER_WEBFONT_CSS,
+            i18nKey: 'ChatHeaderWebfontCSS',
+            icon: 'fas fa-heading',
+            editorType: ChatHeaderWebfontCSSEditor
+        });
+        registerWebfontCSSSetting({
+            menuKey: 'dnd5eTitleWebfontCSSMenu',
+            settingKey: this.SETTINGS.DND5E_TITLE_WEBFONT_CSS,
+            i18nKey: 'Dnd5eTitleWebfontCSS',
+            icon: 'fas fa-heading',
+            editorType: Dnd5eTitleWebfontCSSEditor,
+            showMenu: this._isDnd5eSystem()
+        });
+        registerWebfontCSSSetting({
+            menuKey: 'dnd5eSubtitleWebfontCSSMenu',
+            settingKey: this.SETTINGS.DND5E_SUBTITLE_WEBFONT_CSS,
+            i18nKey: 'Dnd5eSubtitleWebfontCSS',
+            icon: 'fas fa-text-height',
+            editorType: Dnd5eSubtitleWebfontCSSEditor,
+            showMenu: this._isDnd5eSystem()
+        });
+        registerWebfontCSSSetting({
+            menuKey: 'chatMessageWebfontCSSMenu',
+            settingKey: this.SETTINGS.CHAT_MESSAGE_WEBFONT_CSS,
+            i18nKey: 'ChatMessageWebfontCSS',
+            icon: 'fas fa-font',
+            editorType: ChatMessageWebfontCSSEditor
+        });
+        registerWebfontCSSSetting({
+            menuKey: 'chatDiceWebfontCSSMenu',
+            settingKey: this.SETTINGS.CHAT_DICE_WEBFONT_CSS,
+            i18nKey: 'ChatDiceWebfontCSS',
+            icon: 'fas fa-dice-d20',
+            editorType: ChatDiceWebfontCSSEditor
+        });
+        registerWebfontCSSSetting({
+            menuKey: 'narratorWebfontCSSMenu',
+            settingKey: this.SETTINGS.NARRATOR_WEBFONT_CSS,
+            i18nKey: 'NarratorWebfontCSS',
+            icon: 'fas fa-comment-dots',
+            editorType: NarratorWebfontCSSEditor,
+            onChange: () => this._applyNarratorFont()
         });
 
         // 채팅 로그 Export 경로 설정
@@ -882,6 +1080,17 @@ export class SpeakerSelector {
                 // 기존 FVTT 로그 출력 버튼의 표시 상태를 즉시 갱신한다.
                 document.dispatchEvent(new CustomEvent('lichsoma-speaker-selector:updateChatExportButtons'));
             }
+        });
+
+        // 채팅 로그 삭제 전 HTML 백업 저장 설정
+        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.CHAT_LOG_SAVE_HTML_ON_DELETE, {
+            name: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatLogSaveHtmlOnDelete.Name'),
+            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatLogSaveHtmlOnDelete.Hint'),
+            scope: 'world',
+            config: true,
+            restricted: true,
+            type: Boolean,
+            default: true
         });
 
         game.settings.register('lichsoma-speaker-selector', this.SETTINGS.SHOW_PORTRAIT, {
@@ -965,58 +1174,23 @@ export class SpeakerSelector {
             requiresReload: true
         });
 
-        // 초기 폰트 목록
-        const initialFonts = {
-            '': '기본',
-            'Arial': 'Arial',
-            'Times New Roman': 'Times New Roman',
-            'Courier New': 'Courier New',
-            'Verdana': 'Verdana',
-            'Georgia': 'Georgia'
-        };
-
-        // 1. 채팅 헤더 폰트
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.CHAT_HEADER_FONT, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatHeaderFont.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatHeaderFont.Hint'),
-            scope: 'world',
+        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.CHAT_RENDER_LIMIT, {
+            name: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatRenderLimit.Name'),
+            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatRenderLimit.Hint'),
+            scope: 'client',
             config: true,
-            restricted: true,
+            restricted: false,
             type: String,
-            choices: initialFonts,
-            default: '',
+            choices: {
+                '0': game.i18n.localize('SPEAKERSELECTOR.Settings.ChatRenderLimit.Choices.Disabled'),
+                '100': game.i18n.localize('SPEAKERSELECTOR.Settings.ChatRenderLimit.Choices.Keep100'),
+                '200': game.i18n.localize('SPEAKERSELECTOR.Settings.ChatRenderLimit.Choices.Keep200')
+            },
+            default: '0',
             onChange: () => {
-                setTimeout(() => {
-                    this._applyChatFonts();
-                }, 100);
+                ChatRenderLimiter.onSettingChanged?.();
             }
         });
-
-        // 2. 헤더 한자 전용 폰트
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.CHAT_HEADER_CHINESE_FONT, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatHeaderChineseFont.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatHeaderChineseFont.Hint'),
-            scope: 'world',
-            config: true,
-            restricted: true,
-            type: String,
-            choices: initialFonts,
-            default: '',
-            onChange: () => {
-                setTimeout(() => {
-                    this._applyChatFonts();
-                    // 기존 메시지들에도 한자 감싸기 재적용
-                    LichsomaChatDom.findRenderedMessages().forEach(messageEl => {
-                        const senderEl = this._getSenderElement($(messageEl));
-                        if (senderEl.length) {
-                            senderEl[0].removeAttribute('data-lichsoma-chinese-wrapped');
-                            this._wrapChineseCharacters(senderEl[0], 'header');
-                        }
-                    });
-                }, 100);
-            }
-        });
-
         // 3. 헤더 폰트 크기
         game.settings.register('lichsoma-speaker-selector', this.SETTINGS.CHAT_HEADER_FONT_SIZE, {
             name: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatHeaderFontSize.Name'),
@@ -1034,100 +1208,6 @@ export class SpeakerSelector {
             onChange: () => {
                 setTimeout(() => {
                     this._applyChatFonts();
-                }, 100);
-            }
-        });
-
-        // 4. 헤더 폰트 웨이트
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.CHAT_HEADER_FONT_WEIGHT, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatHeaderFontWeight.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatHeaderFontWeight.Hint'),
-            scope: 'world',
-            config: true,
-            restricted: true,
-            type: Number,
-            default: 700,
-            range: {
-                min: 100,
-                max: 900,
-                step: 100
-            },
-            onChange: () => {
-                setTimeout(() => {
-                    this._applyChatFonts();
-                }, 100);
-            }
-        });
-
-        // 5. D&D 5e 헤더 title 폰트
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.DND5E_TITLE_FONT, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.Dnd5eTitleFont.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.Dnd5eTitleFont.Hint'),
-            scope: 'world',
-            config: true,
-            restricted: true,
-            type: String,
-            choices: initialFonts,
-            default: '',
-            onChange: () => {
-                setTimeout(() => {
-                    this._applyChatFonts();
-                }, 100);
-            }
-        });
-
-        // 6. D&D 5e 헤더 subtitle 폰트
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.DND5E_SUBTITLE_FONT, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.Dnd5eSubtitleFont.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.Dnd5eSubtitleFont.Hint'),
-            scope: 'world',
-            config: true,
-            restricted: true,
-            type: String,
-            choices: initialFonts,
-            default: '',
-            onChange: () => {
-                setTimeout(() => {
-                    this._applyChatFonts();
-                }, 100);
-            }
-        });
-
-        // 7. 채팅 메시지 폰트
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.CHAT_MESSAGE_FONT, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatMessageFont.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatMessageFont.Hint'),
-            scope: 'world',
-            config: true,
-            restricted: true,
-            type: String,
-            choices: initialFonts,
-            default: '',
-            onChange: () => {
-                setTimeout(() => {
-                    this._applyChatFonts();
-                }, 100);
-            }
-        });
-
-        // 8. 메시지 한자 전용 폰트
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.CHAT_MESSAGE_CHINESE_FONT, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatMessageChineseFont.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.ChatMessageChineseFont.Hint'),
-            scope: 'world',
-            config: true,
-            restricted: true,
-            type: String,
-            choices: initialFonts,
-            default: '',
-            onChange: () => {
-                setTimeout(() => {
-                    this._applyChatFonts();
-                    // 기존 메시지들에도 한자 감싸기 재적용
-                    LichsomaChatDom.findRenderedMessages().map(el => LichsomaChatDom.getMessageContent(el)).filter(Boolean).forEach(el => {
-                        el.removeAttribute('data-lichsoma-chinese-wrapped');
-                        this._wrapChineseCharacters(el, 'message');
-                    });
                 }, 100);
             }
         });
@@ -1153,23 +1233,6 @@ export class SpeakerSelector {
             }
         });
 
-        // 10. 나레이터 폰트
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_FONT, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorFont.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorFont.Hint'),
-            scope: 'world',
-            config: true,
-            restricted: true,
-            type: String,
-            choices: initialFonts,
-            default: '',
-            onChange: () => {
-                setTimeout(() => {
-                    this._applyNarratorFont();
-                }, 100);
-            }
-        });
-
         // 11. 나레이터 폰트 크기
         game.settings.register('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_FONT_SIZE, {
             name: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorFontSize.Name'),
@@ -1183,27 +1246,6 @@ export class SpeakerSelector {
                 min: 12,
                 max: 36,
                 step: 1
-            },
-            onChange: () => {
-                setTimeout(() => {
-                    this._applyNarratorFont();
-                }, 100);
-            }
-        });
-
-        // 12. 나레이터 폰트 웨이트
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_FONT_WEIGHT, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorFontWeight.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorFontWeight.Hint'),
-            scope: 'world',
-            config: true,
-            restricted: true,
-            type: Number,
-            default: 700,
-            range: {
-                min: 100,
-                max: 900,
-                step: 100
             },
             onChange: () => {
                 setTimeout(() => {
@@ -1231,23 +1273,7 @@ export class SpeakerSelector {
             }
         });
 
-        // 14. 나레이터 기울기 효과
-        game.settings.register('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_ITALIC, {
-            name: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorItalic.Name'),
-            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorItalic.Hint'),
-            scope: 'world',
-            config: true,
-            restricted: true,
-            type: Boolean,
-            default: false,
-            onChange: () => {
-                setTimeout(() => {
-                    this._applyNarratorFont();
-                }, 100);
-            }
-        });
-
-        // 15. 나레이터 채팅 카드
+        // 14. 나레이터 채팅 카드
         game.settings.register('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_CHAT_CARD, {
             name: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorChatCard.Name'),
             hint: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorChatCard.Hint'),
@@ -1266,7 +1292,7 @@ export class SpeakerSelector {
             }
         });
 
-        // 16. 나레이터 타이핑 사운드
+        // 15. 나레이터 타이핑 사운드
         game.settings.register('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_TYPING_SOUND, {
             name: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorTypingSound.Name'),
             hint: game.i18n.localize('SPEAKERSELECTOR.Settings.NarratorTypingSound.Hint'),
@@ -1281,12 +1307,9 @@ export class SpeakerSelector {
             }
         });
         
-        // 폰트가 로드될 때까지 기다린 후 폰트 목록 업데이트
-        this._waitForFontsAndUpdate();
-
         game.settings.register('lichsoma-speaker-selector', this.SETTINGS.ACTOR_GRID_ACTORS, {
-            name: '등록된 스피커 액터',
-            hint: '스피커 셀렉터에 표시될 액터 목록 (내부 설정)',
+            name: game.i18n.localize('SPEAKERSELECTOR.Settings.ActorGridActors.Name'),
+            hint: game.i18n.localize('SPEAKERSELECTOR.Settings.ActorGridActors.Hint'),
             scope: 'world',
             config: false,
             type: Array,
@@ -1296,30 +1319,42 @@ export class SpeakerSelector {
 
     // 메시지 센더 이름 수정
     static _fixMessageSenderName(message, html) {
-        if (!message.speaker || !message.speaker.actor) {
-            // 유저 색상 적용 (speaker가 없어도)
-            this._applyUserColorToSender(message, html);
-            return;
-        }
-        
         const senderElement = this._getSenderElement(html);
         if (!senderElement.length) {
             // 유저 색상 적용 (sender 요소가 없어도)
             this._applyUserColorToSender(message, html);
             return;
         }
-        
-        // 모듈 플래그에 저장된 센더 이름이 있으면 우선 사용
+
+        // 스피커 수정 기능은 actor가 없는 OOC/유저 발화도 수정할 수 있으므로,
+        // actor 존재 여부보다 저장된 senderAlias를 먼저 적용한다.
         const storedAlias = message.flags?.['lichsoma-speaker-selector']?.senderAlias;
         if (storedAlias) {
-            senderElement.text(storedAlias);
-            // 유저 색상 적용
+            this._setSenderElementDisplayName(senderElement, storedAlias);
+            this._applyUserColorToSender(message, html);
+            return;
+        }
+
+        if (!message.speaker || !message.speaker.actor) {
+            // 유저 색상 적용 (speaker가 없어도)
             this._applyUserColorToSender(message, html);
             return;
         }
         
         const actorId = message.speaker.actor;
         const actor = game.actors.get(actorId);
+
+        // LANCER 파일럿/메크 발화는 시스템이 토큰 이름/콜사인을 alias로 넣는 경우가 많다.
+        // 스피커 셀렉터에서는 파일럿 실제 이름을 표시하고, 콜사인은 루비로 올린다.
+        if (this._isLancerSystem() && actor) {
+            const parts = this._getLancerSpeakerNameParts(actor, message.speaker);
+            if (parts) {
+                this._setSenderElementDisplayName(senderElement, parts.name, parts.callsign);
+                this._applyUserColorToSender(message, html);
+                return;
+            }
+        }
+        
         if (!actor) {
             // 유저 색상 적용 (actor가 없어도)
             this._applyUserColorToSender(message, html);
@@ -1375,22 +1410,7 @@ export class SpeakerSelector {
             return;
         }
         
-        // message.author는 User 객체이므로 직접 사용하거나, author.id를 사용
-        let user = null;
-        let userColor = null;
-        
-        // 방법 1: message.author가 User 객체인 경우 직접 사용
-        if (message.author && typeof message.author === 'object' && 'color' in message.author) {
-            user = message.author;
-            userColor = message.author.color;
-        }
-        // 방법 2: author.id를 사용해서 game.users에서 찾기
-        else if (message.author?.id) {
-            const userId = typeof message.author.id === 'string' ? message.author.id : message.author.id;
-            user = game.users.get(userId);
-            userColor = user?.color;
-        }
-        
+        const userColor = getMessageAuthorColor(message);
         if (userColor) {
             // !important를 사용하여 CSS를 확실하게 덮어쓰기
             senderElement[0].style.setProperty('color', userColor, 'important');
@@ -1442,19 +1462,7 @@ export class SpeakerSelector {
     static _isDnd5eNativeHeaderMessage(message, html) {
         if (!this._isDnd5eSystem()) return false;
         const messageElement = LichsomaChatDom.getChatMessageElement(html);
-        if (!messageElement) return false;
-
-        const header = messageElement.querySelector?.('.message-header');
-        if (!header) return false;
-
-        // dnd5e의 일반 액터/토큰 메시지는 dnd5e2 + name-stacked 구조를 가진다.
-        // 단, 액터/토큰 없는 Public as User 계열 메시지는 name-stacked가 없을 수 있으므로
-        // dnd5e 시스템 안에서는 message-header의 sender/avatar 존재만으로도 native header로 취급한다.
-        return messageElement.classList.contains('dnd5e2')
-            || !!header.querySelector?.('.message-sender .name-stacked')
-            || !!header.querySelector?.('.message-sender .avatar')
-            || !!header.querySelector?.('h4.message-sender')
-            || !!header.querySelector?.('.message-sender');
+        return isDnd5eMessageElement(messageElement);
     }
 
     static _prepareDnd5eNativeHeader(message, html) {
@@ -1476,27 +1484,20 @@ export class SpeakerSelector {
         header.find('.lichsoma-dnd5e-original-sender').removeClass('lichsoma-dnd5e-original-sender');
     }
 
-    static _applyDnd5eNativeHeaderEnhancements(message, html) {
+    static _applyDnd5eNativeHeaderEnhancements(message, html, portraitSrc = null) {
         if (!this._isDnd5eNativeHeaderMessage(message, html)) return;
-
-        this._prepareDnd5eNativeHeader(message, html);
 
         const messageElement = LichsomaChatDom.getChatMessageElement(html);
         if (!messageElement) return;
 
-        // 액터/토큰 없는 Public as User 계열 메시지도 dnd5e name-stacked 높이를 유지하도록 subtitle을 보강한다.
-        this._ensureDnd5eNameStackedSubtitle(message, messageElement);
-
-        // 셀렉터가 저장한 senderAlias / speaker.alias를 dnd5e 원본 name-stacked title에 반영한다.
-        this._scheduleDnd5eTitleAliasApply(message, messageElement);
-
-        // 감정 포트레잇/저장된 portraitSrc를 dnd5e 원본 avatar 이미지에 반영한다.
-        this._scheduleDnd5eAvatarPortraitApply(message, messageElement);
+        // Structural normalization, sender alias, subtitle, and avatar are
+        // handled together by one bounded retry job.
+        this._scheduleDnd5eHeaderEnhancements(message, messageElement, portraitSrc);
 
         // CSS가 dnd5e 원본 title/sender에 유저 색상을 적용할 수 있도록 색상 값만 변수로 전달한다.
         const header = messageElement.querySelector('.message-header');
         if (game.settings.get('lichsoma-speaker-selector', this.SETTINGS.APPLY_USER_COLOR)) {
-            const userColor = this._getMessageAuthorColor(message);
+            const userColor = getMessageAuthorColor(message);
             if (userColor) {
                 messageElement.style.setProperty('--lichsoma-dnd5e-title-color', userColor);
                 header?.style.setProperty('--lichsoma-dnd5e-title-color', userColor);
@@ -1515,8 +1516,8 @@ export class SpeakerSelector {
     }
 
     static _prepareDnd5eSender(html) {
-        // 2.1.x부터 dnd5e는 원래 헤더를 그대로 사용한다.
-        // 호환을 위해 함수는 남겨두되 새 커스텀 sender를 만들지 않는다.
+        // 외부/구버전 호환용 진입점. 현재 render pipeline에서는 호출하지 않는다.
+        // dnd5e 원본 헤더에서 과거 LichSOMA 커스텀 헤더 흔적만 정리한다.
         if (!this._isDnd5eSystem() || !html?.length) return;
         this._prepareDnd5eNativeHeader(null, html);
     }
@@ -1873,38 +1874,52 @@ export class SpeakerSelector {
         return token.document || token;
     }
 
-    static _getAssignedCharacter(user = game.user) {
-        const character = user?.character;
-        if (!character) return null;
-        return character instanceof Actor ? character : game.actors?.get(character) || null;
+    static _normalizeSpeakerDataForModule(speakerData, user = game.user) {
+        const speaker = speakerData || {};
+        const tokenDoc = this._resolveTokenDocument(speaker.token || null);
+        const actorDoc = this._resolveActorDocument(
+            speaker.actor ||
+            tokenDoc?.actor ||
+            tokenDoc?.document?.actor ||
+            speaker.token?.actor ||
+            speaker.token?.document?.actor ||
+            null
+        );
+        const sceneDoc = this._resolveSceneDocument(speaker.scene || tokenDoc?.parent || null);
+        const sceneId = typeof speaker.scene === 'string'
+            ? speaker.scene
+            : sceneDoc?.id || tokenDoc?.parent?.id || game.scenes?.active?.id || canvas?.scene?.id || null;
+        const alias = speaker.alias || tokenDoc?.name || actorDoc?.name || user?.name || game.user?.name || '';
+
+        return {
+            alias,
+            scene: sceneId,
+            actor: actorDoc?.id || (typeof speaker.actor === 'string' ? speaker.actor : null),
+            token: tokenDoc?.id || (typeof speaker.token === 'string' ? speaker.token : null)
+        };
     }
 
-    static _findFirstTokenForActor(actor) {
-        const actorDoc = this._resolveActorDocument(actor);
-        if (!actorDoc) return null;
-        const tokens = canvas?.tokens?.placeables?.filter(t => t.actor?.id === actorDoc.id) || [];
-        return tokens.length > 0 ? tokens[0] : null;
-    }
-
-    static _speakerEquals(a, b) {
-        return !!a && !!b &&
-            (a.alias ?? null) === (b.alias ?? null) &&
-            (a.scene ?? null) === (b.scene ?? null) &&
-            (a.actor ?? null) === (b.actor ?? null) &&
-            (a.token ?? null) === (b.token ?? null);
+    static _getLancerSenderAliasForFlags(speakerData) {
+        if (!this._isLancerSystem()) return null;
+        const normalized = this._normalizeSpeakerDataForModule(speakerData);
+        const actor = normalized.actor ? game.actors?.get(normalized.actor) : null;
+        const parts = this._getLancerSpeakerNameParts(actor, normalized);
+        return parts?.name || null;
     }
 
     // 공통: 문서/데이터에 스피커 정보와 센더 이름 플래그 저장
     static _applySpeakerData(doc, data, speakerData, extraFlags = {}) {
-        doc.updateSource({ speaker: speakerData });
+        const normalizedSpeakerData = this._normalizeSpeakerDataForModule(speakerData, game.user);
+        doc.updateSource({ speaker: normalizedSpeakerData });
         if (!data.speaker) {
             data.speaker = {};
         }
-        Object.assign(data.speaker, speakerData);
-        this._applySenderFlagsToDoc(doc, data, speakerData.alias, extraFlags, speakerData);
+        Object.assign(data.speaker, normalizedSpeakerData);
+        this._applySenderFlagsToDoc(doc, data, normalizedSpeakerData.alias, extraFlags, normalizedSpeakerData);
     }
     
     static _applySenderFlagsToDoc(doc, data, alias, extraFlags = {}, speakerData = null) {
+        const normalizedSpeakerData = this._normalizeSpeakerDataForModule(speakerData || data?.speaker || doc?.speaker || {}, game.user);
         const moduleFlags = foundry.utils.mergeObject(extraFlags || {}, {}, { inplace: false });
         const userId = moduleFlags.userId || data?.user || doc?.user?.id || doc?.user || game.user?.id || null;
 
@@ -1912,11 +1927,16 @@ export class SpeakerSelector {
         // - 토큰 발화는 token 기준
         // - 액터 발화는 actor 기준
         // - FVTT v14 기본 Public as User처럼 actor/token이 없는 발화는 user 기준
-        this._addMergeSpeakerFlags(moduleFlags, speakerData, userId);
+        this._addMergeSpeakerFlags(moduleFlags, normalizedSpeakerData, userId);
 
-        if (alias) {
+        const lancerAlias = this._getLancerSenderAliasForFlags(normalizedSpeakerData);
+        if (lancerAlias) {
+            moduleFlags.senderAlias = lancerAlias;
+        } else if (alias) {
             moduleFlags.senderAlias = alias;
         }
+        if (normalizedSpeakerData.actor && !moduleFlags.actorId) moduleFlags.actorId = normalizedSpeakerData.actor;
+        if (normalizedSpeakerData.token && !moduleFlags.tokenId) moduleFlags.tokenId = normalizedSpeakerData.token;
         if (!Object.keys(moduleFlags).length) return;
 
         const existingDocFlags = foundry.utils.getProperty(doc, 'flags.lichsoma-speaker-selector') || {};
@@ -1965,7 +1985,7 @@ export class SpeakerSelector {
 
     // 동기 버전의 이미지 주소 가져오기 (플래그 저장용)
     static _getMessageImageSync(speaker, authorId) {
-        const speakerObj = speaker || {};
+        const speakerObj = this._normalizeSpeakerDataForModule(speaker || {}, game.users?.get(authorId) || game.user);
         let img = null;
 
         // 최우선: 감정 포트레잇 (액터 기반으로 현재 선택된 감정 확인)
@@ -2143,11 +2163,163 @@ export class SpeakerSelector {
         return ChatUI.isSidebarCollapsed();
     }
 
+    static _getChatFormFromEventTarget(target) {
+        const element = target?.nodeType === Node.ELEMENT_NODE ? target : target?.parentElement;
+        return element?.closest?.('#chat-form, .chat-form, form[data-application-part="chat-form"], form') || null;
+    }
+
+    static _isChatInputEventTarget(target) {
+        const element = target?.nodeType === Node.ELEMENT_NODE ? target : target?.parentElement;
+        if (!element) return false;
+
+        if (element.closest?.('.app.window-app.actor, .application.actor, .actor.sheet, .item.sheet')) {
+            return false;
+        }
+
+        const chatForm = this._getChatFormFromEventTarget(element);
+        if (chatForm) {
+            return !!chatForm.closest?.('#sidebar, #chat, .chat-sidebar, [data-tab="chat"], .chat-popout')
+                || chatForm.id === 'chat-form'
+                || chatForm.classList?.contains('chat-form')
+                || chatForm.matches?.('form[data-application-part="chat-form"]');
+        }
+
+        return LichsomaChatDom.isInChatForm?.(element)
+            || !!element.closest?.('#chat-message, prose-mirror[name="message"], .chat-form');
+    }
+
+    static _htmlToPlainText(html) {
+        if (html == null) return '';
+        const value = String(html);
+        if (!/<[a-z][\s\S]*>/i.test(value)) return value;
+
+        const div = document.createElement('div');
+        div.innerHTML = value;
+        div.querySelectorAll('rt').forEach((rt) => rt.remove());
+        return div.textContent || div.innerText || '';
+    }
+
+    static _normalizeChatInputComparableText(text) {
+        return this._htmlToPlainText(text)
+            .replace(/\u00a0/g, ' ')
+            .replace(/[\u200B-\u200D\uFEFF]/g, '')
+            .replace(/\[\[([^|\]]+?)\|[^\]]+?\]\]/g, '$1')
+            .replace(/\*\*\*([^*]+?)\*\*\*/g, '$1')
+            .replace(/\*\*([^*]+?)\*\*/g, '$1')
+            .replace(/\*([^*]+?)\*/g, '$1')
+            .replace(/~~([^~]+?)~~/g, '$1')
+            .replace(/~([^~]+?)~/g, '$1')
+            .replace(/[`_]/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    static _chatInputTextMatchesMessage(inputText, messageContent) {
+        const inputComparable = this._normalizeChatInputComparableText(inputText);
+        const messageComparable = this._normalizeChatInputComparableText(messageContent);
+
+        if (!inputComparable || !messageComparable) return false;
+
+        return inputComparable === messageComparable
+            || inputComparable.includes(messageComparable)
+            || messageComparable.includes(inputComparable);
+    }
+
+    static _setChatInputPending(text, { userId = game.user?.id, durationMs = 3000 } = {}) {
+        if (!text || !String(text).trim()) return;
+
+        this._fromChatInput = true;
+        this._chatInputPendingText = String(text);
+        this._chatInputPendingUntil = Date.now() + durationMs;
+        this._chatInputPendingUserId = userId || game.user?.id || null;
+    }
+
+    static _markChatInputPending(target = null, options = {}) {
+        const delayMs = Number(options.delayMs || 0);
+        if (delayMs > 0) {
+            setTimeout(() => this._markChatInputPending(target, { ...options, delayMs: 0 }), delayMs);
+            return;
+        }
+
+        if (target && !this._isChatInputEventTarget(target)) return;
+
+        const scopedRoot = target?.closest?.('.chat-form, #chat-form') || document;
+        const chatInput = this._getChatInputElement(scopedRoot) || this._getChatInputElement();
+        const text = this._getChatInputText(chatInput);
+
+        if (!text || !text.trim()) return;
+
+        this._setChatInputPending(text, {
+            userId: options.userId || game.user?.id,
+            durationMs: options.durationMs || 3000
+        });
+    }
+
+    static _consumeChatInputPendingForMessage(messageContent, userId = game.user?.id) {
+        const now = Date.now();
+        const pendingText = this._chatInputPendingText;
+
+        if (!pendingText || now > this._chatInputPendingUntil) return false;
+        if (this._chatInputPendingUserId && userId && this._chatInputPendingUserId !== userId) return false;
+        if (!this._chatInputTextMatchesMessage(pendingText, messageContent)) return false;
+
+        this._chatInputPendingText = '';
+        this._chatInputPendingUntil = 0;
+        this._chatInputPendingUserId = null;
+        this._fromChatInput = true;
+        return true;
+    }
+
+    static _isMessageFromChatInput(messageContent, chatInput = null, userId = game.user?.id) {
+        if (this._consumeChatInputPendingForMessage(messageContent, userId)) {
+            return true;
+        }
+
+        const input = chatInput || this._getChatInputElement();
+        if (this._isChatInputFocused(input)) {
+            const inputText = this._getChatInputText(input);
+            if (this._chatInputTextMatchesMessage(inputText, messageContent)) {
+                this._setChatInputPending(inputText, { userId, durationMs: 1000 });
+                this._consumeChatInputPendingForMessage(messageContent, userId);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // 채팅 입력 필드 이벤트 리스너 설정
     static _setupChatInputListener() {
         if (!SpeakerSelector._chatInputDescHotkeyHookRegistered) {
             SpeakerSelector._chatInputDescHotkeyHookRegistered = true;
             Hooks.on('chatInput', SpeakerSelector._onChatInputHookForDescPrefix);
+        }
+
+        if (!SpeakerSelector._chatInputGlobalListenersRegistered) {
+            SpeakerSelector._chatInputGlobalListenersRegistered = true;
+
+            document.addEventListener('submit', (event) => {
+                if (SpeakerSelector._isChatInputEventTarget(event.target)) {
+                    SpeakerSelector._markChatInputPending(event.target);
+                }
+            }, true);
+
+            document.addEventListener('click', (event) => {
+                const button = event.target?.closest?.('button, a, [role="button"]');
+                if (!button || !SpeakerSelector._isChatInputEventTarget(button)) return;
+
+                const action = button.dataset?.action || '';
+                const looksLikeSend =
+                    action === 'send' ||
+                    action === 'sendMessage' ||
+                    action === 'createMessage' ||
+                    button.classList?.contains('chat-submit') ||
+                    !!button.querySelector?.('.fa-paper-plane, .fa-comment, .fa-message');
+
+                if (looksLikeSend) {
+                    SpeakerSelector._markChatInputPending(button);
+                }
+            }, true);
         }
 
         // 채팅 입력 필드 찾기 및 이벤트 리스너 추가
@@ -2162,25 +2334,29 @@ export class SpeakerSelector {
             // 기존 리스너 제거 (중복 방지)
             chatInput.removeEventListener('focus', this._handleChatInputFocus);
             chatInput.removeEventListener('input', this._handleChatInputInput);
+            chatInput.removeEventListener('beforeinput', this._handleChatInputBeforeInput);
+            chatInput.removeEventListener('paste', this._handleChatInputPaste);
             chatInput.removeEventListener('blur', this._handleChatInputBlur);
             chatInput.removeEventListener('keydown', this._handleChatInputKeyDown);
 
             // 포커스 시 플래그 설정
             chatInput.addEventListener('focus', this._handleChatInputFocus);
-            
-            // 입력 시에도 플래그 설정 (안전장치)
+
+            // 입력/붙여넣기/ProseMirror beforeinput에도 pending 기록
             chatInput.addEventListener('input', this._handleChatInputInput);
-            
+            chatInput.addEventListener('beforeinput', this._handleChatInputBeforeInput);
+            chatInput.addEventListener('paste', this._handleChatInputPaste);
+
             // Enter 키 감지 (메시지 전송 직전 플래그 유지)
             chatInput.addEventListener('keydown', this._handleChatInputKeyDown);
-            
+
             // 포커스 아웃 시 플래그 초기화
             chatInput.addEventListener('blur', this._handleChatInputBlur);
         };
 
         // 초기 설정
         setupListener();
-        
+
         // 사이드바가 다시 렌더될 때 리스너 재설정
         Hooks.on('renderSidebarTab', (app) => {
             if (app?.id === 'chat') {
@@ -2188,27 +2364,45 @@ export class SpeakerSelector {
             }
         });
     }
-    
+
     // 채팅 입력 필드 포커스 핸들러
-    static _handleChatInputFocus() {
+    static _handleChatInputFocus(event) {
         SpeakerSelector._fromChatInput = true;
+        SpeakerSelector._markChatInputPending(event?.target);
     }
-    
+
     // 채팅 입력 필드 입력 핸들러
-    static _handleChatInputInput() {
-        SpeakerSelector._fromChatInput = true;
+    static _handleChatInputInput(event) {
+        SpeakerSelector._markChatInputPending(event?.target);
     }
-    
+
+    // ProseMirror beforeinput 핸들러
+    static _handleChatInputBeforeInput(event) {
+        // 실제 DOM 반영은 이벤트 직후 이뤄질 수 있으므로 다음 틱에서도 갱신한다.
+        SpeakerSelector._markChatInputPending(event?.target, { delayMs: 0 });
+        SpeakerSelector._markChatInputPending(event?.target, { delayMs: 25 });
+    }
+
+    // 붙여넣기 핸들러
+    static _handleChatInputPaste(event) {
+        SpeakerSelector._fromChatInput = true;
+        SpeakerSelector._markChatInputPending(event?.target, { delayMs: 0 });
+        SpeakerSelector._markChatInputPending(event?.target, { delayMs: 25 });
+    }
+
     // 채팅 입력 필드 키다운 핸들러
     static _handleChatInputKeyDown(event) {
-        // Enter 키를 누르면 메시지 전송 직전이므로 플래그 설정
+        // Enter 키를 누르면 메시지 전송 직전이므로 pending 텍스트를 기록한다.
         if (event.key === 'Enter' && !event.shiftKey) {
-            this._fromChatInput = true;
+            SpeakerSelector._markChatInputPending(event?.target);
         }
-        // ↑ 키를 누르면 이전 메시지를 불러오므로 플래그 설정 (스피커 셀렉터 적용을 위해)
-        // Shift+↑ 는 chatInput 훅에서 `/desc ` 삽입으로 처리 (여기서는 히스토리용 플래그 생략)
+
+        // ↑ 키는 Foundry의 직전 메시지 불러오기 이후 입력값이 바뀌므로 지연 갱신한다.
+        // Shift+↑ 는 chatInput 훅에서 `/desc ` 삽입으로 처리한다.
         if (event.key === 'ArrowUp' && !event.shiftKey) {
-            this._fromChatInput = true;
+            SpeakerSelector._fromChatInput = true;
+            SpeakerSelector._markChatInputPending(event?.target, { delayMs: 0 });
+            SpeakerSelector._markChatInputPending(event?.target, { delayMs: 50 });
         }
     }
 
@@ -2227,6 +2421,7 @@ export class SpeakerSelector {
         if (!game.settings.get('lichsoma-speaker-selector', SpeakerSelector.SETTINGS.NARRATOR_CHAT_CARD)) return;
         event.preventDefault();
         SpeakerSelector._insertDescSlashPrefixIntoChatInput();
+        SpeakerSelector._markChatInputPending(event.target, { delayMs: 25 });
         return false;
     }
 
@@ -2249,12 +2444,90 @@ export class SpeakerSelector {
             }
         }
     }
-    
+
     // 채팅 입력 필드 블러 핸들러
     static _handleChatInputBlur() {
-        // blur 시 플래그 초기화
-        // Enter 키로 메시지를 보내면 keydown 이벤트에서 플래그가 다시 설정되므로 문제없음
-        this._fromChatInput = false;
+        // 전송 버튼 클릭/Enter 직후 blur가 먼저 올 수 있으므로 pending 유효시간이 남아 있으면 즉시 지우지 않는다.
+        setTimeout(() => {
+            if (Date.now() > SpeakerSelector._chatInputPendingUntil) {
+                SpeakerSelector._fromChatInput = false;
+            }
+        }, 100);
+    }
+
+    static _postProcessRenderedChatMessage(messageElement) {
+        const element = LichsomaChatDom.getChatMessageElement(messageElement);
+        if (!element) return;
+        const messageId = LichsomaChatDom.getMessageId(element);
+        if (!messageId) return;
+
+        const message = game.messages.get(messageId);
+        if (!message) return;
+
+        this._refreshRenderedMessageSender(message, element);
+    }
+
+    static _refreshRenderedMessageSender(message, messageElement = null, { portraitSrc = null } = {}) {
+        const element = LichsomaChatDom.getChatMessageElement(messageElement) || this._getRenderedChatMessageElement(message);
+        if (!element || !message) return;
+
+        if (message.author?.id) {
+            element.dataset.authorId = message.author.id;
+        }
+
+        const headerElement = LichsomaChatDom.getMessageHeader(element);
+        if (headerElement) {
+            const flags = message.flags?.['lichsoma-speaker-selector'] || {};
+            const actorId = flags.actorId || message.speaker?.actor || null;
+            if (actorId) headerElement.dataset.actorId = actorId;
+            else delete headerElement.dataset.actorId;
+        }
+
+        const $messageElement = $(element);
+        const isDnd5eNativeHeader = this._isDnd5eNativeHeaderMessage(message, $messageElement);
+        if (isDnd5eNativeHeader) {
+            this._applyDnd5eNativeHeaderEnhancements(message, $messageElement, portraitSrc);
+        } else {
+            this._fixMessageSenderName(message, $messageElement);
+        }
+    }
+
+    static async _refreshRenderedMessageSpeakerPresentation(message, { portraitSrc = null } = {}) {
+        const element = this._getRenderedChatMessageElement(message);
+        if (!element || !message) return;
+
+        const $messageElement = $(element);
+        const isDnd5eNativeHeader = this._isDnd5eNativeHeaderMessage(message, $messageElement);
+        this._refreshRenderedMessageSender(message, element, { portraitSrc });
+        if (!isDnd5eNativeHeader) {
+            await this._addPortraitToMessage(message, $messageElement, {});
+        }
+
+        ChatMerge.recheckMessageAndNext?.(element);
+    }
+
+    static _postProcessChatLogMessages(root, { forceAll = false } = {}) {
+        const chatLog = LichsomaChatDom.getMainChatLog(root) || LichsomaChatDom.getMainChatLog(document);
+        if (!chatLog) return;
+
+        const allMessages = Array.from(chatLog.children || [])
+            .filter(el => el?.matches?.('.chat-message[data-message-id]') && !LichsomaChatDom.isInChatNotifications(el));
+        if (!allMessages.length) return;
+
+        const shouldProcessAll = forceAll || !this._postProcessedChatLogs.has(chatLog);
+        if (shouldProcessAll) this._postProcessedChatLogs.add(chatLog);
+
+        const targets = shouldProcessAll
+            ? allMessages
+            : [allMessages[0], allMessages[1], allMessages[allMessages.length - 2], allMessages[allMessages.length - 1]].filter(Boolean);
+
+        const seen = new Set();
+        for (const messageElement of targets) {
+            const id = LichsomaChatDom.getMessageId(messageElement) || messageElement;
+            if (seen.has(id)) continue;
+            seen.add(id);
+            this._postProcessRenderedChatMessage(messageElement);
+        }
     }
 
     // 스피커 셀렉터 설정
@@ -2262,36 +2535,12 @@ export class SpeakerSelector {
         // 채팅 로그 렌더링 시 스피커 셀렉터 추가
         Hooks.on('renderChatLog', (app, html, data) => {
             this._renderSpeakerSelector(html);
-            
-            // 모든 메시지에 유저 색상 적용 및 data-actor-id 추가
+
+            // 전체 메시지 순회는 chat-log DOM 인스턴스당 1회로 제한한다.
+            // 같은 로그에서 반복 렌더가 발생하면 경계 메시지만 보정한다.
             setTimeout(() => {
-                const $html = $(html);
-                const messages = $html.find('.chat-message');
-                messages.each((index, messageElement) => {
-                    const $messageElement = $(messageElement);
-                    const messageId = $messageElement.attr('data-message-id');
-                    if (messageId) {
-                        const message = game.messages.get(messageId);
-                        if (message) {
-                            const isDnd5eNativeHeader = this._isDnd5eNativeHeaderMessage(message, $messageElement);
-                            if (isDnd5eNativeHeader) {
-                                this._applyDnd5eNativeHeaderEnhancements(message, $messageElement);
-                            } else {
-                                this._applyUserColorToSender(message, $messageElement);
-                            }
-                            
-                            // speaker가 actor라면 헤더에 data-actor-id 추가
-                            const $headerElement = $messageElement.find('.message-header');
-                            if ($headerElement.length) {
-                                const flags = message.flags?.['lichsoma-speaker-selector'] || {};
-                                const actorId = flags.actorId || message.speaker?.actor || null;
-                                if (actorId) {
-                                    $headerElement.attr('data-actor-id', actorId);
-                                }
-                            }
-                        }
-                    }
-                });
+                const root = LichsomaChatDom.asElement(html) || document;
+                this._postProcessChatLogMessages(root);
             }, 50);
         });
 
@@ -2371,11 +2620,17 @@ export class SpeakerSelector {
 
         const chatForm = $(chatFormElement);
 
-        // 채팅 컨트롤에 "이미지 삽입" 버튼 추가 (ProseMirror 툴바 대체)
+        // FVTT v14 ProseMirror의 이미지 삽입 기능이 있는 환경에서만 별도 이미지 버튼을 추가한다.
+        // FVTT v13에는 해당 이미지 삽입 기능이 없으므로 버튼을 만들지 않는다.
         try {
-            // ProseMirror 상단 메뉴는 기본 숨김
-            chatForm.addClass('lichsoma-hide-chat-editor-menu');
-            this._renderChatInsertImageButton(chatForm);
+            if (this._supportsChatEditorImageInsert()) {
+                // ProseMirror 상단 메뉴는 기본 숨김
+                chatForm.addClass('lichsoma-hide-chat-editor-menu');
+                this._renderChatInsertImageButton(chatForm);
+            } else {
+                chatForm.removeClass('lichsoma-hide-chat-editor-menu');
+                chatForm.find('button.lichsoma-insert-image-btn').remove();
+            }
         } catch (e) {
             // 무시 (채팅 입력/UI는 시스템/테마에 따라 다를 수 있음)
         }
@@ -2412,45 +2667,57 @@ export class SpeakerSelector {
             const alwaysUseActor = this._getAlwaysUseActorSetting();
             // 항상 할당된 캐릭터로 말하기 설정 확인
             const alwaysUseCharacter = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.ALWAYS_USE_CHARACTER);
+            const isLancer = this._isLancerSystem();
             
             // 할당된 캐릭터 ID 가져오기
             const assignedCharacterId = game.user.character instanceof Actor 
                 ? game.user.character?.id 
                 : game.user.character;
+            const assignedCharacter = assignedCharacterId
+                ? (game.user.character instanceof Actor ? game.user.character : game.actors.get(assignedCharacterId))
+                : null;
             
-            // 설정에 따라 옵션 추가
-            let additionalOption = '';
+            // 설정에 따라 OOC 옵션 추가
+            let oocOption = '';
             if (alwaysUseActor || alwaysUseCharacter) {
                 // "항상 액터로 말하기" 또는 "항상 할당된 캐릭터로 말하기" 설정이 켜져 있으면 OOC 옵션 추가
-                additionalOption = `<option value="ooc">${oocLabel}</option>`;
-                
-                // 할당된 캐릭터도 추가 (OOC 다음에 표시)
-                if (assignedCharacterId) {
-                    const character = game.user.character instanceof Actor 
-                        ? game.user.character 
-                        : game.actors.get(assignedCharacterId);
-                    if (character) {
-                        // 저장된 감정이 있으면 표시
-                        const savedEmotion = ActorEmotions.getSavedEmotion(character.id);
-                        const displayName = savedEmotion
-                            ? `${character.name}(${savedEmotion.emotionName})`
-                            : character.name;
-                        additionalOption += `<option value="character">${displayName}</option>`;
-                    }
+                oocOption = this._createSpeakerOptionHTML('ooc', oocLabel);
+            }
+            
+            if (isLancer) {
+                const order = this._getLancerSpeakerCategoryOrder();
+                const actorEntries = [];
+
+                // 할당된 캐릭터는 기존 value인 character를 유지하되, LANCER actor type에 따라 그룹에 넣는다.
+                if (assignedCharacter) {
+                    actorEntries.push({ actor: assignedCharacter, value: 'character' });
                 }
-            } else if (assignedCharacterId) {
-                // 두 설정이 모두 꺼져 있고 할당된 캐릭터가 있으면 할당된 캐릭터 옵션 추가
-                const character = game.user.character instanceof Actor 
-                    ? game.user.character 
-                    : game.actors.get(assignedCharacterId);
-                if (character) {
-                    // 저장된 감정이 있으면 표시
-                    const savedEmotion = ActorEmotions.getSavedEmotion(character.id);
-                    const displayName = savedEmotion
-                        ? `${character.name}(${savedEmotion.emotionName})`
-                        : character.name;
-                    additionalOption = `<option value="character">${displayName}</option>`;
+
+                if (!game.user.isGM) {
+                    // 플레이어가 권한을 가진 다른 캐릭터들 추가 (할당된 캐릭터 제외)
+                    const ownedActors = game.actors.filter(actor => {
+                        if (actor.id === assignedCharacterId) return false;
+                        return actor.isOwner || actor.testUserPermission(game.user, 'OWNER');
+                    });
+
+                    ownedActors.forEach(actor => actorEntries.push({ actor, value: `actor:${actor.id}` }));
+                } else {
+                    // 등록된 액터 옵션은 GM에게만 표시하며, 등록 순서를 보존한 채 LANCER 분류별로 묶는다.
+                    this._actorGridActors.forEach(actorId => {
+                        const actor = game.actors.get(actorId);
+                        if (actor && actor.id !== assignedCharacterId) {
+                            actorEntries.push({ actor, value: `actor:${actorId}` });
+                        }
+                    });
                 }
+
+                return `${oocOption}${this._groupLancerSpeakerOptions(actorEntries, order)}`;
+            }
+
+            // 설정에 따라 할당된 캐릭터 옵션 추가
+            let additionalOption = oocOption;
+            if (assignedCharacter) {
+                additionalOption += this._createActorSpeakerOptionHTML(assignedCharacter, 'character');
             }
             
             // 플레이어가 권한을 가진 다른 캐릭터들 추가 (할당된 캐릭터 제외)
@@ -2465,12 +2732,7 @@ export class SpeakerSelector {
                 });
                 
                 ownedActors.forEach(actor => {
-                    // 저장된 감정이 있으면 표시
-                    const savedEmotion = ActorEmotions.getSavedEmotion(actor.id);
-                    const displayName = savedEmotion
-                        ? `${actor.name}(${savedEmotion.emotionName})`
-                        : actor.name;
-                    ownedActorOptions += `<option value="actor:${actor.id}">${displayName}</option>`;
+                    ownedActorOptions += this._createActorSpeakerOptionHTML(actor);
                 });
             }
             
@@ -2480,13 +2742,8 @@ export class SpeakerSelector {
             if (game.user.isGM) {
                 this._actorGridActors.forEach(actorId => {
                     const actor = game.actors.get(actorId);
-                    if (actor) {
-                        // 저장된 감정이 있으면 표시
-                        const savedEmotion = ActorEmotions.getSavedEmotion(actorId);
-                        const displayName = savedEmotion
-                            ? `${actor.name}(${savedEmotion.emotionName})`
-                            : actor.name;
-                        registeredActorOptions += `<option value="actor:${actorId}">${displayName}</option>`;
+                    if (actor && actor.id !== assignedCharacterId) {
+                        registeredActorOptions += this._createActorSpeakerOptionHTML(actor, `actor:${actorId}`);
                     }
                 });
             }
@@ -2500,7 +2757,7 @@ export class SpeakerSelector {
                     <option value="">${selectorLabel}</option>
                     ${generateOptions()}
                 </select>
-                <button type="button" class="emotion-btn ui-control icon" title="감정 선택" aria-label="감정 선택">
+                <button type="button" class="emotion-btn ui-control icon" title="${game.i18n.localize('SPEAKERSELECTOR.Emotion.SelectTitle')}" aria-label="${game.i18n.localize('SPEAKERSELECTOR.Emotion.SelectTitle')}">
                     <i class="fa-solid fa-face-smile"></i>
                 </button>
                 ${game.user.isGM ? `
@@ -2521,7 +2778,7 @@ export class SpeakerSelector {
             
             // 옵션 업데이트 (권한 재확인)
             const newOptions = generateOptions();
-            dropdown.find('option:not(:first)').remove();
+            dropdown.children(':not(:first)').remove();
             dropdown.append(newOptions);
             
             // 현재 선택 값 복원
@@ -2572,7 +2829,7 @@ export class SpeakerSelector {
             
             // 액터가 선택되어 있어야 함
             if (!this._selectedSpeaker || this._selectedSpeaker === 'ooc') {
-                ui.notifications.warn("먼저 액터를 선택해주세요.");
+                ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.Notifications.SelectActorFirst'));
                 return;
             }
             
@@ -2605,7 +2862,7 @@ export class SpeakerSelector {
             // 나레이터 버튼 이벤트 설정
             selectorHTML.find('.narrator-btn').on('click', (e) => {
                 e.preventDefault();
-                this._toggleNarratorMode(selectorHTML);
+                this._toggleNarratorMode();
             });
             
             // 나레이터 모드 상태에 따라 버튼 활성화
@@ -2630,40 +2887,24 @@ export class SpeakerSelector {
                 }
                 
                 if (isCorrectlyPositioned) {
-                    // 기존 셀렉터가 있으면 나레이터 버튼 이벤트만 재설정
+                    // 기존 셀렉터가 있으면 이벤트와 드롭다운 옵션을 최신 상태로 재설정
                     const $existingSelector = $(existingSelector);
                     if (game.user.isGM) {
                         $existingSelector.find('.narrator-btn').off('click').on('click', (e) => {
                             e.preventDefault();
-                            this._toggleNarratorMode($existingSelector);
+                            this._toggleNarratorMode();
                         });
                         
                         // 나레이터 모드 상태에 따라 버튼 활성화
                         const $existingBtn = $existingSelector.find('.narrator-btn');
                         $existingBtn.attr('aria-pressed', this._narratorModeActive ? 'true' : 'false');
                         
-                        // 스피커 드롭다운 옵션 업데이트 (설정 변경 시 OOC/할당된 캐릭터 옵션 표시/숨김)
-                        const alwaysUseCharacter = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.ALWAYS_USE_CHARACTER);
+                        // 스피커 드롭다운 옵션 업데이트 (스피커 설정 그리드 변경 포함)
                         const $dropdown = $existingSelector.find('.speaker-dropdown');
                         const currentValue = $dropdown.val();
-                        
-                        // 기존 추가 옵션 제거 (OOC 또는 할당된 캐릭터)
-                        $dropdown.find('option[value="ooc"], option[value="character"]').remove();
-                        
-                        // 설정에 따라 옵션 추가
-                        if (alwaysUseCharacter) {
-                            // 활성화되어 있으면 OOC 옵션 추가
-                            const oocLabel = game.i18n.localize('SPEAKERSELECTOR.Selector.OOC');
-                            $dropdown.append(`<option value="ooc">${oocLabel}</option>`);
-                        } else if (game.user.character) {
-                            // 비활성화되어 있고 할당된 캐릭터가 있으면 할당된 캐릭터 옵션 추가
-                            const character = game.user.character instanceof Actor 
-                                ? game.user.character 
-                                : game.actors.get(game.user.character);
-                            if (character) {
-                                $dropdown.append(`<option value="character">${character.name}</option>`);
-                            }
-                        }
+                        $dropdown.children(':not(:first)').remove();
+                        $dropdown.append(generateOptions());
+                        $dropdown.off('mousedown focus').on('mousedown', updateDropdownOptions).on('focus', updateDropdownOptions);
                         
                         // 스피커 드롭다운 변경 이벤트 재설정
                         $dropdown.off('change').on('change', (e) => {
@@ -2729,7 +2970,17 @@ export class SpeakerSelector {
         }
     }
 
+    static _getFoundryGeneration() {
+        const generation = Number(game?.release?.generation);
+        return Number.isFinite(generation) ? generation : 14;
+    }
+
+    static _supportsChatEditorImageInsert() {
+        return this._getFoundryGeneration() >= 14;
+    }
+
     static _renderChatInsertImageButton(chatForm) {
+        if (!this._supportsChatEditorImageInsert()) return;
         const chatFormElement = LichsomaChatDom.asElement(chatForm) || this._getChatFormElement();
         const $chatForm = chatFormElement ? $(chatFormElement) : $(chatForm ?? document);
         // GM은 보통 #chat-controls .control-buttons 를 가지지만,
@@ -2788,7 +3039,7 @@ export class SpeakerSelector {
         const editorRoot = LichsomaChatDom.getChatInput(chatFormElement) || this._getChatInputElement();
 
         if (!editorRoot) {
-            ui?.notifications?.warn?.('채팅 입력창을 찾지 못했습니다.');
+            ui?.notifications?.warn?.(game.i18n.localize('SPEAKERSELECTOR.Notifications.ChatInputNotFound'));
             return;
         }
 
@@ -2801,7 +3052,7 @@ export class SpeakerSelector {
             editorRoot.querySelector('button[data-action="image"]');
 
         if (!imageButton) {
-            ui?.notifications?.warn?.('이미지 삽입 메뉴를 찾지 못했습니다.');
+            ui?.notifications?.warn?.(game.i18n.localize('SPEAKERSELECTOR.Notifications.InsertImageMenuNotFound'));
             return;
         }
 
@@ -2834,8 +3085,9 @@ export class SpeakerSelector {
     
     // 나레이터 모드 설정
     static setupNarratorMode() {
-        // 나레이터 소켓 리스너 설정
+        // 나레이터 소켓 리스너 및 키보드 단축키 설정
         this._setupNarratorSocket();
+        this._setupNarratorKeyboardShortcut();
         
         // 나레이터 모드 상태 복원
         Hooks.once('ready', async () => {
@@ -2905,11 +3157,18 @@ export class SpeakerSelector {
                 if (doc) {
                     doc.updateSource({ content: '<hr>' });
                 }
+            } else {
+                // 텍스트 노드의 세 점(...)을 말줄임표(…)로 변환한다.
+                // HTML 태그/속성은 건드리지 않고 실제 표시 텍스트만 처리한다.
+                const ellipsisContent = this._replaceTextEllipsesInHtml(data.content);
+                if (ellipsisContent !== data.content) {
+                    data.content = ellipsisContent;
+                    if (doc) {
+                        doc.updateSource({ content: ellipsisContent });
+                    }
+                }
             }
-            
-            if (chatInputFocused && plainMessageContent === plainChatInputValue) {
-                this._fromChatInput = true;
-            }
+            this._fromChatInput = this._isMessageFromChatInput(data.content || messageContent, chatInput, userId || game.user?.id);
             
             // 채팅 인풋으로 직접 입력한 메시지가 아니면 플래그만 저장하고 나머지는 무시
             // (액터 시트 등에서 생성한 메시지는 나레이터 모드나 할당된 캐릭터 설정을 적용하지 않음)
@@ -2956,12 +3215,13 @@ export class SpeakerSelector {
                 }
                 
                 if (speakerData) {
+                    speakerData = this._normalizeSpeakerDataForModule(speakerData, game.users?.get(userId) || game.user);
                     const portraitData = this._getMessageImageSync(speakerData, userId);
                     const actorId = speakerData.actor || null;
                     const extraFlags = { portraitSrc: portraitData.src, userId, actorId, senderAlias: speakerData.alias };
                     
-                    // speaker를 보완한 경우 실제 메시지에도 적용
-                    if (needsSpeakerUpdate) {
+                    // speaker를 보완한 경우 또는 시스템이 Actor/Token 객체를 speaker에 넣은 경우 실제 메시지에도 정규화된 speaker를 적용한다.
+                    if (needsSpeakerUpdate || data.speaker !== speakerData) {
                         this._applySpeakerData(doc, data, speakerData, extraFlags);
                     } else {
                         this._applySenderFlagsToDoc(doc, data, null, extraFlags, speakerData);
@@ -3061,13 +3321,7 @@ export class SpeakerSelector {
                     this._startNarratorTyping(plainText);
                     
                     // 소켓으로 모든 클라이언트에 타이핑 효과 전송
-                    if (game.socket) {
-                        game.socket.emit('module.lichsoma-speaker-selector', {
-                            type: 'narratorTyping',
-                            text: plainText,
-                            userId: game.user.id
-                        });
-                    }
+                    emitSocket('narratorTyping', { text: plainText });
                 }
                 
                 // 나레이터 채팅 카드 설정 확인
@@ -3301,9 +3555,8 @@ export class SpeakerSelector {
             tempDiv.innerHTML = messageContent;
             const plainMessageContent = (tempDiv.textContent || tempDiv.innerText || '').trim();
             const plainChatInputValue = chatInputValue.trim();
-            
-            if (chatInputFocused && plainMessageContent === plainChatInputValue) {
-                this._fromChatInput = true;
+            if (!this._fromChatInput) {
+                this._fromChatInput = this._isMessageFromChatInput(messageContent, chatInput, userId || game.user?.id);
             }
             
             // 채팅 인풋으로 직접 입력한 메시지가 아니면 플래그만 저장하고 나머지는 무시
@@ -3680,17 +3933,107 @@ export class SpeakerSelector {
         });
     }
     
+    static _isNarratorShortcutAllowedTarget(target) {
+        if (!(target instanceof Element)) return true;
+
+        const editable = target.closest([
+            'input',
+            'textarea',
+            'select',
+            '[contenteditable="true"]',
+            '[contenteditable=""]',
+            'prose-mirror',
+            '.cm-editor',
+            '.CodeMirror'
+        ].join(','));
+
+        if (!editable) return true;
+
+        // 일반 설정 창, 검색창, CodeMirror 등에서는 나레이터 단축키 입력을 가로채지 않는다.
+        // 다만 실제 Foundry 채팅 입력창에서는 단축키를 사용할 수 있게 허용한다.
+        const chatForm = target.closest('form.chat-form, .chat-form');
+        if (!chatForm) return false;
+
+        const chatInput = LichsomaChatDom.getChatInput(chatForm);
+        if (!chatInput) return false;
+
+        const proseMirrorRoot = LichsomaChatDom.getProseMirrorRoot(chatInput);
+        return target === chatInput
+            || chatInput.contains(target)
+            || target === proseMirrorRoot
+            || proseMirrorRoot?.contains(target) === true;
+    }
+
+    static _eventMatchesNarratorKeybinding(event) {
+        const bindings = game.keybindings.get('lichsoma-speaker-selector', 'toggleNarratorMode') || [];
+        if (!bindings.length) return false;
+
+        const pressedModifiers = new Set();
+        if (event.shiftKey) pressedModifiers.add('SHIFT');
+        if (event.altKey) pressedModifiers.add('ALT');
+        if (event.ctrlKey || event.metaKey) pressedModifiers.add('CONTROL');
+
+        return bindings.some(binding => {
+            if (!binding?.key || binding.key !== event.code) return false;
+            const requiredModifiers = new Set(
+                (binding.modifiers || []).map(modifier => String(modifier).toUpperCase())
+            );
+            if (requiredModifiers.size !== pressedModifiers.size) return false;
+            for (const modifier of requiredModifiers) {
+                if (!pressedModifiers.has(modifier)) return false;
+            }
+            return true;
+        });
+    }
+
+    static _setupNarratorKeyboardShortcut() {
+        if (this._narratorShortcutInitialized) return;
+        this._narratorShortcutInitialized = true;
+
+        this._narratorShortcutHandler = event => {
+            if (!game.user?.isGM) return;
+            if (event.defaultPrevented || event.repeat || event.isComposing) return;
+
+            // Foundry의 Keybindings는 일반 화면 입력을 담당한다. 포커스된 편집 요소에서는
+            // 기존 UX를 보존하되, 실제 채팅 입력창에 한해서 현재 Configure Controls 바인딩을 사용한다.
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const editable = target.closest([
+                'input',
+                'textarea',
+                'select',
+                '[contenteditable="true"]',
+                '[contenteditable=""]',
+                'prose-mirror',
+                '.cm-editor',
+                '.CodeMirror'
+            ].join(','));
+            if (!editable) return;
+            if (!this._isNarratorShortcutAllowedTarget(target)) return;
+            if (!this._eventMatchesNarratorKeybinding(event)) return;
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            void this._toggleNarratorMode();
+        };
+
+        // 채팅 ProseMirror가 입력을 처리하기 전에, 현재 사용자 Keybinding과 일치하는 경우만 가로챈다.
+        document.addEventListener('keydown', this._narratorShortcutHandler, true);
+    }
+
+    static _syncNarratorButtons() {
+        const pressed = this._narratorModeActive ? 'true' : 'false';
+        document.querySelectorAll('.lichsoma-speaker-selector .narrator-btn').forEach(button => {
+            button.setAttribute('aria-pressed', pressed);
+        });
+    }
+
     // 나레이터 모드 토글
-    static async _toggleNarratorMode(selector) {
+    static async _toggleNarratorMode() {
         this._narratorModeActive = !this._narratorModeActive;
         
-        // 버튼 상태 업데이트
-        const $btn = selector.find('.narrator-btn');
-        if (this._narratorModeActive) {
-            $btn.attr('aria-pressed', 'true');
-        } else {
-            $btn.attr('aria-pressed', 'false');
-        }
+        // 메인 채팅과 팝아웃에 존재하는 모든 나레이터 버튼 상태 업데이트
+        this._syncNarratorButtons();
         
         // 유저 플래그에 상태 저장 (새로고침 시 복원용)
         try {
@@ -3699,40 +4042,63 @@ export class SpeakerSelector {
         }
         
         // 소켓으로 모든 클라이언트에 상태 전송
-        if (game.socket) {
-            game.socket.emit('module.lichsoma-speaker-selector', {
-                type: 'narratorMode',
-                active: this._narratorModeActive,
-                userId: game.user.id
-            });
-        }
+        emitSocket('narratorMode', { active: this._narratorModeActive });
         
         // 로컬에서 나레이터 라인 표시/숨김
         this._updateNarratorLine(this._narratorModeActive);
         
     }
     
+    static _clearNarratorLineTransition() {
+        if (this._narratorLineRemovalTimeout) {
+            clearTimeout(this._narratorLineRemovalTimeout);
+            this._narratorLineRemovalTimeout = null;
+        }
+        if (this._narratorLineEnterFrame) {
+            cancelAnimationFrame(this._narratorLineEnterFrame);
+            this._narratorLineEnterFrame = null;
+        }
+        if (this._narratorLineEnterSecondFrame) {
+            cancelAnimationFrame(this._narratorLineEnterSecondFrame);
+            this._narratorLineEnterSecondFrame = null;
+        }
+    }
+
     // 나레이터 라인 업데이트
     static _updateNarratorLine(active, text = '') {
+        this._narratorLineVisible = active === true;
+
         if (active) {
-            // 나레이터 라인이 없으면 생성
+            // 진행 중인 제거 예약을 취소해 빠르게 다시 켜도 새 라인이 사라지지 않게 한다.
+            this._clearNarratorLineTransition();
+
+            // 나레이터 라인이 없으면 초기 opacity 0 상태로 생성하고 다음 프레임부터 페이드인한다.
             if (!this._narratorLineElement) {
                 this._createNarratorLine();
+            } else {
+                this._narratorLineElement.style.opacity = '1';
             }
+
             // 텍스트 업데이트
             if (this._narratorTextElement) {
                 this._narratorTextElement.textContent = text;
             }
         } else {
+            // 나레이터 라인이 사라질 때 진행 중인 타이핑과 지연 작업도 함께 정리한다.
+            this._clearNarratorTypingTimers();
+            this._clearNarratorLineTransition();
+
             // 나레이터 라인 페이드아웃 후 제거
-            if (this._narratorLineElement) {
-                this._narratorLineElement.style.opacity = '0';
-                setTimeout(() => {
-                    if (this._narratorLineElement) {
-                        this._narratorLineElement.remove();
-                        this._narratorLineElement = null;
-                        this._narratorTextElement = null;
-                    }
+            const line = this._narratorLineElement;
+            if (line) {
+                line.style.opacity = '0';
+                this._narratorLineRemovalTimeout = setTimeout(() => {
+                    this._narratorLineRemovalTimeout = null;
+                    if (this._narratorLineVisible || this._narratorLineElement !== line) return;
+
+                    line.remove();
+                    this._narratorLineElement = null;
+                    this._narratorTextElement = null;
                 }, 500);
             }
         }
@@ -3740,6 +4106,8 @@ export class SpeakerSelector {
     
     // 나레이터 라인 생성
     static _createNarratorLine() {
+        this._clearNarratorLineTransition();
+
         // 기존 요소 제거
         if (this._narratorLineElement) {
             this._narratorLineElement.remove();
@@ -3777,6 +4145,7 @@ export class SpeakerSelector {
         
         // 텍스트 요소
         this._narratorTextElement = document.createElement('div');
+        this._narratorTextElement.className = 'lichsoma-narrator-text';
         this._narratorTextElement.style.cssText = `
             position: relative;
             color: white;
@@ -3798,193 +4167,246 @@ export class SpeakerSelector {
         this._narratorLineElement.appendChild(this._narratorTextElement);
         document.body.appendChild(this._narratorLineElement);
         
-        // 페이드인 효과
-        setTimeout(() => {
-            if (this._narratorLineElement) {
-                this._narratorLineElement.style.opacity = '1';
-            }
-        }, 10);
+        // 첫 화면에는 opacity 0 상태가 실제로 그려지도록 두 프레임을 분리한 뒤 페이드인한다.
+        // 단순 setTimeout은 첫 페인트 이전에 opacity 1이 적용되어 transition이 생략될 수 있다.
+        const line = this._narratorLineElement;
+        line.getBoundingClientRect();
+        this._narratorLineEnterFrame = requestAnimationFrame(() => {
+            this._narratorLineEnterFrame = null;
+            this._narratorLineEnterSecondFrame = requestAnimationFrame(() => {
+                this._narratorLineEnterSecondFrame = null;
+                if (this._narratorLineVisible && this._narratorLineElement === line) {
+                    line.style.opacity = '1';
+                }
+            });
+        });
         
     }
     
     // 나레이터 소켓 설정
     static _setupNarratorSocket() {
-        if (!game.socket) return;
-        
-        game.socket.on('module.lichsoma-speaker-selector', (data) => {
-            if (data.type === 'narratorMode') {
-                // GM이 보낸 나레이터 모드 상태 업데이트
-                if (data.userId && game.users.get(data.userId)?.isGM) {
-                    this._updateNarratorLine(data.active, data.text || '');
-                }
-            } else if (data.type === 'narratorTyping') {
-                // GM이 보낸 나레이터 타이핑 효과
-                if (data.userId && game.users.get(data.userId)?.isGM) {
-                    this._startNarratorTyping(data.text || '');
-                }
-            } else if (data.type === 'narratorTypingSound') {
-                // GM이 보낸 나레이터 타이핑 사운드 재생 (자신이 보낸 이벤트는 제외)
-                if (data.userId && game.users.get(data.userId)?.isGM && data.userId !== game.user.id) {
-                    this._playNarratorTypingSound();
-                }
-            }
+        if (this._narratorSocketInitialized) return;
+        this._narratorSocketInitialized = true;
+
+        registerSocketHandler('narratorMode', data => {
+            const sender = data.userId ? game.users.get(data.userId) : null;
+            if (!sender?.isGM) return;
+            this._updateNarratorLine(data.active === true, String(data.text ?? '').slice(0, 20000));
+        });
+
+        registerSocketHandler('narratorTyping', data => {
+            const sender = data.userId ? game.users.get(data.userId) : null;
+            if (!sender?.isGM || data.userId === game.user.id) return;
+            this._startNarratorTyping(String(data.text ?? '').slice(0, 20000));
         });
     }
     
-    // 나레이터 타이핑 효과 시작
-    static _startNarratorTyping(text) {
-        // 기존 타이핑 중지
-        if (this._narratorTypingInterval) {
-            clearInterval(this._narratorTypingInterval);
+    // 사용자에게 보이는 문자 단위로 문자열을 분리한다.
+    static _splitNarratorGraphemes(value) {
+        const text = String(value ?? '');
+        if (!text) return [];
+
+        try {
+            if (typeof Intl?.Segmenter === 'function') {
+                const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+                return Array.from(segmenter.segment(text), (entry) => entry.segment);
+            }
+        } catch (_) {
+            // Intl.Segmenter를 사용할 수 없는 환경에서는 코드 포인트 단위로 폴백한다.
         }
-        
-        // 나레이터 라인이 없으면 생성
-        if (!this._narratorLineElement) {
-            this._createNarratorLine();
-        }
-        
-        // 루비 문자 처리
-        const rubyPattern = /\[\[([^\|\]]+?)\|([^\]]+?)\]\]/g;
-        const processedText = text.replace(rubyPattern, '<ruby class="lichsoma-ruby">$1<rt>$2</rt></ruby>');
-        
-        // 텍스트 콘텐츠만 추출 (HTML 태그 제외) - 타이핑 길이 계산용
-        // 루비 처리된 HTML에서 텍스트만 추출하면 루비 패턴의 기호([[|]])는 이미 제거됨
-        // 단, 루비 주석(<rt>...</rt>)은 타이핑 소리에 포함되지 않아야 하므로 제외
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = processedText;
-        
-        // 루비 주석 제거 (rt 태그 제거)
-        const rtElements = tempDiv.querySelectorAll('rt');
-        rtElements.forEach(rt => rt.remove());
-        
-        // 루비 주석을 제거한 후 텍스트 추출
-        const plainText = tempDiv.textContent || tempDiv.innerText || '';
-        
-        // 타이핑 속도 및 지속 시간 설정
-        const typingSpeed = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_TYPING_SPEED) || 100; // ms
-        const duration = 3; // seconds
-        
-        let currentIndex = 0;
-        this._narratorTextElement.innerHTML = '';
-        this._narratorTextElement.style.opacity = '1';
-        
-        // 타이핑 효과: 한 글자씩 표시 (루비 처리된 HTML 사용)
-        this._narratorTypingInterval = setInterval(() => {
-            if (currentIndex < plainText.length) {
-                const currentChar = plainText[currentIndex];
-                
-                // 원본 텍스트에서 루비 패턴을 찾아서 현재 인덱스만큼만 처리
-                // currentIndex는 plainText 기준이므로, 루비 패턴의 기호는 이미 제외됨
-                const displayHTML = this._processRubyForNarrator(text, currentIndex + 1);
-                this._narratorTextElement.innerHTML = displayHTML;
-                
-                // 공백이 아닌 문자일 때만 사운드 재생
-                // plainText는 루비 패턴의 기호([[|]])가 제거된 순수 텍스트이므로
-                // currentChar는 실제 표시되는 문자만 포함함
-                if (currentChar && currentChar.trim() !== '') {
-                    // 로컬에서 사운드 재생
-                    this._playNarratorTypingSound();
-                    
-                    // 소켓으로 모든 클라이언트에 사운드 재생 전송
-                    if (game.socket) {
-                        game.socket.emit('module.lichsoma-speaker-selector', {
-                            type: 'narratorTypingSound',
-                            userId: game.user.id
-                        });
-                    }
-                }
-                
-                currentIndex++;
+
+        return Array.from(text);
+    }
+
+    // 나레이터 문자열을 최초 한 번만 일반 텍스트와 루비 구간으로 파싱한다.
+    static _parseNarratorTypingSegments(text) {
+        const source = String(text ?? '');
+        const segments = [];
+        const rubyPattern = /\[\[([^|\]]+?)\|([^\]]+?)\]\]/g;
+        let cursor = 0;
+        let match;
+
+        const pushPlain = (value) => {
+            if (!value) return;
+            const graphemes = this._splitNarratorGraphemes(value);
+            if (graphemes.length) segments.push({ type: 'text', graphemes });
+        };
+
+        while ((match = rubyPattern.exec(source)) !== null) {
+            pushPlain(source.slice(cursor, match.index));
+
+            const base = this._splitNarratorGraphemes(match[1]);
+            const reading = this._splitNarratorGraphemes(match[2]);
+            if (base.length) {
+                segments.push({ type: 'ruby', base, reading });
             } else {
-                // 타이핑 완료 - 전체 루비 처리된 HTML 표시
-                const fullProcessedHTML = this._processRubyForNarrator(text, text.length);
-                this._narratorTextElement.innerHTML = fullProcessedHTML;
-                
-                // 타이핑 완료
-                clearInterval(this._narratorTypingInterval);
-                this._narratorTypingInterval = null;
-                
-                // 설정된 시간만큼 대기 후 사라짐
-                setTimeout(() => {
-                    this._stopNarratorTyping();
-                }, duration * 1000);
+                pushPlain(match[0]);
             }
-        }, typingSpeed);
+
+            cursor = match.index + match[0].length;
+        }
+
+        pushPlain(source.slice(cursor));
+        return segments;
     }
-    
-    // HTML 이스케이프 헬퍼 함수
-    static _escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    // 나레이터 바용 루비 처리 함수 (지정된 길이만큼만 처리)
-    static _processRubyForNarrator(text, maxLength) {
-        if (!text) return '';
-        
-        let result = '';
-        let pos = 0;
-        let remainingLength = maxLength; // 실제 표시할 텍스트 길이 (루비 패턴 기호 제외)
-        
-        while (pos < text.length && remainingLength > 0) {
-            const nextRuby = text.substring(pos).search(/\[\[/);
-            if (nextRuby === -1) {
-                // 루비 패턴이 더 이상 없음
-                const plainPart = text.substring(pos, pos + remainingLength);
-                result += this._escapeHtml(plainPart);
-                break;
-            }
-            
-            // 루비 패턴 이전의 일반 텍스트
-            if (nextRuby > 0) {
-                const plainPart = text.substring(pos, pos + Math.min(nextRuby, remainingLength));
-                result += this._escapeHtml(plainPart);
-                remainingLength -= plainPart.length;
-                if (remainingLength <= 0) break;
-                pos += nextRuby;
-            }
-            
-            // 루비 패턴 찾기
-            const rubyMatch = text.substring(pos).match(/^\[\[([^\|\]]+?)\|([^\]]+?)\]\]/);
-            if (rubyMatch) {
-                const rubyText = rubyMatch[1]; // 루비 본문만 (기호 제외)
-                // 루비 패턴의 기호들([[|]])은 카운트하지 않고 건너뜀
-                if (rubyText.length <= remainingLength) {
-                    // 전체 루비 표시
-                    result += `<ruby class="lichsoma-ruby">${this._escapeHtml(rubyText)}<rt>${this._escapeHtml(rubyMatch[2])}</rt></ruby>`;
-                    remainingLength -= rubyText.length; // 본문 길이만 감소
-                    pos += rubyMatch[0].length; // 전체 패턴([[본문|루비]]) 건너뛰기
-                } else {
-                    // 일부만 표시
-                    const partial = rubyText.substring(0, remainingLength);
-                    result += `<ruby class="lichsoma-ruby">${this._escapeHtml(partial)}<rt>${this._escapeHtml(rubyMatch[2])}</rt></ruby>`;
-                    break;
+
+    // 파싱된 세그먼트로 DOM과 글자별 갱신 계획을 한 번만 만든다.
+    static _buildNarratorTypingPlan(text) {
+        const fragment = document.createDocumentFragment();
+        const steps = [];
+        const segments = this._parseNarratorTypingSegments(text);
+
+        for (const segment of segments) {
+            if (segment.type === 'text') {
+                const node = document.createTextNode('');
+                fragment.appendChild(node);
+
+                for (const grapheme of segment.graphemes) {
+                    steps.push({ type: 'text', node, grapheme });
                 }
-            } else {
-                // 루비 패턴이 아님, 일반 문자
-                result += this._escapeHtml(text[pos]);
-                remainingLength--;
-                pos++;
+                continue;
+            }
+
+            const ruby = document.createElement('ruby');
+            ruby.classList.add('lichsoma-ruby', 'lichsoma-narrator-ruby-progress');
+
+            const rb = document.createElement('rb');
+            rb.textContent = '';
+
+            const rt = document.createElement('rt');
+            rt.setAttribute('aria-label', segment.reading.join(''));
+
+            // 완성된 루비 전체 폭을 처음부터 확보하되, 실제 문자는 한 덩어리로 점진 노출한다.
+            const readingShell = document.createElement('span');
+            readingShell.className = 'lichsoma-narrator-ruby-reading-shell';
+            readingShell.setAttribute('aria-hidden', 'true');
+
+            const readingGhost = document.createElement('span');
+            readingGhost.className = 'lichsoma-narrator-ruby-reading-ghost';
+            readingGhost.textContent = segment.reading.join('');
+
+            const readingVisible = document.createElement('span');
+            readingVisible.className = 'lichsoma-narrator-ruby-reading-visible';
+            readingVisible.textContent = '';
+
+            readingShell.append(readingGhost, readingVisible);
+            rt.appendChild(readingShell);
+            ruby.append(rb, rt);
+            fragment.appendChild(ruby);
+
+            const baseLength = segment.base.length;
+            const readingLength = segment.reading.length;
+            for (let index = 0; index < baseLength; index += 1) {
+                const baseVisible = index + 1;
+                const readingVisibleCount = readingLength > 0
+                    ? Math.max(1, Math.min(readingLength, Math.round((baseVisible * readingLength) / baseLength)))
+                    : 0;
+
+                steps.push({
+                    type: 'ruby',
+                    rb,
+                    readingVisible,
+                    baseText: segment.base.slice(0, baseVisible).join(''),
+                    readingText: segment.reading.slice(0, readingVisibleCount).join(''),
+                    grapheme: segment.base[index]
+                });
             }
         }
-        
-        return result;
+
+        return { fragment, steps };
     }
-    
-    // 나레이터 타이핑 효과 중지
-    static _stopNarratorTyping() {
+
+    static _clearNarratorTypingTimers() {
         if (this._narratorTypingInterval) {
             clearInterval(this._narratorTypingInterval);
             this._narratorTypingInterval = null;
         }
-        // 텍스트 페이드아웃
+        if (this._narratorTypingCompleteTimeout) {
+            clearTimeout(this._narratorTypingCompleteTimeout);
+            this._narratorTypingCompleteTimeout = null;
+        }
+        if (this._narratorFadeTimeout) {
+            clearTimeout(this._narratorFadeTimeout);
+            this._narratorFadeTimeout = null;
+        }
+    }
+
+    static _playNarratorTypingSoundThrottled(grapheme) {
+        if (!grapheme || !String(grapheme).trim()) return;
+
+        const now = globalThis.performance?.now?.() ?? Date.now();
+        const minimumInterval = 55;
+        if ((now - (this._lastNarratorSoundAt || 0)) < minimumInterval) return;
+
+        this._lastNarratorSoundAt = now;
+        this._playNarratorTypingSound();
+    }
+
+    // 나레이터 타이핑 효과 시작
+    static _startNarratorTyping(text) {
+        this._clearNarratorTypingTimers();
+        this._lastNarratorSoundAt = 0;
+
+        if (!this._narratorLineElement) {
+            this._createNarratorLine();
+        }
+        if (!this._narratorTextElement) return;
+
+        const { fragment, steps } = this._buildNarratorTypingPlan(text);
+        const typingSpeed = Math.max(
+            1,
+            Number(game.settings.get('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_TYPING_SPEED)) || 100
+        );
+        const duration = 3;
+
+        this._narratorTextElement.replaceChildren(fragment);
+        this._narratorTextElement.style.opacity = '1';
+
+        if (!steps.length) {
+            this._narratorTypingCompleteTimeout = setTimeout(() => this._stopNarratorTyping(), duration * 1000);
+            return;
+        }
+
+        let currentIndex = 0;
+        const advance = () => {
+            const step = steps[currentIndex];
+            if (!step) return;
+
+            if (step.type === 'text') {
+                step.node.appendData(step.grapheme);
+            } else {
+                step.rb.textContent = step.baseText;
+                step.readingVisible.textContent = step.readingText;
+            }
+
+            this._playNarratorTypingSoundThrottled(step.grapheme);
+            currentIndex += 1;
+
+            if (currentIndex >= steps.length) {
+                clearInterval(this._narratorTypingInterval);
+                this._narratorTypingInterval = null;
+                this._narratorTypingCompleteTimeout = setTimeout(() => {
+                    this._narratorTypingCompleteTimeout = null;
+                    this._stopNarratorTyping();
+                }, duration * 1000);
+            }
+        };
+
+        this._narratorTypingInterval = setInterval(advance, typingSpeed);
+        advance();
+    }
+
+    // 나레이터 타이핑 효과 중지
+    static _stopNarratorTyping() {
+        this._clearNarratorTypingTimers();
+
         if (this._narratorTextElement) {
             this._narratorTextElement.style.opacity = '0';
-            setTimeout(() => {
+            this._narratorFadeTimeout = setTimeout(() => {
+                this._narratorFadeTimeout = null;
                 if (this._narratorTextElement) {
-                    this._narratorTextElement.textContent = '';
-                    this._narratorTextElement.style.opacity = '1'; // 다음 타이핑을 위해 복원
+                    this._narratorTextElement.replaceChildren();
+                    this._narratorTextElement.style.opacity = '1';
                 }
             }, 500);
         }
@@ -3993,60 +4415,33 @@ export class SpeakerSelector {
     // 나레이터 폰트 적용
     static _applyNarratorFont() {
         if (!this._narratorTextElement) return;
-        
+
         try {
-            const narratorFont = this._normalizeFontFamilyName(
-                game.settings.get('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_FONT)
-            );
+            const profile = this._getWebfontPresentation(this.SETTINGS.NARRATOR_WEBFONT_CSS);
             const narratorFontSize = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_FONT_SIZE);
-            const narratorFontWeight = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_FONT_WEIGHT);
-            const narratorItalic = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.NARRATOR_ITALIC);
-            
-            const styles = [];
-            
-            if (narratorFont) {
-                styles.push(`font-family: "${narratorFont}", sans-serif`);
+            const style = this._narratorTextElement.style;
+
+            // 웹폰트 CSS가 비어 있으면 Foundry의 기존 폰트 패밀리를 그대로 상속한다.
+            if (profile.family) {
+                style.setProperty('font-family', `${this._quoteFontFamily(profile.family)}, sans-serif`);
             } else {
-                styles.push(`font-family: sans-serif`);
+                style.removeProperty('font-family');
             }
-            
-            if (narratorFontSize) {
-                styles.push(`font-size: ${narratorFontSize}px`);
+
+            style.setProperty('font-size', `${narratorFontSize || 18}px`);
+            style.setProperty('font-weight', profile.weight || '900');
+            style.setProperty('font-style', profile.style || 'italic');
+
+            if (profile.variationSettings) {
+                style.setProperty('font-variation-settings', profile.variationSettings);
             } else {
-                styles.push(`font-size: 18px`);
+                style.removeProperty('font-variation-settings');
             }
-            
-            if (narratorFontWeight) {
-                styles.push(`font-weight: ${narratorFontWeight}`);
-            } else {
-                styles.push(`font-weight: bold`);
-            }
-            
-            if (narratorItalic) {
-                styles.push(`font-style: italic`);
-            } else {
-                styles.push(`font-style: normal`);
-            }
-            
-            // 기존 스타일 유지하면서 폰트 관련 스타일만 업데이트
-            const existingStyle = this._narratorTextElement.style.cssText;
-            const fontStyles = styles.join('; ');
-            
-            // 기존 스타일에서 폰트 관련 부분 제거하고 새로 추가
-            const updatedStyle = existingStyle
-                .replace(/font-family:[^;]*;?/g, '')
-                .replace(/font-size:[^;]*;?/g, '')
-                .replace(/font-weight:[^;]*;?/g, '')
-                .replace(/font-style:[^;]*;?/g, '')
-                .replace(/;;+/g, ';')
-                .replace(/^;|;$/g, '');
-            
-            this._narratorTextElement.style.cssText = updatedStyle + (updatedStyle ? '; ' : '') + fontStyles;
-        } catch (e) {
+        } catch (_error) {
             // 설정이 아직 로드되지 않은 경우 무시
         }
     }
-    
+
     // 나레이터 타이핑 사운드 재생
     static _playNarratorTypingSound() {
         try {
@@ -4060,7 +4455,7 @@ export class SpeakerSelector {
                         volume: 0.5,
                         loop: false,
                         autoplay: true
-                    }, false); // 로컬에서만 재생 (소켓을 통해 다른 클라이언트에 전파)
+                    }, false); // 각 클라이언트가 동일한 타이핑 진행에 맞춰 로컬에서 재생
                 }
             }
         } catch (e) {
@@ -4075,6 +4470,10 @@ SpeakerSelector._isRenderingSelector = false;
 
 // 채팅 입력 필드 플래그
 SpeakerSelector._fromChatInput = false;
+SpeakerSelector._chatInputPendingText = '';
+SpeakerSelector._chatInputPendingUntil = 0;
+SpeakerSelector._chatInputPendingUserId = null;
+SpeakerSelector._chatInputGlobalListenersRegistered = false;
 
 // 선택한 스피커 (ooc, 빈 문자열 등)
 SpeakerSelector._selectedSpeaker = '';
@@ -4083,7 +4482,17 @@ SpeakerSelector._selectedSpeaker = '';
 SpeakerSelector._narratorModeActive = false;
 SpeakerSelector._narratorLineElement = null;
 SpeakerSelector._narratorTextElement = null;
+SpeakerSelector._narratorLineVisible = false;
 SpeakerSelector._narratorTypingInterval = null;
+SpeakerSelector._narratorTypingCompleteTimeout = null;
+SpeakerSelector._narratorFadeTimeout = null;
+SpeakerSelector._narratorLineRemovalTimeout = null;
+SpeakerSelector._narratorLineEnterFrame = null;
+SpeakerSelector._narratorLineEnterSecondFrame = null;
+SpeakerSelector._lastNarratorSoundAt = 0;
+SpeakerSelector._narratorSocketInitialized = false;
+SpeakerSelector._narratorShortcutInitialized = false;
+SpeakerSelector._narratorShortcutHandler = null;
 
 // 액터 격자 관리
 SpeakerSelector._actorGridActors = [];
@@ -4092,6 +4501,169 @@ SpeakerSelector._actorGridApp = null;
 SpeakerSelector._actorGridRows = 5; // 기본 행 수 (4x5 = 20칸)
 SpeakerSelector._actorGridCols = 4; // 열 수
 SpeakerSelector._folderStates = new Map(); // 폴더 열림/닫힘 상태 관리
+SpeakerSelector._tokenHUDHooksRegistered = false;
+
+// ===== Token HUD 스피커 토글 함수들 =====
+
+SpeakerSelector._registerTokenHUDHooks = function() {
+    if (this._tokenHUDHooksRegistered) return;
+    this._tokenHUDHooksRegistered = true;
+
+    const renderTokenHUDButton = (app, html, data) => {
+        this._renderTokenHUDSpeakerButton(app, html, data);
+    };
+
+    Hooks.on('renderTokenHUD', renderTokenHUDButton);
+    Hooks.on('renderTokenHUDHTML', renderTokenHUDButton);
+};
+
+SpeakerSelector._resolveTokenFromHUD = function(app, data = {}) {
+    const object = app?.object ?? app?.document ?? null;
+    if (object?.actor) return object;
+    if (object?.object?.actor) return object.object;
+    if (object?.document?.actor) return object;
+
+    const tokenId = data?._id || data?.id || data?.tokenId || object?.id || object?._id || object?.document?.id || null;
+    if (!tokenId) return null;
+
+    return canvas?.tokens?.get?.(tokenId)
+        || canvas?.tokens?.placeables?.find?.((token) => token.id === tokenId || token.document?.id === tokenId)
+        || null;
+};
+
+SpeakerSelector._resolveWorldActorFromToken = function(token) {
+    if (!token) return null;
+    const actorId = token.document?.actorId || token.actorId || token.actor?.id || null;
+    if (!actorId) return null;
+    return game.actors?.get?.(actorId) || null;
+};
+
+SpeakerSelector._getTokenHUDRootElement = function(app, html) {
+    return SpeakerSelectorCompat.asElement(html)
+        || SpeakerSelectorCompat.asElement(app)
+        || document.querySelector('#token-hud')
+        || null;
+};
+
+SpeakerSelector._getTokenHUDLeftColumn = function(hudElement) {
+    if (!hudElement) return null;
+    return hudElement.querySelector('.col.left')
+        || hudElement.querySelector('.left.col')
+        || hudElement.querySelector('[class~="col"][class~="left"]')
+        || null;
+};
+
+SpeakerSelector._isActorInSpeakerGrid = function(actorId) {
+    if (!actorId) return false;
+    return Array.isArray(this._actorGridActors) && this._actorGridActors.includes(actorId);
+};
+
+SpeakerSelector._trimActorGridActors = function() {
+    while (this._actorGridActors.length > 0 && this._actorGridActors[this._actorGridActors.length - 1] === null) {
+        this._actorGridActors.pop();
+    }
+};
+
+SpeakerSelector._updateTokenHUDSpeakerButtonState = function(button, actorId) {
+    if (!button || !actorId) return;
+    const isRegistered = this._isActorInSpeakerGrid(actorId);
+    button.classList.toggle('active', isRegistered);
+    button.dataset.lichsomaSpeakerRegistered = isRegistered ? 'true' : 'false';
+    button.setAttribute('aria-pressed', isRegistered ? 'true' : 'false');
+};
+
+SpeakerSelector._renderTokenHUDSpeakerButton = function(app, html, data = {}) {
+    if (!game.user?.isGM) return;
+
+    const hudElement = this._getTokenHUDRootElement(app, html);
+    const leftColumn = this._getTokenHUDLeftColumn(hudElement);
+    if (!leftColumn) return;
+
+    const token = this._resolveTokenFromHUD(app, data);
+    const actor = this._resolveWorldActorFromToken(token);
+    if (!actor) return;
+
+    const actorId = actor.id;
+    const title = game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.TokenHUD.Title');
+    const ariaLabel = game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.TokenHUD.AriaLabel');
+
+    let button = leftColumn.querySelector('.lichsoma-token-hud-speaker-toggle');
+    if (!button) {
+        button = document.createElement('div');
+        button.classList.add('control-icon', 'lichsoma-token-hud-speaker-toggle');
+        button.setAttribute('role', 'button');
+        button.setAttribute('tabindex', '0');
+        button.innerHTML = '<i class="fa-solid fa-masks-theater"></i>';
+        leftColumn.appendChild(button);
+    }
+
+    button.dataset.actorId = actorId;
+    button.title = title;
+    button.setAttribute('aria-label', ariaLabel);
+    this._updateTokenHUDSpeakerButtonState(button, actorId);
+
+    button.onmousedown = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+    };
+    button.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void this._toggleTokenHUDSpeakerRegistration(token, button);
+    };
+    button.onkeydown = (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        void this._toggleTokenHUDSpeakerRegistration(token, button);
+    };
+};
+
+SpeakerSelector._toggleTokenHUDSpeakerRegistration = async function(token, button = null) {
+    if (!game.user?.isGM) {
+        ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.Notifications.GMOnly'));
+        return;
+    }
+
+    const actor = this._resolveWorldActorFromToken(token);
+    if (!actor) {
+        ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.Notifications.NoActor'));
+        return;
+    }
+
+    const actorId = actor.id;
+    const maxSlots = this._actorGridRows * this._actorGridCols;
+    const savedData = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.ACTOR_GRID_ACTORS) || [];
+    this._actorGridActors = Array.isArray(savedData) ? [...savedData] : [];
+
+    const existingIndex = this._actorGridActors.indexOf(actorId);
+    if (existingIndex !== -1) {
+        this._actorGridActors = this._actorGridActors.filter((id) => id !== actorId);
+        this._trimActorGridActors();
+    } else {
+        while (this._actorGridActors.length < maxSlots) {
+            this._actorGridActors.push(null);
+        }
+
+        const emptyIndex = this._actorGridActors.findIndex((id) => id === null || id === undefined || id === '');
+        if (emptyIndex === -1) {
+            ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.Notifications.NoEmptySlot'));
+            return;
+        }
+
+        this._actorGridActors[emptyIndex] = actorId;
+        this._trimActorGridActors();
+    }
+
+    const saved = this._saveActorGridData();
+    if (saved && typeof saved.then === 'function') {
+        await saved;
+    }
+
+    this._updateActorGridWindow();
+    this._updateSpeakerDropdown();
+    this._updateTokenHUDSpeakerButtonState(button, actorId);
+};
 
 // 모듈 초기화
 Hooks.once('init', () => {
@@ -4156,482 +4728,76 @@ SpeakerSelector._createActorGridContent = function() {
     return gridHTML;
 };
 
-SpeakerSelector._getFolderPath = function(folder) {
-    if (!folder) return '';
-    
-    const pathParts = [];
-    let currentFolder = folder;
-    const processedIds = new Set();
-    
-    while (currentFolder && !processedIds.has(currentFolder.id)) {
-        processedIds.add(currentFolder.id);
-        pathParts.unshift(currentFolder.name);
-        
-        let parentId = null;
-        try {
-            if (currentFolder.folder && currentFolder.folder.id && currentFolder.folder.id !== currentFolder.id) {
-                parentId = currentFolder.folder.id;
-            } else if (currentFolder.document && currentFolder.document.parent) {
-                parentId = currentFolder.document.parent;
-            } else if (currentFolder.data && currentFolder.data.parent) {
-                parentId = currentFolder.data.parent;
-            } else if (currentFolder.parent) {
-                parentId = currentFolder.parent;
-            }
-        } catch (e) {
-            // getFolderPath - 폴더 부모 찾기 실패 (무시)
-        }
-        
-        if (parentId) {
-            currentFolder = game.folders.get(parentId);
-        } else {
-            currentFolder = null;
-        }
-    }
-    
-    return pathParts.join(' / ');
-};
-
-SpeakerSelector._groupActorsByFolder = function(actors) {
-    const folderMap = new Map();
-    const noFolderActors = [];
-    const allRelevantFolderIds = new Set();
-    
-    // 1단계: 액터가 직접 속한 폴더들 수집
-    actors.forEach(actor => {
-        const folder = actor.folder;
-        if (folder) {
-            allRelevantFolderIds.add(folder.id);
-        } else {
-            noFolderActors.push(actor);
-        }
-    });
-    
-    // 2단계: 모든 관련 폴더들 수집 (액터가 속한 폴더 + 모든 상위 폴더들)
-    const processedIds = new Set();
-    const toProcess = new Set(allRelevantFolderIds);
-    
-    while (toProcess.size > 0) {
-        const currentBatch = Array.from(toProcess);
-        toProcess.clear();
-        
-        for (const folderId of currentBatch) {
-            if (processedIds.has(folderId)) continue;
-            
-            const folder = game.folders.get(folderId);
-            if (!folder) continue;
-            
-            processedIds.add(folderId);
-            allRelevantFolderIds.add(folderId);
-            
-            // 부모 폴더도 추가
-            let parentId = null;
-            try {
-                if (folder.folder && folder.folder.id && folder.folder.id !== folderId) {
-                    parentId = folder.folder.id;
-                } else if (folder.document && folder.document.parent) {
-                    parentId = folder.document.parent;
-                } else if (folder.data && folder.data.parent) {
-                    parentId = folder.data.parent;
-                } else if (folder.parent) {
-                    parentId = folder.parent;
-                }
-                
-                if (parentId && !processedIds.has(parentId)) {
-                    toProcess.add(parentId);
-                }
-            } catch (e) {
-                // 폴더 부모 찾기 실패 (무시)
-            }
-        }
-    }
-    
-    // 3단계: folderMap 구성
-    allRelevantFolderIds.forEach(folderId => {
-        const folder = game.folders.get(folderId);
-        if (folder) {
-            folderMap.set(folderId, {
-                folder: folder,
-                folderPath: this._getFolderPath(folder),
-                directActors: [],
-                subFolders: new Set()
-            });
-        }
-    });
-    
-    // 4단계: 액터들을 해당 폴더에 배치
-    actors.forEach(actor => {
-        const folder = actor.folder;
-        if (folder && folderMap.has(folder.id)) {
-            folderMap.get(folder.id).directActors.push(actor);
-        }
-    });
-    
-    // 5단계: 부모-자식 관계 설정
-    let allFolders = [];
-    try {
-        if (game.folders.contents && Array.isArray(game.folders.contents)) {
-            allFolders = game.folders.contents;
-        } else if (game.folders.filter && typeof game.folders.filter === 'function') {
-            allFolders = game.folders.filter(() => true);
-        } else if (game.folders.values && typeof game.folders.values === 'function') {
-            allFolders = Array.from(game.folders.values());
-        } else {
-            allFolders = Object.values(game.folders);
-        }
-    } catch (e) {
-        // 폴더 접근 실패 (무시)
-    }
-    
-    for (const folder of allFolders) {
-        if (!folderMap.has(folder.id)) continue;
-        
-        let parentId = null;
-        try {
-            if (folder.folder && folder.folder.id && folder.folder.id !== folder.id) {
-                parentId = folder.folder.id;
-            } else if (folder.document && folder.document.parent) {
-                parentId = folder.document.parent;
-            } else if (folder.data && folder.data.parent) {
-                parentId = folder.data.parent;
-            } else if (folder.parent) {
-                parentId = folder.parent;
-            }
-        } catch (e) {
-            // 폴더 부모 찾기 실패 (무시)
-        }
-        
-        if (parentId && folderMap.has(parentId)) {
-            folderMap.get(parentId).subFolders.add(folder.id);
-        }
-    }
-    
-    return { folderMap, noFolderActors };
-};
-
-SpeakerSelector._renderFolderRecursive = function(folderId, folderMap, level = 0) {
-    const folderData = folderMap.get(folderId);
-    if (!folderData) {
-        return '';
-    }
-    
-    // 저장된 폴더 상태 확인 (기본값: 열림)
-    const isExpanded = this._folderStates.has(folderId) ? this._folderStates.get(folderId) : true;
-    const folderIcon = isExpanded ? 'fa-folder-open' : 'fa-folder';
-    
-    let html = '';
-    
-    // 현재 폴더 렌더링
-    html += `
-        <div class="lichsoma-folder-section" style="margin-left: ${level}px;">
-            <div class="lichsoma-folder-header" title="${folderData.folderPath}" data-folder-id="${folderId}">
-                <i class="fas ${folderIcon}"></i>
-                <span>${folderData.folder.name}</span>
-                <span class="lichsoma-folder-count">(${folderData.directActors.length})</span>
-            </div>
-            <div class="lichsoma-folder-actors" style="display: ${isExpanded ? 'block' : 'none'}">
-    `;
-    
-    // 직접적인 액터들 렌더링
-    folderData.directActors.sort((a, b) => a.name.localeCompare(b.name));
-    folderData.directActors.forEach(actor => {
-        const inGrid = this._actorGridActors.includes(actor.id);
-        html += `
-            <div class="lichsoma-available-actor${inGrid ? ' lichsoma-available-actor-in-grid' : ''}" data-actor-id="${actor.id}" draggable="${inGrid ? 'false' : 'true'}">
-                <img src="${actor.img}" alt="${actor.name}" draggable="false">
-                <span>${actor.name}</span>
-            </div>
-        `;
-    });
-    
-    // 하위 폴더들 렌더링 (재귀적으로)
-    Array.from(folderData.subFolders).forEach(subFolderId => {
-        const subFolderData = folderMap.get(subFolderId);
-        if (subFolderData) {
-            html += this._renderFolderRecursive(subFolderId, folderMap, level + 1);
-        }
-    });
-    
-    html += `
-            </div>
-        </div>
-    `;
-    
-    return html;
-};
-
 SpeakerSelector._createAvailableActorsContent = function(searchTerm = '') {
-    // 그리드에 올린 액터도 목록에 유지(반투명만 동기화) — 전체 재렌더 시 스크롤이 튀지 않도록
-    let filteredActors = game.actors.filter(actor => {
-        return game.user.isGM ||
-               actor.isOwner ||
-               actor.testUserPermission(game.user, 'OWNER') ||
-               actor.testUserPermission(game.user, 'LIMITED') ||
-               actor.testUserPermission(game.user, 'OBSERVER');
-    });
-    
-    // lichsoma-taskbar 모듈 활성화 여부 확인
-    const hasTaskbarModule = game.modules.get('lichsoma-taskbar')?.active || false;
-    
-    // 검색어로 필터링 (이름 또는 태그)
-    if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
-        filteredActors = filteredActors.filter(actor => {
-            // 이름으로 검색
-            if (actor.name.toLowerCase().includes(searchLower)) return true;
-            
-            // lichsoma-taskbar 플래그 태그로 검색
-            if (hasTaskbarModule) {
-                const taskbarTags = actor.getFlag('lichsoma-taskbar', 'tags') || [];
-                if (Array.isArray(taskbarTags) && taskbarTags.length > 0) {
-                    const hasTaskbarTag = taskbarTags.some(tag => {
-                        const tagName = typeof tag === 'string' ? tag : String(tag);
-                        return tagName.toLowerCase().includes(searchLower);
-                    });
-                    if (hasTaskbarTag) return true;
-                }
-            }
-            
-            return false;
-        });
-    }
-    
-    // 중첩 폴더를 지원하는 그룹화
-    const { folderMap, noFolderActors } = this._groupActorsByFolder(filteredActors);
-    
-    // 플레이스홀더 결정
-    const placeholder = hasTaskbarModule 
+    const { actors, hasTaskbarModule } = getAccessibleActors(searchTerm);
+    const tree = buildActorFolderTree(actors);
+    const placeholder = hasTaskbarModule
         ? game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.Dialog.SearchPlaceholderWithTags')
         : game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.Dialog.SearchPlaceholder');
-    
-    let actorsHTML = '<div class="lichsoma-available-actors">';
-    actorsHTML += `
+
+    const renderActor = (actor) => {
+        const inGrid = this._actorGridActors.includes(actor.id);
+        const name = foundry.utils.escapeHTML(String(actor.name ?? ''));
+        const image = foundry.utils.escapeHTML(String(actor.img ?? ''));
+        return `
+            <div class="lichsoma-available-actor${inGrid ? ' lichsoma-available-actor-in-grid' : ''}" data-actor-id="${actor.id}" draggable="${inGrid ? 'false' : 'true'}">
+                <img src="${image}" alt="${name}" draggable="false">
+                <span>${name}</span>
+            </div>
+        `;
+    };
+
+    const treeHTML = renderActorFolderTree({
+        ...tree,
+        folderStates: this._folderStates,
+        renderActor,
+        noFolderLabel: game.i18n.localize('SPEAKERSELECTOR.ActorTree.NoFolder')
+    });
+
+    return `<div class="lichsoma-available-actors">
         <h3 style="font-size: 12pt; font-weight: bold; margin: 0 0 8px 0;">${game.i18n.localize('SPEAKERSELECTOR.SpeakerSetting.Dialog.AvailableActors')}</h3>
-    `;
-    actorsHTML += `
         <div style="margin-bottom: 8px;">
-            <input type="text" class="lichsoma-actor-search" placeholder="${placeholder}" value="${searchTerm}" />
+            <input type="text" class="lichsoma-actor-search" placeholder="${foundry.utils.escapeHTML(placeholder)}" value="${foundry.utils.escapeHTML(searchTerm)}" />
         </div>
-    `;
-    
-    // 루트 폴더들만 찾기 (부모가 folderMap에 없는 폴더들)
-    const rootFolders = Array.from(folderMap.entries())
-        .filter(([folderId, folderData]) => {
-            let parentId = null;
-            try {
-                if (folderData.folder.folder && folderData.folder.folder.id && folderData.folder.folder.id !== folderId) {
-                    parentId = folderData.folder.folder.id;
-                } else if (folderData.folder.document && folderData.folder.document.parent) {
-                    parentId = folderData.folder.document.parent;
-                } else if (folderData.folder.data && folderData.folder.data.parent) {
-                    parentId = folderData.folder.data.parent;
-                } else if (folderData.folder.parent) {
-                    parentId = folderData.folder.parent;
-                }
-            } catch (e) {
-                // 루트 폴더 찾기 실패 (무시)
-            }
-            
-            return !parentId || !folderMap.has(parentId);
-        })
-        .map(([folderId, folderData]) => ({ folderId, folderData }))
-        .sort((a, b) => a.folderData.folder.name.localeCompare(b.folderData.folder.name));
-    
-    // 루트 폴더들부터 재귀적으로 렌더링
-    rootFolders.forEach(({ folderId }) => {
-        actorsHTML += this._renderFolderRecursive(folderId, folderMap);
-    });
-    
-    // 폴더가 없는 액터들 렌더링
-    if (noFolderActors.length > 0) {
-        noFolderActors.sort((a, b) => a.name.localeCompare(b.name));
-        
-        actorsHTML += `
-            <div class="lichsoma-folder-section">
-                <div class="lichsoma-folder-header">
-                    <i class="fas fa-question-circle"></i>
-                    <span>폴더 없음</span>
-                    <span class="lichsoma-folder-count">(${noFolderActors.length})</span>
-                </div>
-                <div class="lichsoma-folder-actors">
-        `;
-        
-        noFolderActors.forEach(actor => {
-            const inGrid = this._actorGridActors.includes(actor.id);
-            actorsHTML += `
-                <div class="lichsoma-available-actor${inGrid ? ' lichsoma-available-actor-in-grid' : ''}" data-actor-id="${actor.id}" draggable="${inGrid ? 'false' : 'true'}">
-                    <img src="${actor.img}" alt="${actor.name}" draggable="false">
-                    <span>${actor.name}</span>
-                </div>
-            `;
-        });
-        
-        actorsHTML += `
-                </div>
-            </div>
-        `;
-    }
-    
-    actorsHTML += '</div>';
-    
-    return actorsHTML;
-};
-
-/**
- * 메시지 센더 수정 다이얼로그용 — 폴더 트리 (선택 행, 드래그 없음)
- */
-SpeakerSelector._renderFolderRecursivePicker = function (folderId, folderMap, level, selectedActorId, folderStates) {
-    const folderData = folderMap.get(folderId);
-    if (!folderData) {
-        return '';
-    }
-
-    const isExpanded = folderStates.has(folderId) ? folderStates.get(folderId) : true;
-    const folderIcon = isExpanded ? 'fa-folder-open' : 'fa-folder';
-
-    let html = '';
-
-    html += `
-        <div class="lichsoma-folder-section" style="margin-left: ${level}px;">
-            <div class="lichsoma-folder-header" title="${folderData.folderPath}" data-folder-id="${folderId}">
-                <i class="fas ${folderIcon}"></i>
-                <span>${foundry.utils.escapeHTML(folderData.folder.name)}</span>
-                <span class="lichsoma-folder-count">(${folderData.directActors.length})</span>
-            </div>
-            <div class="lichsoma-folder-actors" style="display: ${isExpanded ? 'block' : 'none'}">
-    `;
-
-    folderData.directActors.sort((a, b) => a.name.localeCompare(b.name));
-    folderData.directActors.forEach((actor) => {
-        const sel = actor.id === selectedActorId ? ' selected' : '';
-        const name = foundry.utils.escapeHTML(actor.name);
-        html += `
-                <div class="lichsoma-available-actor lichsoma-sender-edit-actor-pick${sel}" data-actor-id="${actor.id}" draggable="false">
-                    <img src="${actor.img}" alt="${name}" draggable="false">
-                    <span>${name}</span>
-                </div>
-            `;
-    });
-
-    Array.from(folderData.subFolders).forEach((subFolderId) => {
-        const subFolderData = folderMap.get(subFolderId);
-        if (subFolderData) {
-            html += this._renderFolderRecursivePicker(subFolderId, folderMap, level + 1, selectedActorId, folderStates);
-        }
-    });
-
-    html += `
-            </div>
-        </div>
-    `;
-
-    return html;
+        ${treeHTML}
+    </div>`;
 };
 
 /**
  * 메시지 센더 수정 — 스피커 설정과 동일한 필터·폴더·태그 검색으로 액터 목록 HTML 생성 (본문만)
  */
-SpeakerSelector._createActorPickerListBodyHTML = function (searchTerm = '', selectedActorId = '', folderStates = new Map()) {
-    let filteredActors = game.actors.filter((actor) => {
-        return (
-            game.user.isGM ||
-            actor.isOwner ||
-            actor.testUserPermission(game.user, 'OWNER') ||
-            actor.testUserPermission(game.user, 'LIMITED') ||
-            actor.testUserPermission(game.user, 'OBSERVER')
-        );
+SpeakerSelector._createActorPickerListBodyHTML = function(searchTerm = '', selectedActorId = '', folderStates = new Map()) {
+    const { actors } = getAccessibleActors(searchTerm);
+    const tree = buildActorFolderTree(actors);
+    const actorNone = game.i18n.localize('SPEAKERSELECTOR.ChatSenderEdit.ActorNone');
+    const oocSelected = !selectedActorId ? ' selected' : '';
+
+    const renderActor = (actor) => {
+        const selected = actor.id === selectedActorId ? ' selected' : '';
+        const name = foundry.utils.escapeHTML(String(actor.name ?? ''));
+        const image = foundry.utils.escapeHTML(String(actor.img ?? ''));
+        return `
+            <div class="lichsoma-available-actor lichsoma-sender-edit-actor-pick${selected}" data-actor-id="${actor.id}" draggable="false">
+                <img src="${image}" alt="${name}" draggable="false">
+                <span>${name}</span>
+            </div>
+        `;
+    };
+
+    const treeHTML = renderActorFolderTree({
+        ...tree,
+        folderStates,
+        renderActor,
+        noFolderLabel: game.i18n.localize('SPEAKERSELECTOR.ActorTree.NoFolder')
     });
 
-    const hasTaskbarModule = game.modules.get('lichsoma-taskbar')?.active || false;
-
-    if (searchTerm) {
-        const searchLower = searchTerm.toLowerCase();
-        filteredActors = filteredActors.filter((actor) => {
-            if (actor.name.toLowerCase().includes(searchLower)) return true;
-
-            if (hasTaskbarModule) {
-                const taskbarTags = actor.getFlag('lichsoma-taskbar', 'tags') || [];
-                if (Array.isArray(taskbarTags) && taskbarTags.length > 0) {
-                    const hasTaskbarTag = taskbarTags.some((tag) => {
-                        const tagName = typeof tag === 'string' ? tag : String(tag);
-                        return tagName.toLowerCase().includes(searchLower);
-                    });
-                    if (hasTaskbarTag) return true;
-                }
-            }
-
-            return false;
-        });
-    }
-
-    const { folderMap, noFolderActors } = this._groupActorsByFolder(filteredActors);
-
-    const actorNone = game.i18n.localize('SPEAKERSELECTOR.ChatSenderEdit.ActorNone');
-    const oocSel = !selectedActorId ? ' selected' : '';
-    let html = `
-        <div class="lichsoma-available-actor lichsoma-sender-edit-ooc${oocSel}" data-actor-id="" draggable="false">
+    return `
+        <div class="lichsoma-available-actor lichsoma-sender-edit-ooc${oocSelected}" data-actor-id="" draggable="false">
             <i class="fas fa-user-slash" draggable="false"></i>
             <span>${foundry.utils.escapeHTML(actorNone)}</span>
         </div>
+        ${treeHTML}
     `;
-
-    const rootFolders = Array.from(folderMap.entries())
-        .filter(([folderId, folderData]) => {
-            let parentId = null;
-            try {
-                if (folderData.folder.folder && folderData.folder.folder.id && folderData.folder.folder.id !== folderId) {
-                    parentId = folderData.folder.folder.id;
-                } else if (folderData.folder.document && folderData.folder.document.parent) {
-                    parentId = folderData.folder.document.parent;
-                } else if (folderData.folder.data && folderData.folder.data.parent) {
-                    parentId = folderData.folder.data.parent;
-                } else if (folderData.folder.parent) {
-                    parentId = folderData.folder.parent;
-                }
-            } catch (e) {
-                // 루트 폴더 찾기 실패 (무시)
-            }
-
-            return !parentId || !folderMap.has(parentId);
-        })
-        .map(([folderId, folderData]) => ({ folderId, folderData }))
-        .sort((a, b) => a.folderData.folder.name.localeCompare(b.folderData.folder.name));
-
-    rootFolders.forEach(({ folderId }) => {
-        html += this._renderFolderRecursivePicker(folderId, folderMap, 0, selectedActorId, folderStates);
-    });
-
-    if (noFolderActors.length > 0) {
-        noFolderActors.sort((a, b) => a.name.localeCompare(b.name));
-
-        html += `
-            <div class="lichsoma-folder-section">
-                <div class="lichsoma-folder-header">
-                    <i class="fas fa-question-circle"></i>
-                    <span>폴더 없음</span>
-                    <span class="lichsoma-folder-count">(${noFolderActors.length})</span>
-                </div>
-                <div class="lichsoma-folder-actors">
-        `;
-
-        noFolderActors.forEach((actor) => {
-            const sel = actor.id === selectedActorId ? ' selected' : '';
-            const name = foundry.utils.escapeHTML(actor.name);
-            html += `
-                    <div class="lichsoma-available-actor lichsoma-sender-edit-actor-pick${sel}" data-actor-id="${actor.id}" draggable="false">
-                        <img src="${actor.img}" alt="${name}" draggable="false">
-                        <span>${name}</span>
-                    </div>
-                `;
-        });
-
-        html += `
-                </div>
-            </div>
-        `;
-    }
-
-    return html;
 };
 
 SpeakerSelector._syncAvailableActorsInGridVisuals = function() {
@@ -4849,7 +5015,7 @@ SpeakerSelector._handleGridSlotRightClick = function(e) {
         this._saveActorGridData();
         this._updateActorGridWindow();
         this._updateSpeakerDropdown();
-        ui.notifications.info(`${actor.name}이(가) 그리드에서 제거되었습니다.`);
+        ui.notifications.info(game.i18n.format('SPEAKERSELECTOR.Notifications.ActorRemovedFromGrid', { actorName: actor.name }));
     }
 };
 
@@ -5057,183 +5223,113 @@ SpeakerSelector._updateSpeakerDropdown = function() {
 
 SpeakerSelector._saveActorGridData = function() {
     try {
-        game.settings.set('lichsoma-speaker-selector', this.SETTINGS.ACTOR_GRID_ACTORS, [...this._actorGridActors]);
+        return game.settings.set('lichsoma-speaker-selector', this.SETTINGS.ACTOR_GRID_ACTORS, [...this._actorGridActors]);
     } catch (e) {
         // 액터 격자 데이터 저장 실패 (무시)
+        return null;
     }
 };
 
 // 채팅 폰트 적용 함수
 SpeakerSelector._applyChatFonts = function() {
     try {
-        // 게임 설정이 아직 로드되지 않은 경우 재시도
         if (!game.settings || !game.settings.settings) {
             setTimeout(() => this._applyChatFonts(), 100);
             return;
         }
-        
-        // 기존 폰트 스타일 제거
-        const existingStyle = document.getElementById('lichsoma-chat-fonts');
-        if (existingStyle) existingStyle.remove();
-        
-        let headerFont, messageFont, headerChineseFont, messageChineseFont;
-        let dnd5eTitleFont, dnd5eSubtitleFont;
-        let headerFontSize, messageFontSize, headerFontWeight;
-        
+
+        document.getElementById('lichsoma-chat-fonts')?.remove();
+
+        const settingKeys = [
+            this.SETTINGS.CHAT_HEADER_WEBFONT_CSS,
+            this.SETTINGS.DND5E_TITLE_WEBFONT_CSS,
+            this.SETTINGS.DND5E_SUBTITLE_WEBFONT_CSS,
+            this.SETTINGS.CHAT_MESSAGE_WEBFONT_CSS,
+            this.SETTINGS.CHAT_DICE_WEBFONT_CSS,
+            this.SETTINGS.NARRATOR_WEBFONT_CSS
+        ];
+        const cssByKey = Object.fromEntries(settingKeys.map(key => [key, this._getWebfontCSS(key)]));
+        const profileByKey = Object.fromEntries(settingKeys.map(key => [key, extractWebfontPresentation(cssByKey[key])]));
+
+        let headerFontSize = 20;
+        let messageFontSize = 15;
         try {
-            headerFont = this._normalizeFontFamilyName(
-                game.settings.get('lichsoma-speaker-selector', this.SETTINGS.CHAT_HEADER_FONT)
-            );
-            messageFont = this._normalizeFontFamilyName(
-                game.settings.get('lichsoma-speaker-selector', this.SETTINGS.CHAT_MESSAGE_FONT)
-            );
-            headerChineseFont = this._normalizeFontFamilyName(
-                game.settings.get('lichsoma-speaker-selector', this.SETTINGS.CHAT_HEADER_CHINESE_FONT)
-            );
-            messageChineseFont = this._normalizeFontFamilyName(
-                game.settings.get('lichsoma-speaker-selector', this.SETTINGS.CHAT_MESSAGE_CHINESE_FONT)
-            );
-            dnd5eTitleFont = this._normalizeFontFamilyName(
-                game.settings.get('lichsoma-speaker-selector', this.SETTINGS.DND5E_TITLE_FONT)
-            );
-            dnd5eSubtitleFont = this._normalizeFontFamilyName(
-                game.settings.get('lichsoma-speaker-selector', this.SETTINGS.DND5E_SUBTITLE_FONT)
-            );
             headerFontSize = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.CHAT_HEADER_FONT_SIZE);
             messageFontSize = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.CHAT_MESSAGE_FONT_SIZE);
-            headerFontWeight = game.settings.get('lichsoma-speaker-selector', this.SETTINGS.CHAT_HEADER_FONT_WEIGHT);
-        } catch (e) {
-            // 설정이 아직 등록되지 않은 경우 재시도
+        } catch (_error) {
             setTimeout(() => this._applyChatFonts(), 100);
             return;
         }
-        
-        // 폰트나 폰트 크기, 폰트 웨이트가 하나라도 설정되어 있으면 적용
-        if (!headerFont && !messageFont && !headerChineseFont && !messageChineseFont &&
-            !dnd5eTitleFont && !dnd5eSubtitleFont &&
-            !headerFontSize && !messageFontSize && !headerFontWeight) return;
-        
-        let cssRules = '';
-        
-        // 헤더 한자 전용 폰트 클래스 정의
-        if (headerChineseFont) {
-            cssRules += `.lichsoma-chinese-char-header { font-family: "${headerChineseFont}", sans-serif !important; }\n`;
-        }
-        
-        // 메시지 한자 전용 폰트 클래스 정의
-        if (messageChineseFont) {
-            cssRules += `.lichsoma-chinese-char-message { font-family: "${messageChineseFont}", sans-serif !important; }\n`;
-        }
-        
-        // 헤더 폰트, 크기, 웨이트 적용
-        let headerStyles = [];
-        if (headerFont) {
-            headerStyles.push(`font-family: "${headerFont}", sans-serif`);
-        }
-        if (headerFontSize) {
-            headerStyles.push(`font-size: ${headerFontSize}px`);
-        }
-        if (headerFontWeight) {
-            headerStyles.push(`font-weight: ${headerFontWeight}`);
-        }
-        if (headerStyles.length > 0) {
-            // message-header의 직접 자식인 message-sender만 선택 (flavor-text 안의 요소 제외)
-            // dnd5e 원본 헤더는 LichSOMA 기본 헤더 설정에서 제외한다.
-            cssRules += `.chat-message:not(.lichsoma-dnd5e-native-header) .message-header > .message-sender, .chat-message:not(.lichsoma-dnd5e-native-header) .message-header > h4.message-sender { ${headerStyles.join('; ')} !important; }\n`;
-        }
-        
-        // D&D 5e 원본 name-stacked 헤더 폰트 적용
-        if (dnd5eTitleFont) {
-            cssRules += `.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-header .message-sender .name-stacked .title { font-family: "${dnd5eTitleFont}", sans-serif !important; }\n`;
-        }
-        if (dnd5eSubtitleFont) {
-            cssRules += `.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-header .message-sender .name-stacked .subtitle { font-family: "${dnd5eSubtitleFont}", sans-serif !important; }\n`;
-        }
 
-        // 메시지 폰트 및 크기 적용
-        let messageStyles = [];
-        if (messageFont) {
-            messageStyles.push(`font-family: "${messageFont}", sans-serif`);
-        }
-        if (messageFontSize) {
-            messageStyles.push(`font-size: ${messageFontSize}px`);
-        }
-        if (messageStyles.length > 0) {
-            cssRules += `.chat-message .message-content { ${messageStyles.join('; ')} !important; }\n`;
-        }
-        
-        if (cssRules) {
-            const style = document.createElement('style');
-            style.id = 'lichsoma-chat-fonts';
-            style.textContent = cssRules;
-            document.head.appendChild(style);
-        }
-    } catch (e) {
-        // applyChatFonts 에러 (무시)
-    }
-};
-
-// 한자 감싸기 함수
-SpeakerSelector._wrapChineseCharacters = function(element, type = 'header') {
-    if (!element || element.dataset.lichsomaChineseWrapped) return;
-    
-    // CJK 통합 한자 범위: U+4E00-9FFF, U+3400-4DBF, U+F900-FAFF
-    const chineseRegex = /[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/g;
-    
-    // 텍스트 노드만 처리
-    const walk = document.createTreeWalker(
-        element,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
-    );
-    
-    const nodesToReplace = [];
-    let node;
-    while (node = walk.nextNode()) {
-        if (chineseRegex.test(node.textContent)) {
-            nodesToReplace.push(node);
-        }
-    }
-    
-    // 텍스트 노드를 순회하면서 한자를 span으로 감싸기
-    nodesToReplace.forEach(textNode => {
-        const text = textNode.textContent;
-        const fragment = document.createDocumentFragment();
-        let lastIndex = 0;
-        let match;
-        
-        // 정규식을 다시 생성 (lastIndex 초기화)
-        const regex = /[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]+/g;
-        
-        while ((match = regex.exec(text)) !== null) {
-            // 한자 앞의 텍스트
-            if (match.index > lastIndex) {
-                fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+        const rawWebfontCSS = [...new Set(Object.values(cssByKey).map(css => css.trim()).filter(Boolean))];
+        const rules = [];
+        const buildDeclarations = (profile, defaults = {}, { includeFamily = true } = {}) => {
+            const declarations = [];
+            if (includeFamily && profile?.family) {
+                declarations.push(`font-family: ${this._quoteFontFamily(profile.family)}, sans-serif`);
             }
-            
-            // 한자를 span으로 감싸기 (타입에 따라 다른 클래스 사용)
-            const span = document.createElement('span');
-            span.className = type === 'header' ? 'lichsoma-chinese-char-header' : 'lichsoma-chinese-char-message';
-            span.textContent = match[0];
-            fragment.appendChild(span);
-            
-            lastIndex = regex.lastIndex;
+            const weight = profile?.weight || defaults.weight || '';
+            const style = profile?.style || defaults.style || '';
+            const variationSettings = profile?.variationSettings || '';
+            if (weight) declarations.push(`font-weight: ${weight}`);
+            if (style) declarations.push(`font-style: ${style}`);
+            if (variationSettings) declarations.push(`font-variation-settings: ${variationSettings}`);
+            return declarations;
+        };
+        const addRule = (selector, declarations) => {
+            if (!declarations.length) return;
+            rules.push(`${selector} { ${declarations.map(value => `${value} !important`).join('; ')}; }`);
+        };
+
+        const headerProfile = profileByKey[this.SETTINGS.CHAT_HEADER_WEBFONT_CSS];
+        const headerDeclarations = buildDeclarations(headerProfile, { weight: '900', style: 'normal' });
+        if (headerFontSize) headerDeclarations.push(`font-size: ${headerFontSize}px`);
+        addRule(
+            '.chat-message:not(.lichsoma-dnd5e-native-header) .message-header > .message-sender, .chat-message:not(.lichsoma-dnd5e-native-header) .message-header > h4.message-sender',
+            headerDeclarations
+        );
+
+        addRule(
+            '.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-header .message-sender .name-stacked .title',
+            buildDeclarations(profileByKey[this.SETTINGS.DND5E_TITLE_WEBFONT_CSS])
+        );
+        addRule(
+            '.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-header .message-sender .name-stacked .subtitle',
+            buildDeclarations(profileByKey[this.SETTINGS.DND5E_SUBTITLE_WEBFONT_CSS])
+        );
+
+        const messageProfile = profileByKey[this.SETTINGS.CHAT_MESSAGE_WEBFONT_CSS];
+        const messageDeclarations = buildDeclarations(messageProfile, { weight: '500', style: 'normal' });
+        if (messageFontSize) messageDeclarations.push(`font-size: ${messageFontSize}px`);
+        addRule('.chat-message .message-content', messageDeclarations);
+
+        addRule(
+            '.chat-message .message-content .dice-roll .dice-formula, .chat-message .message-content .dice-roll .dice-total, .chat-message .message-content .dice-roll .dice-tooltip, .chat-message .message-content .dice-roll .dice-tooltip :where(.part-formula, .part-total, .roll, .roll *), .chat-message .message-content .dice-roll .dice-result',
+            buildDeclarations(profileByKey[this.SETTINGS.CHAT_DICE_WEBFONT_CSS])
+        );
+
+        const narratorProfile = profileByKey[this.SETTINGS.NARRATOR_WEBFONT_CSS];
+        if (narratorProfile.family) {
+            addRule(
+                '.chat-message .message-content .narrator-card, .chat-message .message-content .narrator-card :where(p, h1, h2, h3, h4, h5, h6, div, span, strong, em, b, i, li, ul, ol, blockquote, ruby, rb, rt)',
+                [`font-family: ${this._quoteFontFamily(narratorProfile.family)}, sans-serif`]
+            );
         }
-        
-        // 한자 뒤의 텍스트
-        if (lastIndex < text.length) {
-            fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
-        }
-        
-        // 원본 텍스트 노드를 fragment로 교체
-        if (textNode.parentNode) {
-            textNode.parentNode.replaceChild(fragment, textNode);
-        }
-    });
-    
-    // 중복 처리 방지
-    element.dataset.lichsomaChineseWrapped = 'true';
+        addRule(
+            '.chat-message .message-content .narrator-card',
+            buildDeclarations(narratorProfile, { weight: '500', style: 'italic' }, { includeFamily: false })
+        );
+
+        const style = document.createElement('style');
+        style.id = 'lichsoma-chat-fonts';
+        style.textContent = [
+            ...rawWebfontCSS.map((css, index) => `/* LichSOMA webfont ${index + 1} */\n${css}`),
+            ...rules
+        ].join('\n\n');
+        document.head.appendChild(style);
+    } catch (_error) {
+        // 폰트 CSS 적용 실패는 채팅 렌더링을 중단하지 않는다.
+    }
 };
 
 SpeakerSelector._loadActorGridData = function() {
@@ -5277,7 +5373,7 @@ SpeakerSelector._loadActorGridData = function() {
 /**
  * 스피커 액터 격자 설정 — Foundry ApplicationV2 기반 창
  */
-class LichsomaActorGridSettingApp extends foundry.applications.api.ApplicationV2 {
+class LichsomaActorGridSettingApp extends SpeakerSelectorCompat.ApplicationV2 {
     static DEFAULT_OPTIONS = {
         id: 'lichsoma-actor-grid-setting',
         classes: ['lichsoma-actor-grid-setting-app'],
@@ -5332,12 +5428,15 @@ class LichsomaActorGridSettingApp extends foundry.applications.api.ApplicationV2
     }
 }
 
-// 전역 스코프에 등록 (다른 모듈에서 접근 가능하도록)
-window.SpeakerSelector = SpeakerSelector;
 
 // ===== CSS 편집기 Dialog 클래스 (ApplicationV2 — V1 FormApplication 경고 방지) =====
 
-class ChatLogExportCSSEditor extends foundry.applications.api.ApplicationV2 {
+class SpeakerSelectorSettingCSSEditor extends SpeakerSelectorCompat.ApplicationV2 {
+    static settingKey = SpeakerSelector.SETTINGS.CHAT_LOG_EXPORT_CUSTOM_CSS;
+    static titleKey = 'SPEAKERSELECTOR.Settings.ChatLogExportCustomCSS.Name';
+    static savedKey = 'SPEAKERSELECTOR.Settings.ChatLogExportCustomCSS.Saved';
+    static defaultId = 'lichsoma-chat-log-export-css-editor';
+
     static DEFAULT_OPTIONS = {
         id: 'lichsoma-chat-log-export-css-editor',
         classes: ['lichsoma-css-editor'],
@@ -5362,14 +5461,22 @@ class ChatLogExportCSSEditor extends foundry.applications.api.ApplicationV2 {
     /** @type {ResizeObserver | null} */
     _resizeObserver = null;
 
+    constructor(options = {}) {
+        const cls = new.target;
+        const baseOptions = foundry.utils.mergeObject(cls.DEFAULT_OPTIONS, {
+            id: cls.defaultId,
+            window: { title: cls.titleKey }
+        }, { inplace: false });
+        super(foundry.utils.mergeObject(baseOptions, options, { inplace: false }));
+    }
+
     async _prepareContext(options) {
-        const css =
-            game.settings.get('lichsoma-speaker-selector', SpeakerSelector.SETTINGS.CHAT_LOG_EXPORT_CUSTOM_CSS) || '';
+        const css = game.settings.get('lichsoma-speaker-selector', this.constructor.settingKey) || '';
         return { css };
     }
 
     async _renderHTML(context, options) {
-        const html = await foundry.applications.handlebars.renderTemplate(
+        const html = await SpeakerSelectorCompat.renderTemplate(
             'modules/lichsoma-speaker-selector/templates/css-editor.html',
             context
         );
@@ -5461,15 +5568,65 @@ class ChatLogExportCSSEditor extends foundry.applications.api.ApplicationV2 {
 
             await game.settings.set(
                 'lichsoma-speaker-selector',
-                SpeakerSelector.SETTINGS.CHAT_LOG_EXPORT_CUSTOM_CSS,
+                this.constructor.settingKey,
                 css
             );
 
-            ui.notifications.info(game.i18n.localize('SPEAKERSELECTOR.Settings.ChatLogExportCustomCSS.Saved'));
+            ui.notifications.info(game.i18n.localize(this.constructor.savedKey));
             await this.close();
         } catch (error) {
-            ui.notifications.error('CSS 저장 중 오류가 발생했습니다: ' + error.message);
+            ui.notifications.error(game.i18n.format('SPEAKERSELECTOR.Notifications.CssSaveFailed', { error: error.message }));
         }
     }
 }
+
+class ChatLogExportCSSEditor extends SpeakerSelectorSettingCSSEditor {
+    static settingKey = SpeakerSelector.SETTINGS.CHAT_LOG_EXPORT_CUSTOM_CSS;
+    static titleKey = 'SPEAKERSELECTOR.Settings.ChatLogExportCustomCSS.Name';
+    static savedKey = 'SPEAKERSELECTOR.Settings.ChatLogExportCustomCSS.Saved';
+    static defaultId = 'lichsoma-chat-log-export-css-editor';
+}
+
+class ChatHeaderWebfontCSSEditor extends SpeakerSelectorSettingCSSEditor {
+    static settingKey = SpeakerSelector.SETTINGS.CHAT_HEADER_WEBFONT_CSS;
+    static titleKey = 'SPEAKERSELECTOR.Settings.ChatHeaderWebfontCSS.Name';
+    static savedKey = 'SPEAKERSELECTOR.Settings.ChatHeaderWebfontCSS.Saved';
+    static defaultId = 'lichsoma-chat-header-webfont-css-editor';
+}
+
+class Dnd5eTitleWebfontCSSEditor extends SpeakerSelectorSettingCSSEditor {
+    static settingKey = SpeakerSelector.SETTINGS.DND5E_TITLE_WEBFONT_CSS;
+    static titleKey = 'SPEAKERSELECTOR.Settings.Dnd5eTitleWebfontCSS.Name';
+    static savedKey = 'SPEAKERSELECTOR.Settings.Dnd5eTitleWebfontCSS.Saved';
+    static defaultId = 'lichsoma-dnd5e-title-webfont-css-editor';
+}
+
+class Dnd5eSubtitleWebfontCSSEditor extends SpeakerSelectorSettingCSSEditor {
+    static settingKey = SpeakerSelector.SETTINGS.DND5E_SUBTITLE_WEBFONT_CSS;
+    static titleKey = 'SPEAKERSELECTOR.Settings.Dnd5eSubtitleWebfontCSS.Name';
+    static savedKey = 'SPEAKERSELECTOR.Settings.Dnd5eSubtitleWebfontCSS.Saved';
+    static defaultId = 'lichsoma-dnd5e-subtitle-webfont-css-editor';
+}
+
+class ChatMessageWebfontCSSEditor extends SpeakerSelectorSettingCSSEditor {
+    static settingKey = SpeakerSelector.SETTINGS.CHAT_MESSAGE_WEBFONT_CSS;
+    static titleKey = 'SPEAKERSELECTOR.Settings.ChatMessageWebfontCSS.Name';
+    static savedKey = 'SPEAKERSELECTOR.Settings.ChatMessageWebfontCSS.Saved';
+    static defaultId = 'lichsoma-chat-message-webfont-css-editor';
+}
+
+class ChatDiceWebfontCSSEditor extends SpeakerSelectorSettingCSSEditor {
+    static settingKey = SpeakerSelector.SETTINGS.CHAT_DICE_WEBFONT_CSS;
+    static titleKey = 'SPEAKERSELECTOR.Settings.ChatDiceWebfontCSS.Name';
+    static savedKey = 'SPEAKERSELECTOR.Settings.ChatDiceWebfontCSS.Saved';
+    static defaultId = 'lichsoma-chat-dice-webfont-css-editor';
+}
+
+class NarratorWebfontCSSEditor extends SpeakerSelectorSettingCSSEditor {
+    static settingKey = SpeakerSelector.SETTINGS.NARRATOR_WEBFONT_CSS;
+    static titleKey = 'SPEAKERSELECTOR.Settings.NarratorWebfontCSS.Name';
+    static savedKey = 'SPEAKERSELECTOR.Settings.NarratorWebfontCSS.Saved';
+    static defaultId = 'lichsoma-narrator-webfont-css-editor';
+}
+
 

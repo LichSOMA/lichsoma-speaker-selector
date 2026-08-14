@@ -249,8 +249,7 @@
 }
 
 .lichsoma-archive-log-search-prev,
-.lichsoma-archive-log-search-next,
-.lichsoma-archive-log-search-clear {
+.lichsoma-archive-log-search-next {
   width: 24px;
   height: 24px;
   border: none;
@@ -268,8 +267,7 @@
 }
 
 .lichsoma-archive-log-search-prev:hover,
-.lichsoma-archive-log-search-next:hover,
-.lichsoma-archive-log-search-clear:hover {
+.lichsoma-archive-log-search-next:hover {
   background: var(--color-bg-btn-hover, rgba(255, 255, 255, 0.1));
   color: var(--color-warm-1, #ff6b6b);
 }

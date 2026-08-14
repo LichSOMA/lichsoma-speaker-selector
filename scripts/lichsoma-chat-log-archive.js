@@ -1,9 +1,12 @@
+import { SpeakerSelectorCompat } from './lichsoma-speaker-selector-compat.js';
+
 // LichSOMA Speaker Selector - Chat Log Archive
 // 채팅 로그 HTML 파일을 열어서 확인하는 기능
 (function() {
   'use strict';
   
   const MODULE_ID = 'lichsoma-speaker-selector';
+  let archiveSearchAbortController = null;
   
   // 로그 폴더 경로 가져오기
   function getLogFolderPath() {
@@ -50,17 +53,13 @@
     }
     
     try {
-      const FilePicker = foundry.applications.apps.FilePicker.implementation;
+      const FilePicker = SpeakerSelectorCompat.FilePicker;
+      if (!FilePicker) throw new Error('No compatible Foundry FilePicker was found.');
       await ensureDirectoryExists(FilePicker, 'log-archive', 'log-archive 폴더');
       await ensureDirectoryExists(FilePicker, getLogFolderPath(), `월드 폴더(${getLogFolderId()})`);
     } catch (error) {
       console.warn(`[${MODULE_ID}] log-archive/월드 폴더 확인 중 오류:`, error);
     }
-  }
-  
-  // 로그 폴더 생성 함수 (별칭)
-  async function ensureLogFolder() {
-    return await ensureLogFolderExists();
   }
   
   // 정렬 함수: 숫자 > 영어 > 한국어
@@ -121,7 +120,8 @@
   // 폴더 내용 읽기
   async function browseFolder(folderPath) {
     try {
-      const FilePicker = foundry.applications.apps.FilePicker.implementation;
+      const FilePicker = SpeakerSelectorCompat.FilePicker;
+      if (!FilePicker) throw new Error('No compatible Foundry FilePicker was found.');
       const result = await FilePicker.browse('data', folderPath);
       
       const folders = [];
@@ -587,22 +587,29 @@
             scrollToMatch(currentMatchIndex);
           }
           
-          function updateMatchCount() {
-            return {
+          function postSearchState() {
+            parent.postMessage({
+              source: 'lichsoma-speaker-selector-archive',
+              type: 'search-state',
               count: matches.length,
-              current: currentMatchIndex >= 0 ? currentMatchIndex + 1 : 0
-            };
+              current: currentMatchIndex
+            }, '*');
           }
-          
-          // 전역 함수로 노출
-          window.lichsomaArchiveSearch = {
-            search: search,
-            next: nextMatch,
-            previous: previousMatch,
-            getMatchCount: () => matches.length,
-            getCurrentIndex: () => currentMatchIndex,
-            updateMatchCount: updateMatchCount
-          };
+
+          window.addEventListener('message', event => {
+            if (event.source !== parent) return;
+            const data = event.data;
+            if (!data || data.source !== 'lichsoma-speaker-selector-archive-parent') return;
+
+            if (data.command === 'search') search(String(data.query || ''));
+            else if (data.command === 'next') nextMatch();
+            else if (data.command === 'previous') previousMatch();
+            else if (data.command !== 'state') return;
+
+            postSearchState();
+          });
+
+          postSearchState();
         })();
       </script>
     `;
@@ -652,101 +659,69 @@
     
     // iframe 로드 후 검색 기능 연결
     iframe.addEventListener('load', () => {
+      archiveSearchAbortController?.abort();
+      archiveSearchAbortController = new AbortController();
+      const { signal } = archiveSearchAbortController;
+
       const searchInput = searchBar.querySelector('.lichsoma-archive-log-search-input');
       const searchPrev = searchBar.querySelector('.lichsoma-archive-log-search-prev');
       const searchNext = searchBar.querySelector('.lichsoma-archive-log-search-next');
       const searchCount = searchBar.querySelector('.lichsoma-archive-log-search-count');
-      
+
+      const postSearchCommand = (command, payload = {}) => {
+        iframe.contentWindow?.postMessage({
+          source: 'lichsoma-speaker-selector-archive-parent',
+          command,
+          ...payload
+        }, '*');
+      };
+
+      window.addEventListener('message', event => {
+        if (event.source !== iframe.contentWindow) return;
+        const data = event.data;
+        if (!data || data.source !== 'lichsoma-speaker-selector-archive' || data.type !== 'search-state') return;
+        const count = Number(data.count) || 0;
+        const current = Number(data.current);
+        searchCount.textContent = count > 0 ? `${Math.max(0, current) + 1}/${count}` : '0/0';
+      }, { signal });
+
       const updateSearch = () => {
-        try {
-          const iframeWindow = iframe.contentWindow;
-          if (iframeWindow && iframeWindow.lichsomaArchiveSearch) {
-            const query = searchInput.value.trim();
-            iframeWindow.lichsomaArchiveSearch.search(query);
-            updateMatchCount();
-          }
-        } catch (e) {
-          // 크로스 오리진 오류 무시
-        }
+        postSearchCommand('search', { query: searchInput?.value?.trim?.() ?? '' });
       };
-      
-      const updateMatchCount = () => {
-        try {
-          const iframeWindow = iframe.contentWindow;
-          if (iframeWindow && iframeWindow.lichsomaArchiveSearch) {
-            const count = iframeWindow.lichsomaArchiveSearch.getMatchCount();
-            const current = iframeWindow.lichsomaArchiveSearch.getCurrentIndex();
-            searchCount.textContent = count > 0 ? `${current + 1}/${count}` : '0/0';
-          }
-        } catch (e) {
-          // 크로스 오리진 오류 무시
-        }
-      };
-      
+
       if (searchInput) {
         let searchTimeout = null;
         let isComposing = false;
-        
-        // 한글 입력 처리
+
         searchInput.addEventListener('compositionstart', () => {
           isComposing = true;
           clearTimeout(searchTimeout);
-        });
-        
+        }, { signal });
+
         searchInput.addEventListener('compositionend', () => {
           isComposing = false;
           clearTimeout(searchTimeout);
-          searchTimeout = setTimeout(() => {
-            updateSearch();
-          }, 100);
-        });
-        
-        searchInput.addEventListener('input', (e) => {
+          searchTimeout = setTimeout(updateSearch, 100);
+        }, { signal });
+
+        searchInput.addEventListener('input', () => {
           if (isComposing) return;
-          
           clearTimeout(searchTimeout);
-          searchTimeout = setTimeout(() => {
-            updateSearch();
-          }, 300);
-        });
-        
-        searchInput.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            const iframeWindow = iframe.contentWindow;
-            if (iframeWindow && iframeWindow.lichsomaArchiveSearch) {
-              if (e.ctrlKey || e.metaKey) {
-                iframeWindow.lichsomaArchiveSearch.previous();
-              } else {
-                iframeWindow.lichsomaArchiveSearch.next();
-              }
-              updateMatchCount();
-            }
-          }
-        });
+          searchTimeout = setTimeout(updateSearch, 300);
+        }, { signal });
+
+        searchInput.addEventListener('keydown', event => {
+          if (event.key !== 'Enter' || event.shiftKey) return;
+          event.preventDefault();
+          postSearchCommand(event.ctrlKey || event.metaKey ? 'previous' : 'next');
+        }, { signal });
       }
-      
-      if (searchPrev) {
-        searchPrev.addEventListener('click', () => {
-          const iframeWindow = iframe.contentWindow;
-          if (iframeWindow && iframeWindow.lichsomaArchiveSearch) {
-            iframeWindow.lichsomaArchiveSearch.previous();
-            updateMatchCount();
-          }
-        });
-      }
-      
-      if (searchNext) {
-        searchNext.addEventListener('click', () => {
-          const iframeWindow = iframe.contentWindow;
-          if (iframeWindow && iframeWindow.lichsomaArchiveSearch) {
-            iframeWindow.lichsomaArchiveSearch.next();
-            updateMatchCount();
-          }
-        });
-      }
+
+      searchPrev?.addEventListener('click', () => postSearchCommand('previous'), { signal });
+      searchNext?.addEventListener('click', () => postSearchCommand('next'), { signal });
+      postSearchCommand('state');
     });
-    
+
     contentDiv.appendChild(iframe);
     viewer.appendChild(searchBar);
     viewer.appendChild(contentDiv);
@@ -760,6 +735,8 @@
   
   // 트리로 돌아가기
   function goBackToTree() {
+    archiveSearchAbortController?.abort();
+    archiveSearchAbortController = null;
     // HTML 뷰어 제거
     const viewer = archiveWindow?.querySelector('.lichsoma-archive-html-viewer');
     if (viewer) {
@@ -875,9 +852,9 @@
         // 이미 펼쳐져 있으면 하위 항목이 로드되었는지 확인
         if (expandedFolders.has(path)) {
           // 하위 항목이 로드되지 않았으면 로드
-          const hasLoadedContent = content.querySelector('.lichsoma-archive-tree-item') !== null || 
-                                   content.textContent.includes('NoFiles') ||
-                                   content.textContent.includes('파일이 없습니다');
+          const noFilesLabel = game.i18n.localize('SPEAKERSELECTOR.ChatLogArchive.NoFiles');
+          const hasLoadedContent = content.querySelector('.lichsoma-archive-tree-item') !== null ||
+                                   content.textContent.includes(noFilesLabel);
           
           if (!hasLoadedContent) {
             content.innerHTML = `<div style="padding: 4px; color: var(--color-text-secondary);">${game.i18n.localize('SPEAKERSELECTOR.ChatLogArchive.Loading')}</div>`;
@@ -911,9 +888,11 @@
         }
         
         // 하위 내용 로드 (항상 로드 확인)
-        const hasContent = content.querySelector('.lichsoma-archive-tree-item') !== null || 
-                          content.textContent.includes('NoFiles') || 
-                          content.textContent.includes('로딩');
+        const noFilesLabel = game.i18n.localize('SPEAKERSELECTOR.ChatLogArchive.NoFiles');
+        const loadingLabel = game.i18n.localize('SPEAKERSELECTOR.ChatLogArchive.Loading');
+        const hasContent = content.querySelector('.lichsoma-archive-tree-item') !== null ||
+                          content.textContent.includes(noFilesLabel) ||
+                          content.textContent.includes(loadingLabel);
         
         if (!hasContent || content.querySelector('.lichsoma-archive-tree-item') === null) {
           content.innerHTML = `<div style="padding: 4px; color: var(--color-text-secondary);">${game.i18n.localize('SPEAKERSELECTOR.ChatLogArchive.Loading')}</div>`;

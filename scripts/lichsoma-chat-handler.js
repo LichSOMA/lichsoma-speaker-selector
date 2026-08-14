@@ -1,3 +1,5 @@
+import { registerChatRenderProcessor } from './lichsoma-chat-render-pipeline.js';
+
 /**
  * LichSOMA Chat Handler
  * 채팅 메시지에서 마크다운 스타일 포맷팅 처리
@@ -46,7 +48,7 @@ export class ChatRubyHandler {
      */
     static initialize() {
         // 채팅 메시지 렌더링 시 마크다운 포맷팅 처리
-        Hooks.on('renderChatMessageHTML', (message, html, data) => {
+        registerChatRenderProcessor('inline-formatting', 200, (message, html, data) => {
             try {
                 const root = this._asHTMLElement(html);
                 if (!root) return;
@@ -293,73 +295,5 @@ export class ChatRubyHandler {
         return { node: ruby, nextIndex: closeIndex + 2 };
     }
 
-    /**
-     * 이하 메서드는 기존 외부 호출 호환성을 위한 문자열 처리 헬퍼다.
-     * 실제 렌더링 처리(processFormatting)는 더 이상 innerHTML 전체 치환에 의존하지 않는다.
-     */
 
-    /**
-     * 루비 문자 처리: [[본문|루비]] -> <ruby>본문<rt>루비</rt></ruby>
-     * @param {string} content - 처리할 텍스트
-     * @returns {string} 처리된 텍스트
-     */
-    static processRuby(content) {
-        const rubyPattern = /\[\[([^\|\]]+?)\|([^\]]+?)\]\]/g;
-        return content.replace(
-            rubyPattern,
-            '<ruby class="lichsoma-ruby">$1<rt>$2</rt></ruby>'
-        );
-    }
-
-    /**
-     * 볼드+이탤릭 처리: ***텍스트*** -> <b><i>텍스트</i></b>
-     * @param {string} content - 처리할 텍스트
-     * @returns {string} 처리된 텍스트
-     */
-    static processBoldItalic(content) {
-        const boldItalicPattern = /\*\*\*([^\*]+?)\*\*\*/g;
-        return content.replace(
-            boldItalicPattern,
-            '<b><i>$1</i></b>'
-        );
-    }
-
-    /**
-     * 볼드 처리: **텍스트** -> <b>텍스트</b>
-     * @param {string} content - 처리할 텍스트
-     * @returns {string} 처리된 텍스트
-     */
-    static processBold(content) {
-        const boldPattern = /\*\*([^\*]+?)\*\*/g;
-        return content.replace(
-            boldPattern,
-            '<b>$1</b>'
-        );
-    }
-
-    /**
-     * 이탤릭 처리: *텍스트* -> <i>텍스트</i>
-     * @param {string} content - 처리할 텍스트
-     * @returns {string} 처리된 텍스트
-     */
-    static processItalic(content) {
-        const italicPattern = /\*([^\*]+?)\*/g;
-        return content.replace(
-            italicPattern,
-            '<i>$1</i>'
-        );
-    }
-
-    /**
-     * 취소선 처리: ~~텍스트~~ -> <s>텍스트</s>
-     * @param {string} content - 처리할 텍스트
-     * @returns {string} 처리된 텍스트
-     */
-    static processStrikethrough(content) {
-        const strikethroughPattern = /~~([^~]+?)~~/g;
-        return content.replace(
-            strikethroughPattern,
-            '<s>$1</s>'
-        );
-    }
 }

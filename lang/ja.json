@@ -1,0 +1,301 @@
+{
+  "SPEAKERSELECTOR": {
+    "Settings": {
+      "ShowPortrait": {
+        "Name": "ポートレートを表示",
+        "Hint": "チャットメッセージにアクターのポートレートを表示します。"
+      },
+      "PortraitSize": {
+        "Name": "ポートレートサイズ",
+        "Hint": "ポートレート画像のサイズを設定します。"
+      },
+      "AlwaysUseCharacter": {
+        "Name": "常に割り当てキャラクターとして発言",
+        "Hint": "チャット入力欄から直接送信したメッセージを、常に割り当てられたキャラクターとして発言します。"
+      },
+      "AlwaysUseActor": {
+        "Name": "常にアクターとして発言",
+        "Hint": "トークンを選択している場合でも、そのトークンのアクターとして発言します。"
+      },
+      "PreventOtherUserCharacter": {
+        "Name": "プレイヤーキャラクターとしての発言を防止",
+        "Hint": "GMがプレイヤーキャラクターとして発言することを防ぎます。"
+      },
+      "ApplyUserColor": {
+        "Name": "ユーザーカラーを適用",
+        "Hint": "チャットメッセージのヘッダーにある送信者名へユーザーカラーを適用します。"
+      },
+      "EnableChatMerge": {
+        "Name": "チャットマージを有効化",
+        "Hint": "同じユーザー・同じポートレートの連続したメッセージではヘッダーを非表示にします。"
+      },
+      "SidebarMinWidth": {
+        "Name": "サイドバー最小幅",
+        "Hint": "ドラッグでサイドバーをリサイズするときの最小幅を設定します。（312～400px）"
+      },
+      "ChatHeaderWebfontCSS": {
+        "Name": "チャットヘッダー Webフォント CSS",
+        "Hint": "ゲーム内のチャットヘッダーとHTMLチャットログ出力で共通して使用するWebフォントCSSです。最初のfont-familyと、単一のfont-weight、font-style、font-variation-settingsを自動適用します。空欄の場合はFoundryの継承フォントを使用し、既定のウェイトは900です。",
+        "EditButton": "ヘッダー Webフォント CSSを編集",
+        "Saved": "チャットヘッダーのWebフォントCSSを保存しました。"
+      },
+      "Dnd5eTitleWebfontCSS": {
+        "Name": "D&D 5e ヘッダー名 Webフォント CSS",
+        "Hint": "ゲーム内およびHTML出力のD&D 5eチャットヘッダーの名前（title）に適用するWebフォントCSSです。入力したfont-family、font-weight、font-style、font-variation-settingsを優先します。",
+        "EditButton": "D&D 5e 名前 Webフォント CSSを編集",
+        "Saved": "D&D 5eヘッダー名のWebフォントCSSを保存しました。"
+      },
+      "Dnd5eSubtitleWebfontCSS": {
+        "Name": "D&D 5e ヘッダー補助情報 Webフォント CSS",
+        "Hint": "ゲーム内およびHTML出力のD&D 5eチャットヘッダーの補助情報（subtitle）に適用するWebフォントCSSです。入力したfont-family、font-weight、font-style、font-variation-settingsを優先します。",
+        "EditButton": "D&D 5e 補助情報 Webフォント CSSを編集",
+        "Saved": "D&D 5eヘッダー補助情報のWebフォントCSSを保存しました。"
+      },
+      "ChatMessageWebfontCSS": {
+        "Name": "チャットメッセージ Webフォント CSS",
+        "Hint": "ゲーム内のチャット本文とHTMLチャットログ出力で共通して使用するWebフォントCSSです。最初のfont-familyと、単一のfont-weight、font-style、font-variation-settingsを自動適用します。空欄の場合はFoundryの継承フォントを使用し、既定のウェイトは500です。",
+        "EditButton": "本文 Webフォント CSSを編集",
+        "Saved": "チャットメッセージのWebフォントCSSを保存しました。"
+      },
+      "ChatDiceWebfontCSS": {
+        "Name": "チャットダイス Webフォント CSS",
+        "Hint": "ゲーム内のダイス領域とHTMLチャットログ出力で共通して使用するWebフォントCSSです。入力したfont-family、font-weight、font-style、font-variation-settingsを優先します。",
+        "EditButton": "ダイス Webフォント CSSを編集",
+        "Saved": "チャットダイスのWebフォントCSSを保存しました。"
+      },
+      "NarratorWebfontCSS": {
+        "Name": "ナレーター Webフォント CSS",
+        "Hint": "ナレーターバーとナレーターチャットカードに適用するWebフォントCSSです。HTML出力にも同じ設定を使用します。空欄の場合はFoundryの継承フォントを使用し、ナレーターバーは900イタリック、ナレーターカードは500イタリックを使用します。",
+        "EditButton": "ナレーター Webフォント CSSを編集",
+        "Saved": "ナレーターのWebフォントCSSを保存しました。"
+      },
+      "ChatHeaderFontSize": {
+        "Name": "ヘッダーフォントサイズ",
+        "Hint": "チャットヘッダーのフォントサイズを設定します。"
+      },
+      "ChatMessageFontSize": {
+        "Name": "メッセージフォントサイズ",
+        "Hint": "チャットメッセージ本文のフォントサイズを設定します。"
+      },
+      "NarratorFontSize": {
+        "Name": "ナレーターフォントサイズ",
+        "Hint": "ナレーターモードで表示するテキストのフォントサイズを設定します。"
+      },
+      "NarratorTypingSound": {
+        "Name": "ナレータータイピング音",
+        "Hint": "ナレーターモードのタイピング演出時に再生するサウンドファイルを設定します。空白以外の文字を入力したときに再生されます。"
+      },
+      "NarratorTypingSpeed": {
+        "Name": "ナレータータイピング速度",
+        "Hint": "ナレーターモードでテキストを1文字ずつ表示する速度を設定します。値が小さいほど速く表示されます。（10ms: 非常に速い、50ms: 標準、200ms: 遅い）"
+      },
+      "NarratorChatCard": {
+        "Name": "ナレーターチャットカード",
+        "Hint": "ナレーターモードで送信したチャットメッセージに専用のスタイルを適用します。"
+      },
+      "ChatLogExportBasePath": {
+        "Name": "チャットログ出力の基本パス",
+        "Hint": "HTMLとして保存するチャットログ内の画像パスの前に付加する基本パスです。\nHTTPサーバー: http://localhost:30000"
+      },
+      "ChatLogExportUseBase64": {
+        "Name": "画像をBase64で保存",
+        "Hint": "HTML出力時、500KB以下の画像をBase64として埋め込みます。同じ画像は最終Data URLを基準に1度だけ保存し、500KBを超える画像は絶対URLを維持します。"
+      },
+      "ChatLogExportCustomCSS": {
+        "Name": "チャットログ出力カスタムCSS",
+        "Hint": "HTMLとして保存するチャットログに追加で適用するCSSです。既定のCSSと併用されます。",
+        "EditButton": "CSSを編集",
+        "Saved": "CSSを保存しました。"
+      },
+      "ChatLogExportShowDiceTooltip": {
+        "Name": "ダイスツールチップを表示",
+        "Hint": "有効にすると、チャットログ出力時にダイスツールチップ（ロール詳細）を表示します。"
+      },
+      "ChatUtilsForIC": {
+        "Name": "ICモードでトークン未選択時はOOC送信",
+        "Hint": "Public as Characterモードでトークンを選択せずにチャットを送信した場合、自動的にOOCとして送信します。"
+      },
+      "ChatLogExportHideCoreButton": {
+        "Name": "標準チャットログ出力ボタンを非表示",
+        "Hint": "Foundry VTT標準のチャットログ出力ボタンを非表示にします。"
+      },
+      "ChatLogSaveHtmlOnDelete": {
+        "Name": "ログ削除時にHTMLログを保存",
+        "Hint": "有効にすると、チャットログを削除する前に現在のログをHTMLファイルとして保存します。"
+      },
+      "ChatRenderLimit": {
+        "Name": "レンダリング済みチャット数を制限",
+        "Hint": "チャットログが下端付近にあるとき、古いチャットDOMを削除して現在レンダリングされているメッセージ数を制限します。実際のチャット文書は削除されません。上へスクロールすると、まずこのモジュールが削除した連続区間を再レンダリングし、それより古い履歴はFoundry VTT標準の履歴ローダーが処理します。",
+        "Choices": {
+          "Disabled": "無効",
+          "Keep100": "直近100件を保持",
+          "Keep200": "直近200件を保持"
+        }
+      },
+      "ActorGridActors": {
+        "Name": "登録済みスピーカーアクター",
+        "Hint": "Speaker Selectorに表示するアクター一覧（内部設定）"
+      }
+    },
+    "DeleteButton": {
+      "AriaLabel": "メッセージを削除",
+      "Title": "メッセージを削除"
+    },
+    "Notifications": {
+      "DeleteOwnOnly": "自分のメッセージのみ削除できます。",
+      "SelectActorFirst": "先にアクターを選択してください。",
+      "ChatInputNotFound": "チャット入力欄が見つかりませんでした。",
+      "InsertImageMenuNotFound": "画像挿入メニューが見つかりませんでした。",
+      "ActorRemovedFromGrid": "{actorName}をグリッドから削除しました。",
+      "CssSaveFailed": "CSSの保存中にエラーが発生しました: {error}"
+    },
+    "Selector": {
+      "Label": "スピーカー選択",
+      "OOC": "OOC (Out of Character)"
+    },
+    "Narrator": {
+      "Button": {
+        "Title": "ナレーターモード",
+        "AriaLabel": "ナレーターモードを切り替え"
+      },
+      "Keybinding": {
+        "Name": "ナレーターモードを切り替え",
+        "Hint": "ナレーターモードのオン・オフを切り替えます。既定のショートカットはShift+Spaceです。"
+      }
+    },
+    "SpeakerSetting": {
+      "Button": {
+        "Title": "スピーカー設定",
+        "AriaLabel": "スピーカー設定を開く"
+      },
+      "Notifications": {
+        "GMOnly": "GMのみ使用できます。",
+        "NoActor": "このトークンにリンクされたワールドアクターが見つかりません。",
+        "NoEmptySlot": "スピーカー設定に空きスロットがありません。"
+      },
+      "Dialog": {
+        "Title": "スピーカー設定",
+        "DropHint": "アクターをドロップしてください",
+        "AvailableActors": "利用可能なアクター",
+        "SearchPlaceholder": "名前で検索...",
+        "SearchPlaceholderWithTags": "名前またはタグで検索..."
+      },
+      "TokenHUD": {
+        "Title": "スピーカー設定へ登録/解除",
+        "AriaLabel": "このトークンのアクターをスピーカー設定へ登録または解除"
+      }
+    },
+    "Emotion": {
+      "Label": "感情",
+      "SelectTitle": "感情を選択",
+      "Default": "デフォルト",
+      "Manage": "感情を管理",
+      "ManageWindowTitle": "{manage}: {actorName}",
+      "Add": "感情を追加",
+      "Save": "保存",
+      "Cancel": "キャンセル",
+      "SaveError": "感情の保存中にエラーが発生しました。",
+      "NamePlaceholder": "感情名",
+      "PortraitPlaceholder": "ポートレートのパス",
+      "ChoosePortrait": "ポートレートを選択",
+      "Delete": "削除",
+      "NewEmotionAlt": "新しい感情",
+      "Empty": "登録された感情はありません。",
+      "FilePickerUnavailable": "このFoundryバージョンではファイルピッカーを利用できません。"
+    },
+    "ChatPortraitToken": {
+      "Title": "チャットポートレート用トークン画像設定",
+      "PreviewAlt": "Image Pathを基準にしたトークン画像プレビュー",
+      "PreviewInteractHint": "ホイール: 拡大・縮小 (1～3) ・ ドラッグ: アンカー",
+      "Scale": "スケール",
+      "AnchorX": "アンカー X",
+      "AnchorY": "アンカー Y"
+    },
+    "ChatLogExport": {
+      "Success": "チャットログHTMLを保存しました。（{count}件）",
+      "Error": {
+        "ExportFailed": "チャットログの保存中にエラーが発生しました。",
+        "FlushBackupFailed": "HTMLバックアップを保存できなかったため、チャットログの削除を中止しました。"
+      },
+      "Warning": {
+        "Empty": "保存するチャットメッセージがありません。",
+        "CountMismatch": "メッセージ数が一致しません。（{rendered}/{total}件）"
+      },
+      "Button": {
+        "Title": "チャットログをHTML出力",
+        "AriaLabel": "チャットログをHTML出力"
+      }
+    },
+    "ChatLogArchive": {
+      "Button": {
+        "OpenArchive": "アーカイブを開く"
+      },
+      "Title": "チャットログアーカイブ",
+      "Close": "閉じる",
+      "Back": "戻る",
+      "Loading": "読み込み中...",
+      "NoFiles": "ファイルがありません。",
+      "Search": {
+        "Placeholder": "ログを検索...",
+        "PlaceholderInLog": "ログ内を検索...",
+        "NoResults": "検索結果がありません。",
+        "Next": "次へ",
+        "Previous": "前へ"
+      },
+      "Error": {
+        "LoadFailed": "フォルダー内容の読み込みに失敗しました。"
+      }
+    },
+    "ChatSenderEdit": {
+      "ContextMenu": "スピーカーを編集",
+      "Title": "スピーカーを編集",
+      "UserLabel": "ユーザーを編集",
+      "ActorLabel": "キャラクター",
+      "ActorNone": "OOC / キャラクターなし",
+      "SpeakModeActor": "アクター",
+      "SpeakModeToken": "トークン",
+      "SpeakModeToggleHint": "クリックするたびにアクターとして発言 ↔ トークンとして発言を切り替え",
+      "Save": "適用",
+      "Notifications": {
+        "GMOnly": "この操作はGMのみ実行できます。",
+        "Success": "メッセージの送信者を更新しました。",
+        "UpdateFailed": "メッセージを更新できませんでした。",
+        "NoTokenOnScene": "アクティブシーンにこのアクターのトークンがないため、アクターとして発言したものとして保存しました。"
+      }
+    },
+    "Typing": {
+      "Single": "{name}が入力中です",
+      "Multiple": "複数のユーザーが入力中です"
+    },
+    "LancerCategory": {
+      "Pilot": "パイロット",
+      "Mech": "メック",
+      "Deployable": "デプロイアブル"
+    },
+    "ChatReviser": {
+      "Notifications": {
+        "EditOwnOnly": "自分のメッセージのみ編集できます。",
+        "Success": "メッセージを更新しました。",
+        "Error": "メッセージの編集中にエラーが発生しました。"
+      }
+    },
+    "ActorTree": {
+      "NoFolder": "フォルダーなし"
+    },
+    "Resizer": {
+      "Sidebar": {
+        "AriaLabel": "サイドバー幅を調整",
+        "Title": "ドラッグしてサイドバー幅を調整します。ダブルクリックで既定の幅に戻します。"
+      },
+      "ChatInput": {
+        "AriaLabel": "チャット入力欄の高さを調整",
+        "Title": "ドラッグしてチャット入力欄の高さを調整します。ダブルクリックで既定の高さに戻します。"
+      }
+    },
+    "Common": {
+      "CSSCode": "CSSコード",
+      "Save": "保存",
+      "Cancel": "キャンセル"
+    }
+  }
+}

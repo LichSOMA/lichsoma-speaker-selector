@@ -20,7 +20,7 @@
     width: calc(100% - 16px);
     height: calc(100% - var(--chat-form-height, 174px) - 8px);
     border-radius: 4px 0 0 4px;
-    background: var(--background-color, var(--color-cool-5));
+    background: var(--color-cool-5);
     opacity: 0.8;
     pointer-events: none;
     z-index: 0;
@@ -50,6 +50,7 @@
 .chat-form :is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input) {
     order: 3;
 }
+
 
 /* FVTT core의 100개 이상 ol 들여쓰기 무효화
    chat-log는 번호 목록이 아니라 채팅 컨테이너이므로 padding-left가 필요 없다. */
@@ -138,4 +139,22 @@
     height: 240px;
     object-fit: contain;
     border-radius: 6px;
+}
+
+/* FVTT v13: ProseMirror 채팅 입력 높이를 실제 입력 루트까지 강제 전달한다. */
+body.lichsoma-fvtt13-chat #chat.chat-sidebar :is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input) {
+    height: var(--chat-input-height, 128px) !important;
+    min-height: var(--chat-input-height, 128px) !important;
+    max-height: var(--chat-input-height, 128px) !important;
+    flex: 0 0 var(--chat-input-height, 128px) !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
+
+body.lichsoma-fvtt13-chat #chat.chat-sidebar :is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input) :is(.editor-container, .ProseMirror, [contenteditable="true"]) {
+    height: 100% !important;
+    min-height: 100% !important;
+    max-height: 100% !important;
+    overflow-y: auto !important;
+    box-sizing: border-box !important;
 }

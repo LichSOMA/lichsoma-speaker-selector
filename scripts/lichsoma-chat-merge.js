@@ -5,24 +5,39 @@
 
 import { ChatSystemBridge } from './lichsoma-chat-system-registry.js';
 import { LichsomaChatDom } from './lichsoma-chat-dom.js';
+import { ActorEmotions } from './lichsoma-actor-emotions.js';
+import { getMessageAuthorId } from './lichsoma-shared-utils.js';
+import { registerChatRenderProcessor } from './lichsoma-chat-render-pipeline.js';
 
 export class ChatMerge {
     static SETTING_KEY = 'enableChatMerge';
+    static _processedChatLogs = new WeakSet();
 
     static initialize() {
-        // 새 메시지가 렌더링될 때 머지 처리
-        Hooks.on('renderChatMessageHTML', (message, html, data) => {
+        // 새 메시지가 렌더링될 때 머지 처리.
+        // prepend batch의 경계 보정을 위해 현재 메시지뿐 아니라 바로 다음 메시지도 재검사한다.
+        registerChatRenderProcessor('chat-merge', 400, (message, html, data) => {
             const messageElement = LichsomaChatDom.getChatMessageElement(html);
 
             setTimeout(() => {
                 this._checkAndMergeMessage(message, messageElement);
+                this.recheckNextMessage(messageElement);
             }, 0);
-        });
+        }, { runInExport: false });
 
-        // 채팅 로그가 렌더링될 때 모든 메시지 처리
+        // 채팅 로그가 렌더링될 때 전체 순회는 chat-log DOM 인스턴스당 1회로 제한한다.
+        // 이후 같은 로그에서 발생하는 렌더 훅은 경계 메시지만 재검사한다.
         Hooks.on('renderChatLog', (app, html, data) => {
             setTimeout(() => {
-                this._processAllMessages(html);
+                const chatLog = this._getChatLogFromRoot(html) || LichsomaChatDom.getMainChatLog(document);
+                if (!chatLog) return;
+
+                if (!this._processedChatLogs.has(chatLog)) {
+                    this._processedChatLogs.add(chatLog);
+                    this._processAllMessages(chatLog);
+                } else {
+                    this.recheckVisibleBoundaries(chatLog);
+                }
             }, 0);
         });
 
@@ -88,7 +103,7 @@ export class ChatMerge {
      */
     static _isMessengerMessage(message) {
         const flags = message?.flags?.['lichsoma-fvtt-smartphone'];
-        return flags && flags.type === 'messenger-message';
+        return flags && (flags.type === 'messenger-message' || flags.type === 'sns-dm-message');
     }
 
     /**
@@ -124,18 +139,77 @@ export class ChatMerge {
     /**
      * 머지 비교용 메타데이터.
      */
+    static _normalizeId(value) {
+        if (!value) return null;
+        if (typeof value === 'string') return value;
+        return value.id || value._id || value.uuid || null;
+    }
+
+    static _resolveActor(actorRef) {
+        if (!actorRef) return null;
+        if (typeof actorRef === 'object') return actorRef;
+        return game.actors?.get(actorRef) || null;
+    }
+
+    static _resolveToken(tokenRef) {
+        if (!tokenRef) return null;
+        if (typeof tokenRef === 'object') return tokenRef.document || tokenRef;
+        return canvas?.tokens?.placeables?.find(t => t.id === tokenRef)?.document
+            || canvas?.scene?.tokens?.get(tokenRef)
+            || game.scenes?.active?.tokens?.get(tokenRef)
+            || null;
+    }
+
+    static _getFallbackPortraitSrc(message) {
+        if (!message) return null;
+        const flags = message.flags?.['lichsoma-speaker-selector'] || {};
+        if (flags.emotionPortrait) return flags.emotionPortrait;
+        if (flags.portraitSrc) return flags.portraitSrc;
+
+        try {
+            const emotionPortrait = ActorEmotions?.getEmotionPortraitForMessage?.(message);
+            if (emotionPortrait) return emotionPortrait;
+        } catch (e) {
+            // ignore
+        }
+
+        const speaker = message.speaker || {};
+        const actorId = this._normalizeId(flags.actorId || speaker.actor || null);
+        const actor = this._resolveActor(actorId || speaker.actor);
+
+        try {
+            if (actor?.id) {
+                const savedEmotion = ActorEmotions?.getSavedEmotion?.(actor.id);
+                if (savedEmotion?.emotionPortrait) return savedEmotion.emotionPortrait;
+            }
+        } catch (e) {
+            // ignore
+        }
+
+        const tokenId = this._normalizeId(flags.tokenId || speaker.token || null);
+        const token = this._resolveToken(tokenId || speaker.token);
+        const tokenSrc = token?.texture?.src || token?.document?.texture?.src || null;
+        if (tokenSrc) return tokenSrc;
+        if (actor?.img) return actor.img;
+        if (actor?.prototypeToken?.texture?.src) return actor.prototypeToken.texture.src;
+
+        const authorId = getMessageAuthorId(message);
+        return authorId ? game.users?.get(authorId)?.avatar || null : null;
+    }
+
     static _getMergeMeta(message) {
         const flags = message?.flags?.['lichsoma-speaker-selector'] || {};
         const speaker = message?.speaker || {};
 
-        const userId = flags.userId || message?.author?.id || null;
-        const portraitSrc = flags.portraitSrc || null;
+        const userId = flags.userId || getMessageAuthorId(message);
+        const portraitSrc = flags.portraitSrc || flags.emotionPortrait || this._getFallbackPortraitSrc(message) || null;
 
-        let mergeSpeakerId =
+        let mergeSpeakerId = this._normalizeId(
             flags.mergeSpeakerId ||
             flags.actorId ||
             speaker.actor ||
-            null;
+            null
+        );
 
         let mergeSpeakerType = flags.mergeSpeakerType || null;
 
@@ -149,13 +223,11 @@ export class ChatMerge {
         if (!mergeSpeakerType) {
             // 구버전 플래그 fallback.
             // tokenId와 mergeSpeakerId가 일치하거나 speaker.token과 일치하면 token으로 간주.
-            if (
-                (flags.tokenId && mergeSpeakerId === flags.tokenId) ||
-                (speaker.token && mergeSpeakerId === speaker.token)
-            ) {
+            const tokenId = this._normalizeId(flags.tokenId || speaker.token || null);
+            if (tokenId && mergeSpeakerId === tokenId) {
                 mergeSpeakerType = 'token';
             } else {
-                mergeSpeakerType = 'actor';
+                mergeSpeakerType = mergeSpeakerId ? 'actor' : 'user';
             }
         }
 
@@ -282,6 +354,52 @@ export class ChatMerge {
         const shouldMerge = this._canMerge(currentMeta, prevMeta);
 
         messageElement.classList.toggle('lichsoma-merged', shouldMerge);
+    }
+
+    static recheckMessageElement(messageElement) {
+        const element = LichsomaChatDom.getChatMessageElement(messageElement);
+        if (!element) return;
+        const message = this._getMessageFromElement(element);
+        if (!message) {
+            element.classList.remove('lichsoma-merged');
+            return;
+        }
+        this._checkAndMergeMessage(message, element);
+    }
+
+    static recheckNextMessage(messageElement) {
+        const nextElement = LichsomaChatDom.getNextChatMessageElement(messageElement);
+        if (nextElement) this.recheckMessageElement(nextElement);
+    }
+
+    static recheckMessageAndNext(messageElement) {
+        const element = LichsomaChatDom.getChatMessageElement(messageElement);
+        if (!element) return;
+        this.recheckMessageElement(element);
+        this.recheckNextMessage(element);
+    }
+
+    static recheckMessageElements(messageElements = []) {
+        const seen = new Set();
+        for (const candidate of messageElements) {
+            const element = LichsomaChatDom.getChatMessageElement(candidate);
+            if (!element) continue;
+            const id = LichsomaChatDom.getMessageId(element) || element;
+            if (seen.has(id)) continue;
+            seen.add(id);
+            this.recheckMessageAndNext(element);
+        }
+    }
+
+    static recheckVisibleBoundaries(root = document) {
+        const chatLog = this._getChatLogFromRoot(root) || LichsomaChatDom.getMainChatLog(document);
+        if (!chatLog) return;
+        const messages = Array.from(chatLog.children || [])
+            .filter(messageEl => messageEl.matches?.('.chat-message[data-message-id]') && !LichsomaChatDom.isInChatNotifications(messageEl));
+        if (!messages.length) return;
+
+        const boundary = [messages[0], messages[1], messages[messages.length - 1]].filter(Boolean);
+        this.recheckMessageElements(boundary);
     }
 
     /**

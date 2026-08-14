@@ -1,0 +1,145 @@
+/* ========================================================================== 
+ * LichSOMA Speaker Selector — LANCER HTML export priority styles
+ * - LANCER system CSS and dynamic icon fallbacks are still collected by JS.
+ * - This file contains only the static LichSOMA priority/spacing corrections.
+ * ========================================================================== */
+
+/* --- LichSOMA Speaker Selector priority overrides for LANCER export --- */
+#chat-log.chat-log .chat-message,
+.chat-log .chat-message,
+#chat-log.chat-log .message,
+.chat-log .message {
+  background: none !important;
+  background-color: transparent !important;
+}
+
+#chat-log.chat-log .lichsoma-chat-header,
+.chat-log .lichsoma-chat-header {
+  padding: 0 !important;
+  background: none !important;
+  background-color: transparent !important;
+}
+
+#chat-log.chat-log .message-content,
+.chat-log .message-content,
+#chat-log.chat-log .chat-message .message-content,
+.chat-log .chat-message .message-content {
+  padding: 0 !important;
+  background: none !important;
+  background-color: transparent !important;
+}
+
+body.lichsoma-fvtt13-chat #chat-log.chat-scroll,
+body.lichsoma-fvtt13-chat .chat-log.chat-scroll {
+  --lichsoma-chat-line-gap: 5px;
+  --lichsoma-chat-message-gap: 0px;
+}
+
+body.lichsoma-fvtt13-chat #chat-log.chat-scroll .chat-message,
+body.lichsoma-fvtt13-chat .chat-log.chat-scroll .chat-message {
+  margin: 0 1px var(--lichsoma-chat-message-gap) 5px !important;
+}
+
+body.lichsoma-fvtt13-chat #chat-log.chat-scroll .chat-message.whisper,
+body.lichsoma-fvtt13-chat .chat-log.chat-scroll .chat-message.whisper,
+body.lichsoma-fvtt13-chat #chat-log.chat-scroll .message.whisper,
+body.lichsoma-fvtt13-chat .chat-log.chat-scroll .message.whisper {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+body.lichsoma-fvtt13-chat #chat-log.chat-scroll .chat-message .message-content,
+body.lichsoma-fvtt13-chat .chat-log.chat-scroll .chat-message .message-content {
+  line-height: calc(1em + var(--lichsoma-chat-line-gap)) !important;
+}
+
+body.lichsoma-fvtt13-chat #chat-log.chat-scroll .chat-message .message-content > p,
+body.lichsoma-fvtt13-chat .chat-log.chat-scroll .chat-message .message-content > p {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  line-height: inherit !important;
+}
+
+body.lichsoma-chat-log-export.system-lancer #chat-log.chat-scroll .chat-message .message-content > :is([class^="lancer-"], [class*=" lancer-"]),
+body.lichsoma-chat-log-export.system-lancer .chat-log.chat-scroll .chat-message .message-content > :is([class^="lancer-"], [class*=" lancer-"]) {
+  line-height: normal !important;
+}
+
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow {
+  display: flex !important;
+  flex-flow: row nowrap !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 0.25em !important;
+  text-align: left !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-height: unset !important;
+  height: auto !important;
+}
+
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow > * {
+  flex-grow: 0 !important;
+}
+
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow > .dice-total,
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow > .dice-total.major {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  max-width: max-content !important;
+  min-width: max-content !important;
+  margin: 5px 5px 5px auto !important;
+  padding: 0 5px !important;
+  display: inline-flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  text-align: right !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .overcharge-heat-wrapper.flexrow {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  flex-flow: row nowrap !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 0.2em !important;
+  width: auto !important;
+  max-width: max-content !important;
+  min-width: max-content !important;
+}
+
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .overcharge-heat-wrapper.flexrow > * {
+  flex: 0 0 auto !important;
+}
+
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow i.cci,
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow i.mdi,
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow [class^="cci-"],
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow [class*=" cci-"],
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow [class^="mdi-"],
+body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow [class*=" mdi-"] {
+  flex: 0 0 auto !important;
+}
+
+body.lichsoma-chat-log-export.system-lancer .lancer-header .lichsoma-lancer-inline-icon,
+body.lichsoma-chat-log-export.system-lancer .lancer-button .lichsoma-lancer-inline-icon,
+body.lichsoma-chat-log-export.system-lancer .lancer-header i.mdi,
+body.lichsoma-chat-log-export.system-lancer .lancer-button i.mdi,
+body.lichsoma-chat-log-export.system-lancer .lancer-header i.cci,
+body.lichsoma-chat-log-export.system-lancer .lancer-button i.cci {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-right: 0.35em !important;
+  vertical-align: -0.125em !important;
+}
+
+body.lichsoma-chat-log-export.system-lancer .lancer-button .lichsoma-lancer-inline-icon,
+body.lichsoma-chat-log-export.system-lancer .lancer-button i.mdi,
+body.lichsoma-chat-log-export.system-lancer .lancer-button i.cci {
+  margin-right: 0.4em !important;
+}

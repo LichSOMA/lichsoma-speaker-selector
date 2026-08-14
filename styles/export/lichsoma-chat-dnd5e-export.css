@@ -1,8 +1,8 @@
-/* D&D 5e 전용 LichSOMA 채팅 보정
-   - 원본 dnd5e header/avatar/name-stacked 구조 유지
-   - LichSOMA 머지 표시와 dnd5e 카드형 채팅 외피의 충돌 보정
-   - HTML 내보내기 시 scripts/apps/lichsoma-chat-dnd5e.js가 이 파일을 추가 CSS로 포함
-*/
+/* ==========================================================================
+ * LichSOMA Speaker Selector — D&D 5e HTML export chat styles
+ * - Applies to exported chat logs with body.system-dnd5e.
+ * - Kept separate from in-game dnd5e chat styles.
+ * ========================================================================== */
 
 body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .lichsoma-chat-portrait-container,
 body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .lichsoma-chat-portrait-container,

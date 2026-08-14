@@ -1,0 +1,31 @@
+/* ==========================================================================
+ * LichSOMA Speaker Selector — DX3rd(fvtt) in-game integration styles
+ * - DX3rd-FVTT owns its native chat/card styling.
+ * - Keep only Speaker Selector-specific integration/override rules here.
+ * ========================================================================== */
+
+/* DX3rd system messages already hide Foundry's native header in the system CSS.
+ * Speaker Selector adds its own header, so suppress only that additional header. */
+body.system-dx3rd-fvtt .chat-log .chat-message.dx3rd-system-message .lichsoma-chat-header {
+    display: none !important;
+}
+
+/* Speaker Selector normally gives every message wrapper 0.25rem top padding.
+ * DX3rd system messages have no visible chat header and their native card now starts flush,
+ * so suppress the wrapper padding as an integration rule rather than duplicating DX3rd card styles. */
+body.system-dx3rd-fvtt .chat-scroll .chat-message.dx3rd-system-message {
+    padding-top: 0 !important;
+}
+
+/* Keep a small gap when an info-text block and a rendered roll are adjacent. */
+body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-info-message, form.chat-form)
+  .dx3rd-info__text + .dice-roll,
+body.system-dx3rd-fvtt :is(.chat-log .chat-message.dx3rd-info-message, form.chat-form)
+  .dice-roll + .dx3rd-info__text {
+    margin-top: 0.25rem !important;
+}
+
+/* Speaker Selector-specific readability override requested for DX3rd dice chain totals. */
+body.system-dx3rd-fvtt .dice-tooltip .dice-rolls .clear {
+    color: #fff;
+}

@@ -4,6 +4,7 @@
  */
 
 import { LichsomaChatDom } from './lichsoma-chat-dom.js';
+import { emitSocket, registerSocketHandler } from './lichsoma-socket-router.js';
 
 export class ChatNotification {
     // 입력 중인 사용자 상태 저장 (userId -> timestamp)
@@ -55,15 +56,8 @@ export class ChatNotification {
      * Socket 리스너 설정
      */
     static _setupSocketListener() {
-        if (!game.socket) return;
-        
-        game.socket.on('module.lichsoma-speaker-selector', (data) => {
-            if (data.type === 'typingStart') {
-                this._handleTypingStart(data.userId);
-            } else if (data.type === 'typingStop') {
-                this._handleTypingStop(data.userId);
-            }
-        });
+        registerSocketHandler('typingStart', data => this._handleTypingStart(data.userId));
+        registerSocketHandler('typingStop', data => this._handleTypingStop(data.userId));
     }
 
     static _getChatInput(root = document) {
@@ -177,10 +171,7 @@ export class ChatNotification {
      */
     static _emitTypingStart() {
         if (!game.socket) return;
-        game.socket.emit('module.lichsoma-speaker-selector', {
-            type: 'typingStart',
-            userId: game.user.id
-        });
+        emitSocket('typingStart');
     }
 
     /**
@@ -216,10 +207,7 @@ export class ChatNotification {
         if (!this._isTyping) return; // 이미 중지 상태면 중복 방지
         
         this._isTyping = false;
-        game.socket.emit('module.lichsoma-speaker-selector', {
-            type: 'typingStop',
-            userId: game.user.id
-        });
+        emitSocket('typingStop');
     }
 
     /**

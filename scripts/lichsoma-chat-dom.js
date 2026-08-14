@@ -235,7 +235,14 @@ export class LichsomaChatDom {
             '#chat-message .editor-container',
             'prose-mirror#chat-message .editor-container',
             'prose-mirror[name="message"] .editor-container',
-            '.chat-form .editor-container'
+            '.chat-form .editor-container',
+            // FVTT v13 also uses a ProseMirror-like chat input, but may not expose an inner editor-container.
+            // In that case, use the chat input custom element itself as the resize target.
+            '#chat-message',
+            'prose-mirror#chat-message',
+            'prose-mirror[name="message"]',
+            '.chat-form prose-mirror[name="message"]',
+            '.chat-form .chat-input'
         ], root);
     }
 
