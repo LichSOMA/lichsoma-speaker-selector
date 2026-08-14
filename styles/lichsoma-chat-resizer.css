@@ -90,3 +90,27 @@ body.lichsoma-fvtt13-chat #sidebar .lichsoma-editor-height-handle--form {
     pointer-events: auto;
     touch-action: none;
 }
+
+/* Notification tray chat input
+   - 일반 sidebar의 사용자 조절 높이와 분리한다.
+   - FVTT v13/v14 모두 128px로 고정하며 notification에서는 높이 전환 애니메이션을 사용하지 않는다.
+   - notification의 message overflow / Grid / ProseMirror 내부 geometry는 Foundry 코어에 맡긴다. */
+body:is(.lichsoma-fvtt13-chat, .lichsoma-fvtt14-chat) #chat-notifications {
+    --chat-input-height: 128px !important;
+}
+
+body:is(.lichsoma-fvtt13-chat, .lichsoma-fvtt14-chat) #chat-notifications
+:is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input) {
+    height: 128px !important;
+    min-height: 128px !important;
+    max-height: 128px !important;
+    box-sizing: border-box !important;
+    transition: none !important;
+}
+
+/* FVTT v13 notification은 chat-form의 flex 흐름을 사용하므로 flex 크기만 함께 고정한다.
+   FVTT v14는 코어 Grid가 배치를 소유하므로 flex/overflow/Grid 관련 속성을 재정의하지 않는다. */
+body.lichsoma-fvtt13-chat #chat-notifications
+:is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input) {
+    flex: 0 0 128px !important;
+}

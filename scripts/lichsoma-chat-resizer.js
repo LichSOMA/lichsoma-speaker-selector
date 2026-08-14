@@ -16,6 +16,7 @@ const DEFAULT_WIDTH = 312;
 const MIN_CHAT_INPUT_HEIGHT = 128;
 const FVTT13_MIN_CHAT_INPUT_HEIGHT = 128;
 const DEFAULT_CHAT_INPUT_HEIGHT = 128;
+const NOTIFICATION_CHAT_INPUT_HEIGHT = 128;
 
 export class ChatSidebarResizer {
     static _resizeClampTimer = null;
@@ -110,11 +111,26 @@ export class ChatSidebarResizer {
                 this._applySavedChatInputHeight();
                 this._installSidebarHandle();
                 this._installEditorHeightHandle();
+                return;
+            }
+
+            // FVTT v14: ChatLog input may be embedded in #chat-notifications.
+            if (app?.constructor?.tabName === 'chat' || app?.tabName === 'chat') {
+                setTimeout(() => this._applySavedChatInputHeight(), 0);
             }
         });
 
         Hooks.on('renderChatLog', () => {
-            setTimeout(() => this._installEditorHeightHandle(), 0);
+            setTimeout(() => {
+                this._applySavedChatInputHeight();
+                this._installEditorHeightHandle();
+            }, 0);
+        });
+
+        // FVTT v13.346+ / v14: chat input이 다른 DOM 부모로 re-parent된 직후 호출되는 공식 훅.
+        // 이동된 실제 요소를 즉시 정규화해 sidebar 전용 inline layout이 notification tray로 새지 않게 한다.
+        Hooks.on('renderChatInput', (app, elements, context) => {
+            this._handleChatInputAdoption(elements, context);
         });
 
         // FVTT v13 이하: 일부 환경에서만 존재 (v14 코어에는 없음)
@@ -127,7 +143,10 @@ export class ChatSidebarResizer {
         // FVTT v14+: 사이드바 탭 전환 시 호출됨 — 채팅으로 돌아올 때 높이 핸들 재설치
         Hooks.on('changeSidebarTab', (app) => {
             if (app?.constructor?.tabName !== 'chat') return;
-            setTimeout(() => this._installEditorHeightHandle(), 0);
+            setTimeout(() => {
+                this._applySavedChatInputHeight();
+                this._installEditorHeightHandle();
+            }, 0);
         });
     }
 
@@ -185,42 +204,187 @@ export class ChatSidebarResizer {
         const sidebar = this._getSidebar();
         if (!sidebar) return;
         const h = this._clampChatInputHeight(px);
-        sidebar.style.setProperty('--chat-input-height', `${h}px`);
+        const value = `${h}px`;
+        sidebar.style.setProperty('--chat-input-height', value);
+
+        // Notification tray의 128px 고정 높이는 tray 전용 CSS와 adoption 정규화에서 관리한다.
+        // 일반 sidebar의 사용자 높이 값이 notification 레이아웃 변수로 전파되지 않도록 여기서는 건드리지 않는다.
         this._syncChatInputHeightToDom(h);
         this._updateEditorHandlePosition();
+    }
+
+    static _getChatInputSelector() {
+        return ':is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input)';
+    }
+
+    static _getMovedElements(elements) {
+        if (!elements || typeof elements !== 'object') return [];
+        const moved = [];
+        for (const value of Object.values(elements)) {
+            if (value instanceof HTMLElement) moved.push(value);
+            else if (Array.isArray(value)) moved.push(...value.filter(item => item instanceof HTMLElement));
+        }
+        return [...new Set(moved)];
+    }
+
+    static _findMovedElement(elements, selector) {
+        for (const root of this._getMovedElements(elements)) {
+            if (root.matches?.(selector)) return root;
+            const nested = root.querySelector?.(selector);
+            if (nested) return nested;
+        }
+        return null;
+    }
+
+    static _clearLegacyInlineOrder(input, controls = null) {
+        // 과거 Speaker Selector가 chat-form 정렬을 위해 남기던 정확한 inline 값만 제거한다.
+        // 다른 모듈이 별도 order 값을 사용한다면 건드리지 않는다.
+        if (input?.style?.getPropertyValue('order')?.trim() === '3') {
+            input.style.removeProperty('order');
+        }
+        if (controls?.style?.getPropertyValue('order')?.trim() === '0') {
+            controls.style.removeProperty('order');
+        }
+    }
+
+    static _applyManagedInnerEditorSizing(editor) {
+        if (!editor) return;
+        editor.dataset.lichsomaChatHeightManaged = 'true';
+        editor.style.setProperty('height', '100%', 'important');
+        editor.style.setProperty('min-height', '100%', 'important');
+        editor.style.setProperty('max-height', '100%', 'important');
+        editor.style.setProperty('overflow-y', 'auto', 'important');
+        editor.style.setProperty('box-sizing', 'border-box', 'important');
+    }
+
+    static _clearManagedInnerEditorSizing(editor) {
+        if (!editor || editor.dataset.lichsomaChatHeightManaged !== 'true') return;
+        for (const property of ['height', 'min-height', 'max-height', 'overflow-y', 'box-sizing']) {
+            editor.style.removeProperty(property);
+        }
+        delete editor.dataset.lichsomaChatHeightManaged;
+    }
+
+    static _applyNotificationInputSizing(input) {
+        if (!input) return;
+        const inputValue = `${NOTIFICATION_CHAT_INPUT_HEIGHT}px`;
+
+        input.style.setProperty('height', inputValue, 'important');
+        input.style.setProperty('min-height', inputValue, 'important');
+        input.style.setProperty('max-height', inputValue, 'important');
+
+        if (this._isFoundry13()) {
+            // v13 notification의 chat-form은 flex 흐름을 유지하므로 입력 자체도 128px flex item으로 고정한다.
+            input.style.setProperty('flex-basis', inputValue, 'important');
+            input.style.setProperty('flex', `0 0 ${inputValue}`, 'important');
+        } else {
+            // v14 notification은 코어 CSS Grid가 배치를 소유한다. sidebar에서 따라온 flex 값은 제거한다.
+            input.style.removeProperty('flex-basis');
+            input.style.removeProperty('flex');
+        }
+
+        // 반복 수정 과정에서 추가됐던 notification 전용 transition override만 제거한다.
+        if (input.style.getPropertyValue('transition-property')?.trim() === 'opacity') {
+            input.style.removeProperty('transition-property');
+        }
     }
 
     static _syncChatInputHeightToDom(px) {
         const sidebar = this._getSidebar();
         if (!sidebar) return;
         const h = this._clampChatInputHeight(px);
-        const value = `${h}px`;
-        const inputs = LichsomaChatDom.queryAll(
-            ':is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input)',
-            sidebar
-        );
+        const roots = [sidebar];
+        const notifications = document.querySelector('#chat-notifications');
+        if (notifications) roots.push(notifications);
+
+        const inputSelector = this._getChatInputSelector();
+        const inputs = [...new Set(roots.flatMap(root => LichsomaChatDom.queryAll(inputSelector, root)))];
 
         for (const input of inputs) {
-            input.style.setProperty('height', value, 'important');
-            input.style.setProperty('min-height', value, 'important');
-            input.style.setProperty('flex-basis', value, 'important');
-            input.style.setProperty('flex', `0 0 ${value}`, 'important');
+            if (LichsomaChatDom.isInChatNotifications(input)) {
+                this._applyNotificationInputSizing(input);
+                const controls = LichsomaChatDom.getChatControls(input.closest('#chat-notifications'));
+                this._clearLegacyInlineOrder(input, controls);
+                continue;
+            }
+
+            const inputValue = `${h}px`;
+            input.style.setProperty('height', inputValue, 'important');
+            input.style.setProperty('min-height', inputValue, 'important');
+            input.style.setProperty('flex-basis', inputValue, 'important');
+            input.style.setProperty('flex', `0 0 ${inputValue}`, 'important');
+
             if (this._isFoundry13()) {
-                input.style.setProperty('max-height', value, 'important');
+                input.style.setProperty('max-height', inputValue, 'important');
                 input.style.setProperty('overflow', 'hidden', 'important');
+                input.style.setProperty('box-sizing', 'border-box', 'important');
+            } else {
+                input.style.removeProperty('max-height');
+                input.style.removeProperty('overflow');
+                input.style.removeProperty('box-sizing');
+                if (input.style.getPropertyValue('transition-property')?.trim() === 'opacity') {
+                    input.style.removeProperty('transition-property');
+                }
             }
         }
 
-        const innerEditors = LichsomaChatDom.queryAll(
-            ':is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input) :is(.editor-container, .ProseMirror, [contenteditable="true"])',
-            sidebar
-        );
+        const editorSelector = `${inputSelector} :is(.editor-container, .ProseMirror, [contenteditable="true"])`;
+        const innerEditors = [...new Set(roots.flatMap(root => LichsomaChatDom.queryAll(editorSelector, root)))];
         for (const editor of innerEditors) {
-            editor.style.setProperty('height', '100%', 'important');
-            editor.style.setProperty('min-height', '100%', 'important');
-            editor.style.setProperty('max-height', '100%', 'important');
-            editor.style.setProperty('overflow-y', 'auto', 'important');
-            editor.style.setProperty('box-sizing', 'border-box', 'important');
+            const inNotifications = LichsomaChatDom.isInChatNotifications(editor);
+            if (inNotifications && !this._isFoundry13()) {
+                // v14 notification에서는 ProseMirror 내부 geometry는 코어가 소유한다.
+                // sidebar에서 이동해 온 우리 inline 100% sizing만 제거한다.
+                this._clearManagedInnerEditorSizing(editor);
+                continue;
+            }
+            this._applyManagedInnerEditorSizing(editor);
+        }
+    }
+
+    static _handleChatInputAdoption(elements, context = null) {
+        const inputSelector = this._getChatInputSelector();
+        const movedInput = this._findMovedElement(elements, inputSelector);
+        const movedControls = this._findMovedElement(elements, '#chat-controls');
+        const notificationRoot = document.querySelector('#chat-notifications');
+        const input = movedInput
+            ?? LichsomaChatDom.getChatInput(notificationRoot)
+            ?? LichsomaChatDom.getChatInput(this._getSidebar() ?? document);
+
+        if (!input) return;
+
+        const inNotifications = LichsomaChatDom.isInChatNotifications(input);
+        const previousParent = LichsomaChatDom.asElement(context?.previousParent);
+        const cameFromNotifications = previousParent?.id === 'chat-notifications'
+            || LichsomaChatDom.isInChatNotifications(previousParent);
+        const controls = movedControls
+            ?? (inNotifications ? LichsomaChatDom.getChatControls(notificationRoot) : null);
+
+        // Notification으로 들어가거나 빠져나오는 adoption에 한해서만 과거 inline order를 청소한다.
+        // popout 등 다른 re-parent 경로의 layout은 건드리지 않는다.
+        if (inNotifications || cameFromNotifications) {
+            this._clearLegacyInlineOrder(input, controls);
+        }
+
+        if (inNotifications) {
+            // 이 훅은 re-parent 직후 동기적으로 호출되므로, 다음 paint 전에 notification geometry를 확정한다.
+            this._applyNotificationInputSizing(input);
+            if (!this._isFoundry13()) {
+                for (const editor of LichsomaChatDom.queryAll(
+                    ':is(.editor-container, .ProseMirror, [contenteditable="true"])',
+                    input
+                )) {
+                    this._clearManagedInnerEditorSizing(editor);
+                }
+            }
+            notificationRoot?.querySelectorAll?.('.lichsoma-editor-height-handle')?.forEach?.(handle => handle.remove());
+            return;
+        }
+
+        // notification에서 sidebar로 돌아온 경우에만 사용자 저장 높이와 리사이즈 핸들을 복원한다.
+        if (input.closest?.('#sidebar')) {
+            this._applySavedChatInputHeight();
+            this._installEditorHeightHandle();
         }
     }
 
@@ -345,6 +509,13 @@ export class ChatSidebarResizer {
             if (attempt < maxAttempts) {
                 setTimeout(() => this._installEditorHeightHandleAttempt(attempt + 1), delayMs);
             }
+            return;
+        }
+
+        // Notification tray에서는 높이를 128px로 고정하므로 리사이즈 핸들을 두지 않는다.
+        if (LichsomaChatDom.isInChatNotifications(editorContainer)) {
+            const notifications = document.querySelector('#chat-notifications');
+            notifications?.querySelectorAll?.('.lichsoma-editor-height-handle')?.forEach?.(h => h.remove());
             return;
         }
 

@@ -31,23 +31,25 @@
     z-index: 1;
 }
 
-/* chat-form의 자식 요소들 순서 명시 */
-.chat-form {
+/* chat-form의 자식 요소들 순서 명시.
+   FVTT v14 notification은 chat-form 구조를 사용하지 않으므로 이 규칙의 대상에서 제외한다. */
+:is(#chat.chat-sidebar .chat-form, body.lichsoma-fvtt13-chat #chat-notifications > .chat-form) {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.chat-form #chat-controls {
+:is(#chat.chat-sidebar .chat-form, body.lichsoma-fvtt13-chat #chat-notifications > .chat-form) #chat-controls {
     order: 0;
 }
 
-.chat-form .lichsoma-speaker-selector {
+:is(#chat.chat-sidebar .chat-form, body.lichsoma-fvtt13-chat #chat-notifications > .chat-form) .lichsoma-speaker-selector {
     order: 2;
 }
 
 /* FVTT v14 채팅 입력은 .chat-input 대신 prose-mirror#chat-message일 수 있다. */
-.chat-form :is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input) {
+:is(#chat.chat-sidebar .chat-form, body.lichsoma-fvtt13-chat #chat-notifications > .chat-form)
+:is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"], .chat-input) {
     order: 3;
 }
 
@@ -86,7 +88,11 @@
 /* FVTT v14: 채팅 입력(ProseMirror) 상단 메뉴는 별도 버튼으로 대체
    - display:none 상태에서 내부 버튼을 트리거하면 드롭다운이 (0,0)으로 뜰 수 있어
      기본은 숨기되, 동작 순간에는 잠깐 노출하도록 클래스 기반으로 제어 */
-.chat-form.lichsoma-hide-chat-editor-menu :is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"]) .menu-container {
+:is(
+    .chat-form.lichsoma-hide-chat-editor-menu,
+    body.lichsoma-fvtt14-chat #chat-notifications
+)
+:is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"]) .menu-container {
     display: none !important;
 }
 

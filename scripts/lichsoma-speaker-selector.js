@@ -81,7 +81,7 @@ export class SpeakerSelector {
     }
 
     static _getSidebarChatFormElement(root = document) {
-        return LichsomaChatDom.getSidebarChatForm(root) || LichsomaChatDom.getSidebarChatForm(document) || LichsomaChatDom.getChatForm(root);
+        return LichsomaChatDom.getSidebarChatForm(root) || LichsomaChatDom.getSidebarChatForm(document);
     }
 
     static _getChatInputText(chatInput) {
@@ -2618,6 +2618,13 @@ export class SpeakerSelector {
             return;
         }
 
+        // FVTT v14는 chat-form 전체가 아니라 chat input/controls를 #chat-notifications로 이동시킬 수 있다.
+        // 실제로 form 자체가 notification 안에 들어온 환경에서는 Speaker Selector 관련 클래스/버튼을 추가하지 않는다.
+        if (LichsomaChatDom.isInChatNotifications(chatFormElement)) {
+            this._isRenderingSelector = false;
+            return;
+        }
+
         const chatForm = $(chatFormElement);
 
         // FVTT v14 ProseMirror의 이미지 삽입 기능이 있는 환경에서만 별도 이미지 버튼을 추가한다.
@@ -2645,12 +2652,6 @@ export class SpeakerSelector {
             }
         }
         
-        // notifications에 있는 경우 제외
-        if (LichsomaChatDom.isInChatNotifications(chatFormElement)) {
-            this._isRenderingSelector = false;
-            return;
-        }
-
         // chat-controls와 chat-input 사이에 삽입할 위치 찾기
         const chatControls = $(LichsomaChatDom.getChatControls(chatFormElement));
         const chatInput = $(LichsomaChatDom.getChatInput(chatFormElement));
@@ -2929,37 +2930,20 @@ export class SpeakerSelector {
             }
             
             if (chatControls.length && chatInput.length) {
-                // chat-input 바로 앞에 삽입
+                // 실제 DOM은 chat-input 바로 앞에 삽입하고, 시각적 순서는 chat-form 범위의 CSS가 담당한다.
+                // inline order는 FVTT가 동일한 chat input/controls를 notification으로 re-parent할 때 함께 이동하므로 사용하지 않는다.
                 try {
                     chatInput[0].insertAdjacentElement('beforebegin', selectorHTML[0]);
-                    
-                    // CSS order 속성 명시적 설정으로 순서 보장
-                    const insertedElement = selectorHTML[0];
-                    insertedElement.style.order = '2';
-                    if (chatControls[0]) chatControls[0].style.order = '0';
-                    if (chatInput[0]) chatInput[0].style.order = '3';
                 } catch (error) {
                     // chat-input 앞 삽입 실패 시 fallback으로 chat-controls 다음에 삽입
                     chatControls[0].insertAdjacentElement('afterend', selectorHTML[0]);
-                    
-                    const insertedElement = selectorHTML[0];
-                    insertedElement.style.order = '2';
-                    if (chatControls[0]) chatControls[0].style.order = '0';
-                    if (chatInput[0]) chatInput[0].style.order = '3';
                 }
             } else if (chatInput.length) {
                 // chat-controls가 없으면 chat-input 앞에 삽입
                 chatInput[0].insertAdjacentElement('beforebegin', selectorHTML[0]);
-                
-                const insertedElement = selectorHTML[0];
-                insertedElement.style.order = '2';
-                if (chatInput[0]) chatInput[0].style.order = '3';
             } else {
                 // 최후 fallback: chat-form 맨 앞에 추가
                 chatForm.prepend(selectorHTML);
-                
-                const insertedElement = selectorHTML[0];
-                insertedElement.style.order = '2';
             }
             
         } catch (error) {
