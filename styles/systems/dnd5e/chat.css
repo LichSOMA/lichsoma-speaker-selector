@@ -1,0 +1,99 @@
+/* ==========================================================================
+ * LichSOMA Speaker Selector — D&D 5e in-game integration styles
+ * - Preserve D&D's native payload/card presentation while Speaker Selector owns the outer chat shell.
+ * - Keep only Speaker Selector header, sender-color, delete-control, and merge integration.
+ * ========================================================================== */
+
+/* D&D light-theme tokens that become unreadable after Speaker Selector removes the outer message background.
+ * Only transparent shell-level components are adjusted; opaque D&D cards keep their native foreground/background. */
+body.system-dnd5e .theme-light .chat-message.lichsoma-dnd5e-native-header {
+    --pill-transparent-color: rgba(255, 255, 255, 0.75);
+    --pill-border-dotted: 1px dotted rgba(255, 255, 255, 0.35);
+}
+
+body.system-dnd5e .theme-light .chat-message.lichsoma-dnd5e-native-header :is(.card-tray, .targets-tray) {
+    color: var(--pill-transparent-color);
+}
+
+/* Preserve the native sender and suppress only the module's generic header parts. */
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .lichsoma-dnd5e-original-sender {
+    display: flex !important;
+}
+
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .lichsoma-chat-portrait-container,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender[data-lichsoma-sender="true"] {
+    display: none !important;
+}
+
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-header {
+    display: flex;
+}
+
+body.system-dnd5e .chat-message.dnd5e2.lichsoma-dnd5e-native-header .message-header {
+    margin-bottom: 0 !important;
+}
+
+/* Speaker Selector's optional user color applies only to the native sender title. */
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender,
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender .name-stacked .title {
+    color: var(--lichsoma-dnd5e-title-color, inherit) !important;
+}
+
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-sender .avatar {
+    cursor: pointer;
+}
+
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header:not(.lichsoma-merged) .message-metadata {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* The D&D 5e metadata area owns placement, but visibility follows Speaker Selector's
+ * shared hover-only delete-control UX. */
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-metadata .lichsoma-delete-btn {
+    position: static !important;
+    display: inline-flex;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    color: inherit;
+    opacity: 0;
+    z-index: auto;
+    pointer-events: none;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header:hover
+.message-metadata .lichsoma-delete-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-metadata
+:is(.lichsoma-delete-btn, .message-delete, [data-action="deleteMessage"]):hover {
+    color: #ff3b30 !important;
+}
+
+body.system-dnd5e .chat-message.lichsoma-dnd5e-native-header .message-metadata
+:is(.lichsoma-delete-btn, .message-delete, [data-action="deleteMessage"]):hover :is(i, svg) {
+    color: inherit !important;
+    fill: currentColor;
+}
+
+/* Merge only suppresses the repeated native sender/header chrome. */
+body.system-dnd5e .chat-log .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header).lichsoma-merged
+:is(.message-sender, .message-metadata) {
+    display: none !important;
+}
+
+body.system-dnd5e .chat-log .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header).lichsoma-merged
+.message-header:not(:has(.flavor-text)) {
+    display: none !important;
+}
+
+body.system-dnd5e .chat-log .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header).lichsoma-merged
+.message-header:has(.flavor-text) {
+    display: block !important;
+}

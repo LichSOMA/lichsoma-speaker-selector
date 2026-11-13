@@ -1,0 +1,501 @@
+/* Chat palettes and terminal controls. Shared sidebar/window backgrounds are
+ * defined in lichsoma-chat-surfaces.css for all three themes. */
+body.lichsoma-speaker-theme-retro-terminal {
+    --speaker-terminal-rgb: 143 255 199;
+    --speaker-terminal-bg-rgb: 5 9 8;
+    --speaker-terminal-header-rgb: 5 16 13;
+    --speaker-terminal-panel-rgb: 2 5 4;
+    --speaker-terminal-fg: #8fffc7;
+    --speaker-terminal-muted: #6cb99a;
+    --speaker-terminal-bg: #050908;
+    --speaker-terminal-panel: #020504;
+    --speaker-terminal-border: rgba(143, 255, 199, 0.3);
+    --speaker-terminal-control-active: #17382b;
+    --speaker-terminal-control-hover: #244b3a;
+    --speaker-terminal-font: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --export-bg-color: var(--speaker-terminal-bg);
+    --export-text-color: var(--speaker-terminal-fg);
+    --export-border-color: var(--speaker-terminal-border);
+    --export-secondary-text-color: var(--speaker-terminal-muted);
+    --speaker-terminal-highlight: #baffdd;
+    --speaker-terminal-control-bg: rgba(5, 9, 8, 0.75);
+    --speaker-terminal-scrollbar: rgba(143, 255, 199, 0.5);
+    --speaker-terminal-window-bg: rgba(5, 9, 8, 0.9);
+    --speaker-terminal-selection-bg: rgba(143, 255, 199, 0.08);
+}
+body.lichsoma-speaker-theme-terminal-red {
+    --speaker-terminal-rgb: 255 155 155;
+    --speaker-terminal-bg-rgb: 11 5 5;
+    --speaker-terminal-header-rgb: 22 8 8;
+    --speaker-terminal-panel-rgb: 7 2 2;
+    --speaker-terminal-line: #643737;
+    --speaker-terminal-deep: #291313;
+    --speaker-terminal-strong: #dc8585;
+    --speaker-terminal-surface: #210e0e;
+    --speaker-terminal-fg: #ff9b9b;
+    --speaker-terminal-muted: #c57878;
+    --speaker-terminal-bg: #0b0505;
+    --speaker-terminal-panel: #070202;
+    --speaker-terminal-border: rgba(255, 155, 155, 0.3);
+    --speaker-terminal-control-active: #3b1919;
+    --speaker-terminal-control-hover: #512525;
+    --speaker-terminal-font: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --export-bg-color: var(--speaker-terminal-bg);
+    --export-text-color: var(--speaker-terminal-fg);
+    --export-border-color: var(--speaker-terminal-border);
+    --export-secondary-text-color: var(--speaker-terminal-muted);
+    --speaker-terminal-highlight: #ffd0d0;
+    --speaker-terminal-control-bg: rgba(11, 5, 5, 0.75);
+    --speaker-terminal-scrollbar: rgba(255, 155, 155, 0.5);
+    --speaker-terminal-window-bg: rgba(11, 5, 5, 0.9);
+    --speaker-terminal-selection-bg: rgba(255, 155, 155, 0.08);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) {
+    color: var(--speaker-terminal-fg);
+    font-family: var(--speaker-terminal-font);
+    --color-scrollbar: var(--speaker-terminal-scrollbar);
+    --color-scrollbar-track: transparent;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-chat-log-export {
+    background: var(--speaker-terminal-bg);
+    color: var(--speaker-terminal-fg);
+    font-family: var(--speaker-terminal-font);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) #chat.chat-sidebar::before {
+    background: var(--speaker-terminal-bg);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-speaker-selector :is(select, button),
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-controls, .chat-controls) :is(button, select) {
+    background: var(--speaker-terminal-control-bg) !important;
+    color: var(--speaker-terminal-fg);
+    border-color: var(--speaker-terminal-border);
+    font-family: var(--speaker-terminal-font);
+    --input-background-color: var(--speaker-terminal-panel);
+    --input-text-color: var(--speaker-terminal-fg);
+    --input-border-color: var(--speaker-terminal-border);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-speaker-selector option {
+    background: var(--speaker-terminal-panel);
+    color: var(--speaker-terminal-fg);
+}
+
+/* Style only generic text and core dice; system cards keep their own payload skin. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(.lichsoma-simple-text-payload, .lichsoma-narrator-card, .lichsoma-export-fallback) > .message-content,
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .dice-roll.lichsoma-core-dice :where(.dice-formula, .dice-total, .dice-tooltip, .dice-flavor) {
+    color: var(--speaker-terminal-fg);
+    font-family: var(--speaker-terminal-font);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-chat-header .message-sender {
+    color: var(--speaker-terminal-fg);
+    font-family: var(--speaker-terminal-font);
+    /* Preserve the shared neutral outline; a green blur muddies actor colors. */
+    text-shadow: none;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-chat-portrait-container {
+    background: var(--speaker-terminal-panel);
+    box-shadow: 0 0 0 1px var(--speaker-terminal-border);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-narrator-card .narrator-card {
+    color: var(--speaker-terminal-fg);
+    font-family: var(--speaker-terminal-font);
+    text-shadow: 0 0 5px rgba(143, 255, 199, 0.2);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-narrator-line {
+    color: var(--speaker-terminal-fg) !important;
+    font-family: var(--speaker-terminal-font);
+    text-shadow: 0 0 5px rgba(143, 255, 199, 0.3);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-narrator-line > div:first-child {
+    background: linear-gradient(to right, transparent 0%, rgba(5, 16, 13, 0.7) 20%, rgba(5, 16, 13, 0.7) 80%, transparent 100%) !important;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-narrator-text {
+    color: var(--speaker-terminal-fg) !important;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-portrait-preview {
+    border-color: var(--speaker-terminal-border);
+    background: var(--speaker-terminal-panel);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-typing-indicator {
+    color: var(--speaker-terminal-muted);
+    font-family: var(--speaker-terminal-font);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(.lichsoma-simple-text-payload, .lichsoma-narrator-card) > .message-content hr {
+    border-color: var(--speaker-terminal-border);
+}
+
+/* Module-owned windows share the terminal chrome, including windows opened later. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(.lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) {
+    --color-bg-tint: var(--speaker-terminal-panel);
+    --color-bg-hover: var(--speaker-terminal-selection-bg);
+    --color-primary: var(--speaker-terminal-fg);
+    --color-primary-light: rgba(143, 255, 199, 0.12);
+    background: var(--speaker-terminal-bg);
+    border-color: var(--speaker-terminal-border);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(.lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) :is(.window-header, .lichsoma-grid-window-header) {
+    background: rgba(5, 16, 13, 0.98);
+    color: var(--speaker-terminal-fg);
+    border-bottom-color: var(--speaker-terminal-border);
+    text-shadow: 0 0 5px rgba(143, 255, 199, 0.3);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(.lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) :is(.window-content, input, select, textarea, button) {
+    background: var(--speaker-terminal-panel);
+    color: var(--speaker-terminal-fg);
+    border-color: var(--speaker-terminal-border);
+    font-family: var(--speaker-terminal-font);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-speaker-selector .narrator-btn[aria-pressed="true"] i {
+    color: var(--speaker-terminal-fg) !important;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-speaker-selector select:focus-visible {
+    outline: 1px solid var(--speaker-terminal-fg);
+    outline-offset: 2px;
+}
+
+/* Icon buttons need their icon face even inside terminal-font windows. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#chat.chat-sidebar, .chat-popout, #chat-notifications, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) :is(.fa-solid, .fas) {
+    font-family: var(--fa-style-family-classic, "Font Awesome 6 Pro", "Font Awesome 6 Free", "Font Awesome 5 Free") !important;
+    font-weight: 900 !important;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#chat.chat-sidebar, .chat-popout, #chat-notifications, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) :is(.fa-regular, .far) {
+    font-family: var(--fa-style-family-classic, "Font Awesome 6 Pro", "Font Awesome 6 Free", "Font Awesome 5 Free") !important;
+    font-weight: 400 !important;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#chat.chat-sidebar, .chat-popout, #chat-notifications, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) :is(.fa-brands, .fab) {
+    font-family: "Font Awesome 6 Brands", "Font Awesome 5 Brands" !important;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) .chat-scroll {
+    scrollbar-color: var(--speaker-terminal-scrollbar) transparent;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) .chat-scroll::-webkit-scrollbar-thumb {
+    background: var(--speaker-terminal-scrollbar);
+}
+
+/* Document sheets keep their system/core palette, including header and controls.
+ * Exclusions use :where() so they do not increase selector specificity. */
+
+/* Theme only known core HUD/settings surfaces and Selector-owned windows.
+ * Ordinary dialogs, file pickers and third-party windows are not targets.
+ * Recolor Foundry chrome through existing tokens. No geometry or new panels:
+ * notification overflow, sidebar spacing, radii and borders keep their core shape. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(
+    #sidebar, #sidebar-content, #sidebar-tabs, .sidebar-tab, .sidebar-popout,
+    #scene-controls, #controls, #navigation, #scene-navigation, #players, #hotbar,
+    #chat-notifications,
+    :where(#settings-config, #client-settings), .settings-config, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window
+):not(:where(.sheet, .sheet *)) {
+    --color-text-primary: var(--speaker-terminal-fg);
+    --color-text-secondary: var(--speaker-terminal-muted);
+    --color-text-emphatic: var(--speaker-terminal-highlight);
+    --color-text-light-highlight: var(--speaker-terminal-highlight);
+    --color-text-light-heading: var(--speaker-terminal-fg);
+    --color-text-light-primary: var(--speaker-terminal-fg);
+    --color-text-dark-primary: var(--speaker-terminal-fg);
+    --color-text-dark-secondary: var(--speaker-terminal-muted);
+    --color-text-hyperlink: var(--speaker-terminal-highlight);
+    --color-border-light-primary: var(--speaker-terminal-border);
+    --color-border-dark-primary: var(--speaker-terminal-border);
+    --color-border-highlight: var(--speaker-terminal-fg);
+    --color-border-highlight-alt: var(--speaker-terminal-fg);
+    --color-shadow-primary: rgba(143, 255, 199, 0.3);
+    --color-cool-3: #36584a;
+    --color-cool-4: #13231d;
+    --color-cool-5: var(--speaker-terminal-bg);
+    --color-cool-5-25: rgba(5, 9, 8, 0.25);
+    --color-cool-5-50: rgba(5, 9, 8, 0.5);
+    --color-cool-5-75: var(--speaker-terminal-control-bg);
+    --color-warm-1: var(--speaker-terminal-fg);
+    --color-warm-2: #6ccea3;
+    --color-warm-3: #36584a;
+    --background: var(--speaker-terminal-window-bg);
+    --background-color: var(--speaker-terminal-window-bg);
+    --color-scrollbar: var(--speaker-terminal-scrollbar);
+    --color-scrollbar-track: transparent;
+    color: var(--speaker-terminal-fg);
+    font-family: var(--speaker-terminal-font);
+    --font-body: var(--speaker-terminal-font);
+}
+
+/* Local theme classes can reset tokens on controls, so set their palette locally. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(
+    #sidebar, #sidebar-content, #sidebar-tabs, .sidebar-tab, .sidebar-popout,
+    #scene-controls, #controls, #navigation, #scene-navigation, #players, #hotbar,
+    #chat-notifications,
+    :where(#settings-config, #client-settings), .settings-config, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window
+) :is(.ui-control, button, input, select, textarea):not(:where(.sheet, .sheet *)) {
+    --control-bg-color: var(--speaker-terminal-control-bg);
+    --control-border-color: var(--speaker-terminal-border);
+    --control-icon-color: var(--speaker-terminal-fg);
+    --control-hover-bg-color: var(--speaker-terminal-control-hover);
+    --control-hover-border-color: var(--speaker-terminal-fg);
+    --control-hover-icon-color: var(--speaker-terminal-highlight);
+    --control-active-bg-color: var(--speaker-terminal-control-active);
+    --control-active-border-color: var(--speaker-terminal-fg);
+    --control-active-icon-color: var(--speaker-terminal-highlight);
+    --control-button-bg-color: var(--speaker-terminal-control-bg);
+    --control-button-border-color: var(--speaker-terminal-border);
+    --control-button-icon-color: var(--speaker-terminal-fg);
+    --control-toggle-bg-color: #0d1b15;
+    --control-button-hover-bg-color: var(--speaker-terminal-control-hover);
+    --control-button-active-bg-color: var(--speaker-terminal-control-active);
+    --control-toggle-hover-bg-color: var(--speaker-terminal-control-hover);
+    --control-toggle-active-bg-color: var(--speaker-terminal-control-active);
+    --control-toggle-border-color: var(--speaker-terminal-fg);
+    --control-toggle-icon-color: var(--speaker-terminal-highlight);
+    --button-background-color: var(--speaker-terminal-control-bg);
+    --button-border-color: var(--speaker-terminal-border);
+    --button-text-color: var(--speaker-terminal-fg);
+    --button-hover-background-color: var(--speaker-terminal-control-hover);
+    --button-hover-border-color: var(--speaker-terminal-fg);
+    --button-hover-text-color: var(--speaker-terminal-highlight);
+    --button-focus-outline-color: var(--speaker-terminal-fg);
+    --input-background-color: rgba(2, 5, 4, 0.85);
+    --input-border-color: var(--speaker-terminal-border);
+    --input-text-color: var(--speaker-terminal-fg);
+    --input-focus-outline-color: var(--speaker-terminal-fg);
+    --input-text-selection-color: rgba(143, 255, 199, 0.25);
+    --checkbox-checked-color: var(--speaker-terminal-fg);
+    /* Foundry uses this as the unchecked square glyph's color, not its fill. */
+    --checkbox-background-color: var(--speaker-terminal-muted);
+    --checkbox-checkmark-color: var(--speaker-terminal-panel);
+    --checkbox-unchecked-color: var(--speaker-terminal-muted);
+    --checkbox-disabled-color: #4c806b;
+    --range-track-color: var(--speaker-terminal-border);
+    --range-thumb-background-color: var(--speaker-terminal-fg);
+    accent-color: var(--speaker-terminal-fg);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#sidebar, #sidebar-content, .sidebar-tab, .sidebar-popout, :where(#settings-config, #client-settings), .settings-config, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) :is(
+    .window-title, .document-name, .entry-name, .combatant-name, .directory-header,
+    .directory-footer, .combat-tracker-header, .combat-tracker-footer, .form-group > label
+):not(:where(.sheet, .sheet *)) {
+    color: var(--speaker-terminal-fg);
+    font-family: var(--speaker-terminal-font);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#sidebar, .sidebar-tab, .sidebar-popout, #scene-controls, #controls, #navigation, #scene-navigation, #players, #hotbar, :where(#settings-config, #client-settings), .settings-config, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) :is(input, select, textarea):not(:where(.sheet, .sheet *)) {
+    color: var(--speaker-terminal-fg);
+    border-color: var(--speaker-terminal-border);
+    font-family: var(--speaker-terminal-font);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#sidebar, .sidebar-tab, .sidebar-popout, #scene-controls, #controls, #navigation, #scene-navigation, #players, #hotbar, :where(#settings-config, #client-settings), .settings-config, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) button:not(.icon, [class*="fa-"], .fas, .far, .fab, .fal, .fad, .fat):not(:where(.sheet, .sheet *)) {
+    font-family: var(--speaker-terminal-font);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(:where(#settings-config, #client-settings), .settings-config, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) > .window-header:not(:where(.sheet, .sheet *)) {
+    background-color: rgba(5, 16, 13, 0.95);
+    color: var(--speaker-terminal-fg);
+    border-color: var(--speaker-terminal-border);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(:where(#settings-config, #client-settings), .settings-config, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) > .window-content:not(:where(.sheet, .sheet *)) {
+    background-color: var(--speaker-terminal-window-bg);
+    color: var(--speaker-terminal-fg);
+}
+
+/* Only recolor existing surfaces and outlines; never create a new separator. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#sidebar-tabs, #sidebar .tabs, #scene-controls, #controls, #navigation, #scene-navigation, #hotbar) :is(.ui-control, .scene-control, .control-tool, .scene, .macro, [role="tab"], button[data-tab], a[data-tab]) {
+    background-color: var(--speaker-terminal-control-bg);
+    color: var(--speaker-terminal-fg);
+    border-color: var(--speaker-terminal-border);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#sidebar-tabs, #sidebar .tabs, #scene-controls, #controls, #navigation, #scene-navigation, #hotbar) :is(.ui-control, .scene-control, .control-tool, .scene, .macro, [role="tab"], button[data-tab], a[data-tab]):is(:hover, :focus-visible) {
+    background-color: var(--speaker-terminal-control-hover) !important;
+    color: var(--speaker-terminal-highlight);
+    border-color: var(--speaker-terminal-fg);
+}
+
+/* Keep selected/toggled controls opaque over a bright canvas. Also support
+ * legacy controls which place the active class on the surrounding list item. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#sidebar-tabs, #sidebar .tabs, #scene-controls, #controls, #navigation, #scene-navigation, #hotbar) :is(.ui-control, .scene-control, .control-tool, .scene, .macro, [role="tab"], button[data-tab], a[data-tab]):is(.active, .selected, .toggled, [aria-pressed="true"], [aria-selected="true"]),
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#sidebar-tabs, #sidebar .tabs, #scene-controls, #controls) :is(li.active, li.selected) > :is(button, a, .ui-control) {
+    background-color: var(--speaker-terminal-control-active) !important;
+    color: var(--speaker-terminal-highlight);
+    border-color: var(--speaker-terminal-fg);
+}
+
+/* The scene name is text inside the control, not a second button surface.
+ * Preserve the parent surface and core placement of status/user badges. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#navigation, #scene-navigation) .scene-name,
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#scene-controls, #controls) .ui-control :is(.control-label, .tool-label, label) {
+    background: transparent !important;
+    color: inherit;
+    font-family: inherit;
+    box-shadow: none;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#combat, .combat-sidebar) .combatant:is(.active, .current),
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#sidebar, .sidebar-tab, .sidebar-popout) .directory-item:is(:hover, .selected) {
+    background-color: var(--speaker-terminal-selection-bg);
+}
+
+/* Chat icon controls have their own core hover rules. Override the actual
+ * surface too so they never lose their background on a bright canvas. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#chat, #chat-notifications, .chat-popout) :is(#chat-controls, .chat-controls, .lichsoma-speaker-selector) button:not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible):not(:where(.sheet, .sheet *)),
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(:where(#settings-config, #client-settings), .settings-config, .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app, .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app, .lichsoma-css-editor, .lichsoma-chat-log-archive-window) .window-content button:not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible):not(:where(.sheet, .sheet *)) {
+    background: var(--speaker-terminal-control-hover) !important;
+    color: var(--speaker-terminal-highlight);
+    border-color: var(--speaker-terminal-fg);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) :is(#chat, #chat-notifications, .chat-popout) :is(#chat-controls, .chat-controls, .lichsoma-speaker-selector) button:not(:disabled, [aria-disabled="true"]):is(.active, .selected, .toggled, [aria-pressed="true"], [aria-selected="true"]) {
+    background: var(--speaker-terminal-control-active) !important;
+    color: var(--speaker-terminal-highlight);
+    border-color: var(--speaker-terminal-fg);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-available-actor:not(.lichsoma-available-actor-in-grid):hover,
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-grid-slot.drag-over {
+    background: var(--speaker-terminal-control-hover);
+    border-color: var(--speaker-terminal-fg);
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-speaker-drag-preview {
+    position: fixed;
+    left: -10000px;
+    top: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 220px;
+    padding: 8px;
+    background: #0d1b15;
+    color: var(--speaker-terminal-fg);
+    border: 1px solid var(--speaker-terminal-fg);
+    border-radius: 4px;
+    font: 13px var(--speaker-terminal-font);
+    pointer-events: none;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-speaker-drag-preview img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    flex-shrink: 0;
+    border-radius: 4px;
+}
+
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red) .lichsoma-speaker-drag-preview span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Simple Light chat palette; shared surfaces reuse these colors without
+ * changing notification transparency or system-owned payloads. */
+body.lichsoma-speaker-theme-simple-light {
+    --speaker-light-text: #262a32;
+    --speaker-light-muted: #626b78;
+    --speaker-light-bg: #cdd1d6;
+    --speaker-light-control: #d9dce1;
+    --speaker-light-hover: #c3c9d2;
+    --speaker-light-active: #b5becb;
+    --speaker-light-border: #929ba8;
+    --lichsoma-delete-hover-color: #b42318;
+    --export-bg-color: var(--speaker-light-bg);
+    --export-text-color: var(--speaker-light-text);
+    --export-border-color: var(--speaker-light-border);
+    --export-secondary-text-color: var(--speaker-light-muted);
+}
+
+body.lichsoma-speaker-theme-simple-light :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) {
+    --color-cool-5: var(--speaker-light-bg);
+    --color-cool-5-50: rgba(98, 107, 120, 0.5);
+    --color-text-primary: var(--speaker-light-text);
+    --color-text-secondary: var(--speaker-light-muted);
+    --color-scrollbar: var(--speaker-light-muted);
+    --color-scrollbar-track: transparent;
+    color: var(--speaker-light-text);
+}
+
+body.lichsoma-speaker-theme-simple-light.lichsoma-chat-log-export {
+    background: var(--speaker-light-bg);
+    color: var(--speaker-light-text);
+}
+
+body.lichsoma-speaker-theme-simple-light #chat.chat-sidebar::before {
+    background: var(--speaker-light-bg);
+}
+
+body.lichsoma-speaker-theme-simple-light :is(.lichsoma-simple-text-payload, .lichsoma-narrator-card, .lichsoma-export-fallback) > .message-content,
+body.lichsoma-speaker-theme-simple-light .dice-roll.lichsoma-core-dice :where(.dice-formula, .dice-total, .dice-tooltip, .dice-flavor),
+body.lichsoma-speaker-theme-simple-light .lichsoma-chat-header .message-sender,
+body.lichsoma-speaker-theme-simple-light .lichsoma-narrator-card .narrator-card {
+    color: var(--speaker-light-text);
+}
+
+body.lichsoma-speaker-theme-simple-light :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-controls, .chat-controls, .lichsoma-speaker-selector) {
+    --control-bg-color: var(--speaker-light-control);
+    --control-icon-color: var(--speaker-light-text);
+    --control-border-color: var(--speaker-light-border);
+    --input-background-color: var(--speaker-light-control);
+    --input-text-color: var(--speaker-light-text);
+    --input-border-color: var(--speaker-light-border);
+    --input-focus-outline-color: var(--speaker-light-muted);
+}
+
+body.lichsoma-speaker-theme-simple-light .lichsoma-speaker-selector :is(select, option, button),
+body.lichsoma-speaker-theme-simple-light :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-controls, .chat-controls) :is(button, select) {
+    background: var(--speaker-light-control) !important;
+    color: var(--speaker-light-text);
+    border-color: var(--speaker-light-border);
+    color-scheme: light;
+}
+
+/* Also correct already-rendered dropdowns from older module versions whose
+ * inline background still references this legacy dark-surface variable. */
+body.lichsoma-speaker-theme-simple-light .lichsoma-speaker-selector .speaker-dropdown {
+    --color-cool-5-75: var(--speaker-light-control);
+}
+
+body.lichsoma-speaker-theme-simple-light :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-controls, .chat-controls, .lichsoma-speaker-selector) button:not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) {
+    background: var(--speaker-light-hover) !important;
+    border-color: var(--speaker-light-muted);
+}
+
+body.lichsoma-speaker-theme-simple-light :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-controls, .chat-controls, .lichsoma-speaker-selector) button:not(:disabled, [aria-disabled="true"]):is(.active, .selected, .toggled, [aria-pressed="true"], [aria-selected="true"]) {
+    background: var(--speaker-light-active) !important;
+    border-color: var(--speaker-light-muted);
+}
+
+body.lichsoma-speaker-theme-simple-light .lichsoma-typing-indicator,
+body.lichsoma-speaker-theme-simple-light .chat-message .lichsoma-delete-btn {
+    color: var(--speaker-light-muted);
+}
+
+body.lichsoma-speaker-theme-simple-light .lichsoma-chat-portrait-container {
+    background: rgba(98, 107, 120, 0.15);
+    box-shadow: 0 0 0 1px rgba(98, 107, 120, 0.25);
+}
+
+body.lichsoma-speaker-theme-simple-light :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) .chat-scroll {
+    scrollbar-color: var(--speaker-light-muted) transparent;
+}
+
+body.lichsoma-speaker-theme-simple-light :is(#chat.chat-sidebar, .chat-popout, #chat-notifications) .chat-scroll::-webkit-scrollbar-thumb {
+    background: var(--speaker-light-muted);
+}

@@ -1,0 +1,41 @@
+/* ==========================================================================
+ * LichSOMA Speaker Selector — Pathfinder 2e standalone HTML export
+ * - adapter.js collects PF2e chat-related rules from the installed system CSS.
+ * - This file only restores the payload surface and conservative Foundry layout
+ *   primitives required by PF2e chat templates.
+ * ========================================================================== */
+
+body.lichsoma-chat-log-export.system-pf2e
+.chat-message > .message-content.lichsoma-system-payload {
+    background-color: var(--color-light-1, rgba(245, 242, 234, 0.96));
+}
+
+body.lichsoma-chat-log-export.system-pf2e.theme-dark
+.chat-message > .message-content.lichsoma-system-payload {
+    background-color: var(--color-cool-5-90, rgba(30, 32, 38, 0.96));
+}
+
+/* PF2e chat templates still use Foundry's flex utility classes. Standalone HTML
+ * does not load the Foundry application stylesheet, so restore only these basics. */
+:where(body.lichsoma-chat-log-export.system-pf2e .message-content.lichsoma-system-payload) .flexrow {
+    display: flex;
+    flex-flow: row wrap;
+}
+
+:where(body.lichsoma-chat-log-export.system-pf2e .message-content.lichsoma-system-payload) .flexcol {
+    display: flex;
+    flex-flow: column nowrap;
+}
+
+:where(body.lichsoma-chat-log-export.system-pf2e .message-content.lichsoma-system-payload) :is(.flexrow, .flexcol) > * {
+    flex: 1;
+}
+
+/* Speaker Selector continues to own the exported outer frame even if the current
+ * PF2e build contributes broad chat-message rules through its compiled CSS. */
+body.lichsoma-chat-log-export.system-pf2e .chat-log > .chat-message {
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: none !important;
+}

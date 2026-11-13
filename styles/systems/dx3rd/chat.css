@@ -1,0 +1,28 @@
+/* ==========================================================================
+ * LichSOMA Speaker Selector — DX3rd(fvtt) in-game integration styles
+ * - DX3rd-FVTT owns its native chat/card presentation.
+ * - Keep only Speaker Selector-specific semantic integration here.
+ * ========================================================================== */
+
+/* DX3rd system messages already own their header presentation; suppress only
+ * the additional Speaker Selector header. */
+body.system-dx3rd-fvtt .chat-log .chat-message.dx3rd-system-message .lichsoma-chat-header {
+    display: none !important;
+}
+
+/* DX3rd 전투 진행 알림은 시스템 CSS의 `color: inherit`에 의존한다.
+ * Speaker Selector가 outer chat shell을 투명하게 만드는 환경에서는 Foundry/DX3rd의
+ * 어두운 message-content 색상을 상속할 수 있으므로, 전투 알림 계열만 밝은 foreground를
+ * 명시적으로 복원한다. 다른 DX3rd 카드/본문 색상은 건드리지 않는다. */
+body.system-dx3rd-fvtt :is(#chat-log, .chat-log, .chat-scroll, .chat-popout)
+.chat-message .message-content :is(.dx3rd-combat-msg, .dx3rd-combat-start-msg, .dx3rd-combat-end-msg) {
+    color: rgba(245, 245, 245, 0.96) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.78) !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+body.system-dx3rd-fvtt :is(#chat-log, .chat-log, .chat-scroll, .chat-popout)
+.chat-message .message-content :is(.dx3rd-combat-msg, .dx3rd-combat-start-msg, .dx3rd-combat-end-msg)
+:is(a, a:visited, span, strong, em) {
+    color: inherit !important;
+}

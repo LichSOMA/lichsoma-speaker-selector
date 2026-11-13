@@ -1,0 +1,159 @@
+/* One palette for composing and revising. Scope to chat, not sheet editors. */
+body.lichsoma-speaker-theme-dark-simple {
+    --speaker-editor-bg: rgba(11, 10, 19, 0.75);
+    --speaker-editing-message-color: #ffd700;
+    --speaker-editor-text: #e8e5df;
+    --speaker-editor-muted: #aba398;
+    --speaker-editor-border: #45424c;
+    --speaker-editor-focus: #b59b76;
+    --speaker-editor-hover: #302b36;
+    --speaker-editor-selection: rgba(181, 155, 118, 0.25);
+    --speaker-editor-scheme: dark;
+}
+body.lichsoma-speaker-theme-simple-light {
+    --speaker-editor-bg: rgba(217, 220, 225, 0.75);
+    --speaker-editing-message-color: #795517;
+    --speaker-editor-text: var(--speaker-light-text);
+    --speaker-editor-muted: var(--speaker-light-muted);
+    --speaker-editor-border: var(--speaker-light-border);
+    --speaker-editor-focus: #526d8c;
+    --speaker-editor-hover: var(--speaker-light-hover);
+    --speaker-editor-selection: rgba(82, 109, 140, 0.22);
+    --speaker-editor-scheme: light;
+}
+body.lichsoma-speaker-theme-retro-terminal {
+    --speaker-editor-bg: var(--speaker-terminal-control-bg);
+    --speaker-editing-message-color: #e3c777;
+    --speaker-editor-text: var(--speaker-terminal-fg);
+    --speaker-editor-muted: var(--speaker-terminal-muted);
+    --speaker-editor-border: var(--speaker-terminal-border);
+    --speaker-editor-focus: var(--speaker-terminal-fg);
+    --speaker-editor-hover: var(--speaker-terminal-control-hover);
+    --speaker-editor-selection: rgb(var(--speaker-terminal-rgb, 143 255 199) / 0.22);
+    --speaker-editor-scheme: dark;
+    --speaker-editor-font: var(--speaker-terminal-font);
+}
+body.lichsoma-speaker-theme-terminal-red {
+    --speaker-editor-bg: var(--speaker-terminal-control-bg);
+    --speaker-editing-message-color: #e3c777;
+    --speaker-editor-text: var(--speaker-terminal-fg);
+    --speaker-editor-muted: var(--speaker-terminal-muted);
+    --speaker-editor-border: var(--speaker-terminal-border);
+    --speaker-editor-focus: var(--speaker-terminal-fg);
+    --speaker-editor-hover: var(--speaker-terminal-control-hover);
+    --speaker-editor-selection: rgba(255, 155, 155, 0.22);
+    --speaker-editor-scheme: dark;
+    --speaker-editor-font: var(--speaker-terminal-font);
+}
+
+/* Core themes can skin both the custom element and its inner editor. Set the
+ * fill once on the host; nested editing layers remain transparent. */
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input),
+.lichsoma-chat-reviser-overlay {
+    --input-background-color: var(--speaker-editor-bg);
+    --input-text-color: var(--speaker-editor-text);
+    --input-border-color: var(--speaker-editor-border);
+    --input-focus-outline-color: var(--speaker-editor-focus);
+    --input-placeholder-color: var(--speaker-editor-muted);
+    --color-text-primary: var(--speaker-editor-text);
+    --color-text-secondary: var(--speaker-editor-muted);
+    --speaker-editor-padding: 8px;
+    background: var(--speaker-editor-bg) !important;
+    color: var(--speaker-editor-text);
+    caret-color: var(--speaker-editor-text);
+    color-scheme: var(--speaker-editor-scheme);
+    font-family: var(--speaker-editor-font, var(--font-body, sans-serif));
+    border: 1px solid var(--speaker-editor-border);
+    padding: 0;
+    box-shadow: none;
+}
+.lichsoma-chat-reviser-overlay {
+    /* Reuse the original input background without a second fill or frame. */
+    background: transparent !important;
+    border: none;
+    border-radius: 0;
+    outline: none;
+}
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input) :is(#chat-message, prose-mirror[name="message"], .chat-input, .editor-container, .ProseMirror, [contenteditable="true"]),
+.lichsoma-chat-reviser-content {
+    --input-background-color: transparent;
+    background: transparent !important;
+    color: var(--speaker-editor-text);
+    caret-color: var(--speaker-editor-text);
+    font-family: inherit;
+    color-scheme: var(--speaker-editor-scheme);
+    border: none;
+    outline: none;
+    box-shadow: none;
+}
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input):is(textarea, [contenteditable="true"]),
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input) :is(.ProseMirror, [contenteditable="true"]),
+.lichsoma-chat-reviser-content {
+    padding: var(--speaker-editor-padding, 8px);
+    font-size: 14px;
+    line-height: 1.5;
+    box-sizing: border-box;
+}
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input):is(:focus-within, .lichsoma-chat-input-editing) {
+    border-color: var(--speaker-editor-focus);
+    outline: 1px solid var(--speaker-editor-focus);
+    outline-offset: -1px;
+}
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input)::placeholder,
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input) [data-placeholder]::before {
+    color: var(--speaker-editor-muted);
+    opacity: 1;
+}
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input) :is(.menu-container, .menu-container button) {
+    --button-background-color: transparent;
+    --button-text-color: var(--speaker-editor-text);
+    --button-hover-background-color: var(--speaker-editor-hover);
+    --button-hover-text-color: var(--speaker-editor-text);
+    --button-focus-outline-color: var(--speaker-editor-focus);
+    background: transparent;
+    color: var(--speaker-editor-text);
+    border-color: var(--speaker-editor-border);
+}
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input) .menu-container button:not(:disabled):is(:hover, :focus-visible, [aria-pressed="true"]) {
+    background: var(--speaker-editor-hover);
+    color: var(--speaker-editor-text);
+    outline-color: var(--speaker-editor-focus);
+}
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input) .ProseMirror > p,
+.lichsoma-chat-reviser-content > :is(p, div) {
+    margin: 0 0 0.5em;
+}
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#chat.chat-sidebar, .chat-popout, #chat-notifications) :is(#chat-message, prose-mirror[name="message"], .chat-input) ::selection,
+.lichsoma-chat-reviser-content ::selection {
+    background: var(--speaker-editor-selection);
+    color: var(--speaker-editor-text);
+}
+
+/* Preserve draft contents and dimensions so cancelling restores the input. */
+.lichsoma-chat-reviser-source {
+    color: transparent !important;
+    caret-color: transparent !important;
+}
+.lichsoma-chat-reviser-source * { visibility: hidden; }
+.lichsoma-chat-reviser-source::placeholder { color: transparent !important; }
+/* Foundry can render "Enter Message" on the host or editor container itself,
+ * outside the draft's child nodes. Keep those placeholder layers hidden too. */
+.lichsoma-chat-input-editing::before,
+.lichsoma-chat-input-editing::after,
+.lichsoma-chat-reviser-source::before,
+.lichsoma-chat-reviser-source::after,
+.lichsoma-chat-input-editing [data-placeholder]::before {
+    visibility: hidden !important;
+}
+.lichsoma-chat-input-editing::placeholder { color: transparent !important; }

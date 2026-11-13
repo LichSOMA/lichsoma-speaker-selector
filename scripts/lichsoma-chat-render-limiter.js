@@ -11,6 +11,7 @@
  *   which it removed itself.
  */
 
+import { renderSystemChatMessage } from './lichsoma-chat-message-render.js';
 import { LichsomaChatDom } from './lichsoma-chat-dom.js';
 import { ChatMerge } from './lichsoma-chat-merge.js';
 import { ChatUI } from './lichsoma-chat-ui.js';
@@ -191,7 +192,7 @@ export class ChatRenderLimiter {
                 if (!message || message.visible === false) continue;
 
                 try {
-                    const rendered = await message.renderHTML();
+                    const rendered = await renderSystemChatMessage(message);
                     const element = LichsomaChatDom.getChatMessageElement(rendered)
                         || (rendered instanceof HTMLElement ? rendered : null);
                     if (!element) {
@@ -276,7 +277,7 @@ export class ChatRenderLimiter {
                 if (!message || message.visible === false) continue;
 
                 try {
-                    const rendered = await message.renderHTML();
+                    const rendered = await renderSystemChatMessage(message);
                     const element = LichsomaChatDom.getChatMessageElement(rendered)
                         || (rendered instanceof HTMLElement ? rendered : null);
                     if (!element) {

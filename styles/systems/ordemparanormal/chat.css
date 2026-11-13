@@ -1,0 +1,132 @@
+/* OP payloads only. Sender, portraits, plain chat, sheets and dialogs remain separate. */
+.lichsoma-op-message {
+    --op-bg: #171c24;
+    --op-panel: #202833;
+    --op-text: #e6eaf0;
+    --op-muted: #aab6c5;
+    --op-border: #465366;
+    --op-accent: #a8c5e7;
+    --op-hover: #33465e;
+    --op-success: #a3ddba;
+    --op-danger: #ffb0b0;
+    --op-font: var(--font-primary, sans-serif);
+    --op-scheme: dark;
+}
+body.lichsoma-speaker-theme-simple-light .lichsoma-op-message {
+    --op-bg: #eef0f3; --op-panel: #fff; --op-text: #222d3b;
+    --op-muted: #526174; --op-border: #a1acba; --op-accent: #234f7c;
+    --op-hover: #d9e6f4; --op-success: #236341; --op-danger: #a52d35; --op-scheme: light;
+}
+body.lichsoma-speaker-theme-retro-terminal .lichsoma-op-message {
+    --op-bg: var(--speaker-terminal-bg, #050908); --op-panel: #102219;
+    --op-text: var(--speaker-terminal-fg, #8fffc7); --op-muted: #8bbba0;
+    --op-border: #3f7858; --op-accent: #c4ffdd; --op-hover: #21442f;
+    --op-success: #a4f5bd; --op-danger: #ffc0b4;
+    --op-font: var(--speaker-terminal-font, monospace);
+}
+body.lichsoma-speaker-theme-terminal-red .lichsoma-op-message {
+    --op-bg: var(--speaker-terminal-bg, #0b0505); --op-panel: #2b161a;
+    --op-text: #ffd0ce; --op-muted: #d0a2a4; --op-border: #9c5b61;
+    --op-accent: #ffe3d5; --op-hover: #4b272e; --op-success: #b4e7c8; --op-danger: #ffc0c0;
+    --op-font: var(--speaker-terminal-font, monospace);
+}
+.lichsoma-op-message > .message-content.lichsoma-op-body {
+    box-sizing: border-box; min-width: 0; padding: 10px;
+    color: var(--op-text); background: var(--op-bg);
+    border: 1px solid var(--op-border); border-radius: 6px;
+    font-family: var(--op-font); font-size: 14px; line-height: 1.55;
+    overflow-wrap: anywhere; color-scheme: var(--op-scheme);
+}
+.lichsoma-op-message .lichsoma-op-title {
+    font-family: var(--op-font); font-size: 16px; font-weight: 700;
+    line-height: 1.45; color: var(--op-text); overflow-wrap: anywhere;
+}
+/* Flavor remains in its original header: give it a complete title band, including merged rows. */
+.lichsoma-op-message > .message-header .flavor-text.lichsoma-op-title {
+    box-sizing: border-box; display: block; flex: 0 0 100%; width: 100%; min-width: 0;
+    margin: 4px 0 0; padding: 8px 10px; white-space: normal;
+    background: var(--op-panel); border: 1px solid var(--op-border); border-radius: 6px 6px 0 0;
+    opacity: 1;
+}
+.lichsoma-op-message:has(> .message-header .lichsoma-op-title) > .lichsoma-op-body {
+    border-top: 0; border-radius: 0 0 6px 6px;
+}
+.lichsoma-op-message .chat-card { color: var(--op-text); background: transparent; min-width: 0; }
+.lichsoma-op-message .chat-card :is(.header, .card-header) {
+    display: flex; align-items: center; gap: 8px; padding: 8px; margin-bottom: 8px;
+    border: 0; border-radius: 4px; background: var(--op-panel); min-width: 0;
+}
+.lichsoma-op-message .chat-card .card-header { display: block; }
+.lichsoma-op-message .chat-card :is(.header h2, .card-header h3) {
+    flex: 1; min-width: 0; padding: 0; margin: 0; border: 0; color: var(--op-text);
+    line-height: 1.45; font-family: var(--op-font); font-size: 16px;
+}
+.lichsoma-op-message .chat-card .header img {
+    width: 36px; height: 36px; flex: 0 0 36px; object-fit: cover; border: 0; border-radius: 4px;
+}
+.lichsoma-op-message .chat-card details {
+    color: var(--op-text); background: var(--op-panel); border: 1px solid var(--op-border);
+    padding: 7px 9px; margin-block: 8px; box-shadow: none;
+    font-family: inherit; font-size: 13px; line-height: 1.6;
+}
+.lichsoma-op-message .chat-card details summary { margin: 0; cursor: pointer; color: var(--op-text); }
+.lichsoma-op-message .chat-card details[open] summary {
+    padding-bottom: 6px; border-bottom: 1px solid var(--op-border); margin-bottom: 7px;
+}
+.lichsoma-op-message .chat-card > h4:has(> details) { font-size: 13px; font-weight: 400; }
+.lichsoma-op-message :is(.ritual-info, .card-footer, table, .target-info, .card-buttons button, .reaction-panel) {
+    font-family: inherit; color: var(--op-text);
+}
+.lichsoma-op-message .ritual-info { font-size: 12px; padding: 4px 0; }
+.lichsoma-op-message .ritual-info p { margin: 4px 0; }
+.lichsoma-op-message .ritual-info strong { color: var(--op-accent); }
+.lichsoma-op-message table { width: 100%; margin-block: 8px; background: var(--op-panel); border-collapse: collapse; }
+.lichsoma-op-message table :is(th, td) { padding: 6px 4px; color: var(--op-text); border-color: var(--op-border); }
+.lichsoma-op-message table th { background: var(--op-hover); }
+.lichsoma-op-message .card-footer { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.lichsoma-op-message :is(.card-footer span, span.element, .op-action-badge) {
+    font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1.45;
+    padding: 2px 6px; border: 1px solid var(--op-border); border-radius: 4px;
+}
+.lichsoma-op-message .card-footer span { background: var(--op-panel); color: var(--op-muted); }
+.lichsoma-op-message span.element { color: #fff; }
+.lichsoma-op-message span.element.death { background: #383440; }
+.lichsoma-op-message span.element.blood { background: #a21d35; }
+.lichsoma-op-message span.element.knowledge { background: #735300; }
+.lichsoma-op-message span.element.energy { background: #6034a8; }
+.lichsoma-op-message span.element.fear { background: #d5d9e0; color: #202631; }
+.lichsoma-op-message .target-info { color: var(--op-muted); font-size: 12px; padding: 5px 0; }
+.lichsoma-op-message :is(.card-buttons, .reaction-buttons) { display: flex; gap: 6px; flex-wrap: wrap; }
+.lichsoma-op-message :is(.card-buttons button, .reaction-button, .dice-roll + button) {
+    color: var(--op-text); background: var(--op-panel); border: 1px solid var(--op-border);
+    border-radius: 4px; height: auto; min-height: 31px; line-height: 1.35;
+    padding: 6px 8px; white-space: normal; font-family: inherit;
+}
+.lichsoma-op-message :is(.card-buttons button, .reaction-button, .dice-roll + button):not(:disabled):hover {
+    background: var(--op-hover); border-color: var(--op-accent);
+}
+.lichsoma-op-message button:disabled { opacity: .5; cursor: default; }
+.lichsoma-op-message button:focus-visible { outline: 2px solid var(--op-accent); outline-offset: 1px; }
+.lichsoma-op-message [hidden] { display: none !important; }
+.lichsoma-op-message .dice-result :is(.dice-formula, .dice-total) {
+    color: var(--op-text); background: var(--op-panel); border-color: var(--op-border);
+    box-shadow: none; font-family: inherit; font-variant-numeric: tabular-nums;
+    box-sizing: border-box; padding: 5px 7px; text-align: center;
+    border-style: solid; border-width: 1px; border-radius: 4px; margin-block: 4px; line-height: 1.4;
+}
+.lichsoma-op-message .dice-result .dice-total { position: relative; font-size: 18px; font-weight: 700; }
+.lichsoma-op-message .dice-result .dice-tooltip { color: var(--op-text); }
+.lichsoma-op-message .dice-roll .dice-total:is(.success, .critical) { color: var(--op-success); border-color: var(--op-success); }
+.lichsoma-op-message .dice-roll .dice-total:is(.failure, .fumble) { color: var(--op-danger); border-color: var(--op-danger); }
+.lichsoma-op-message .dt-result { padding: 3px 6px; border-radius: 3px; text-align: center; background: var(--op-panel); font-size: 12px; font-weight: 700; }
+.lichsoma-op-message .dt-result.success { color: var(--op-success); }
+.lichsoma-op-message .dt-result.failure { color: var(--op-danger); }
+.lichsoma-op-message .card-buttons button.hit-critical,
+.lichsoma-op-message .dice-roll + button.damage-applied { border-color: var(--op-success); }
+.lichsoma-op-message .hit-result { padding: 6px 8px; border: 1px solid var(--op-border); border-radius: 4px; color: var(--op-text); background: var(--op-panel); }
+.lichsoma-op-message .hit-result.success { color: var(--op-success); border-color: var(--op-success); }
+.lichsoma-op-message .hit-result.failure { color: var(--op-danger); border-color: var(--op-danger); }
+.lichsoma-op-message .reaction-panel { padding: 8px; border: 1px solid var(--op-border); border-radius: 5px; background: var(--op-panel); }
+.lichsoma-op-message :is(.reaction-panel-title, .reaction-status, .vs-defense) { color: var(--op-muted); }
+/* Standalone exports preserve these same markers and need no Interface stylesheet. */
+body.lichsoma-chat-log-export .lichsoma-op-message .lichsoma-op-title { text-shadow: none; }

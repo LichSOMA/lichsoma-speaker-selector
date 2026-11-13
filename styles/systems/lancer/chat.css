@@ -4,6 +4,17 @@
  * - Keeps pilot name/callsign ruby display and preserves LANCER card internals.
  * ========================================================================== */
 
+
+/*
+ * LANCER의 표준 채팅 카드는 밝은 message surface 위에 반투명 `.card`를 겹치는 구조다.
+ * Speaker Selector가 outer `.chat-message` background를 제거하므로, 시스템 카드가 실제로
+ * 존재하는 structured payload에만 원래의 밝은 substrate를 복구한다.
+ * 일반 텍스트 채팅과 LANCER 카드 내부의 색상/레이아웃은 건드리지 않는다.
+ */
+body.system-lancer .chat-message > .message-content:has(> .card .lancer-header) {
+    background-color: var(--lancer-light-app-bg, #e1e1e1);
+}
+
 /* LANCER: 파일럿 실제 이름 + 콜사인 루비 표시 */
 .chat-message.lichsoma-lancer-pilot-speaker .message-sender .lichsoma-lancer-speaker-ruby,
 body.system-lancer .chat-message .message-sender .lichsoma-lancer-speaker-ruby {
@@ -20,11 +31,3 @@ body.system-lancer .chat-message .message-sender .lichsoma-lancer-speaker-ruby r
     opacity: 0.85;
 }
 
-/* LANCER rich chat cards keep their own inner layout; only the outer chat rhythm is normalized. */
-body.system-lancer .chat-scroll .chat-message .message-content > :is([class^="lancer-"], [class*=" lancer-"]) {
-    line-height: normal !important;
-}
-
-body.system-lancer .chat-scroll .chat-message.lichsoma-merged .message-content > :is([class^="lancer-"], [class*=" lancer-"]) {
-    margin-top: 0 !important;
-}

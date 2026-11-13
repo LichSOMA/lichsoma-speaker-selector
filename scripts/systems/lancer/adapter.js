@@ -1,14 +1,17 @@
-import { fetchTextAsset, uint8ArrayToBase64 } from '../lichsoma-shared-utils.js';
+import { fetchTextAsset, uint8ArrayToBase64 } from '../../lichsoma-shared-utils.js';
+import { registerChatSystemModule } from '../../lichsoma-chat-system-registry.js';
+import { ActorEmotions } from '../../lichsoma-actor-emotions.js';
 
 /**
  * LANCER — HTML 내보내기용 CSS 보정.
  *
  * LANCER 시스템의 채팅 카드 CSS를 내보낸 HTML에도 포함하되,
- * 채팅 메시지 바깥 프레임/헤더/본문 padding 및 background는
- * LichSOMA Speaker Selector 쪽 스타일이 우선하도록 정리한다.
+ * 채팅 메시지 바깥 프레임/헤더는 Speaker Selector가 소유한다.
+ * LANCER 카드가 의존하는 밝은 payload substrate와 content inset은
+ * export 전용 CSS에서 structured payload에만 다시 복구한다.
  */
 const LANCER_SYSTEM_ID = 'lancer';
-const LANCER_MODULE_EXPORT_CSS_PATH = 'modules/lichsoma-speaker-selector/styles/export/lichsoma-chat-lancer-export.css';
+const LANCER_MODULE_EXPORT_CSS_PATH = 'modules/lichsoma-speaker-selector/styles/systems/lancer/export.css';
 
 const LANCER_EXPORT_CSS_PATHS = [
     'systems/lancer/fonts/compcon/glyphs.css',
@@ -168,6 +171,230 @@ body.lichsoma-chat-log-export .mdi-dice-multiple:before{content:"\F076E";}
 
 function isLancerSystem() {
     return game.system?.id === LANCER_SYSTEM_ID;
+}
+
+
+function isPilotActor(actor) {
+    if (!actor) return false;
+    if (actor.type === 'pilot') return true;
+    try {
+        return typeof actor.is_pilot === 'function' && actor.is_pilot();
+    } catch (_error) {
+        return false;
+    }
+}
+
+function isMechActor(actor) {
+    if (!actor) return false;
+    if (actor.type === 'mech') return true;
+    try {
+        return typeof actor.is_mech === 'function' && actor.is_mech();
+    } catch (_error) {
+        return false;
+    }
+}
+
+function isNpcActor(actor) {
+    if (!actor) return false;
+    if (actor.type === 'npc') return true;
+    try {
+        return typeof actor.is_npc === 'function' && actor.is_npc();
+    } catch (_error) {
+        return false;
+    }
+}
+
+function isDeployableActor(actor) {
+    if (!actor) return false;
+    if (actor.type === 'deployable') return true;
+    try {
+        return typeof actor.is_deployable === 'function' && actor.is_deployable();
+    } catch (_error) {
+        return false;
+    }
+}
+
+function getSpeakerCategory(actor) {
+    if (!actor) return 'other';
+    if (isDeployableActor(actor)) return 'deployable';
+    if (isNpcActor(actor)) return 'npc';
+    if (isPilotActor(actor)) return 'pilot';
+    if (isMechActor(actor)) return 'mech';
+    return 'other';
+}
+
+function getSpeakerCategoryOrder() {
+    return game.user?.isGM
+        ? ['npc', 'pilot', 'mech', 'deployable']
+        : ['pilot', 'mech', 'npc', 'deployable'];
+}
+
+function getSpeakerCategoryLabel(category) {
+    switch (category) {
+        case 'npc': return 'NPC';
+        case 'pilot': return game.i18n.localize('SPEAKERSELECTOR.LancerCategory.Pilot');
+        case 'mech': return game.i18n.localize('SPEAKERSELECTOR.LancerCategory.Mech');
+        case 'deployable': return game.i18n.localize('SPEAKERSELECTOR.LancerCategory.Deployable');
+        default: return '';
+    }
+}
+
+function escapeHTML(value) {
+    const text = String(value ?? '');
+    if (foundry?.utils?.escapeHTML) return foundry.utils.escapeHTML(text);
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function getActorDisplayName(actor) {
+    if (!actor) return '';
+    const savedEmotion = ActorEmotions.getSavedEmotion(actor.id);
+    return savedEmotion ? `${actor.name}(${savedEmotion.emotionName})` : actor.name;
+}
+
+function createActorOption(actor, value = null) {
+    if (!actor) return '';
+    const optionValue = value ?? `actor:${actor.id}`;
+    return `<option value="${escapeHTML(optionValue)}">${escapeHTML(getActorDisplayName(actor))}</option>`;
+}
+
+function renderSpeakerOptions({ entries }) {
+    const order = getSpeakerCategoryOrder();
+    const buckets = new Map(order.map(category => [category, []]));
+    const other = [];
+
+    for (const entry of entries || []) {
+        if (!entry?.actor) continue;
+        const option = createActorOption(entry.actor, entry.value);
+        if (!option) continue;
+        const category = getSpeakerCategory(entry.actor);
+        if (buckets.has(category)) buckets.get(category).push(option);
+        else other.push(option);
+    }
+
+    const groups = [];
+    for (const category of order) {
+        const options = buckets.get(category) || [];
+        if (!options.length) continue;
+        groups.push(`<optgroup label="${escapeHTML(getSpeakerCategoryLabel(category))}">${options.join('')}</optgroup>`);
+    }
+    if (other.length) groups.push(other.join(''));
+    return groups.join('');
+}
+
+function resolvePilotCandidate(candidate) {
+    if (!candidate) return null;
+    if (typeof candidate === 'object') {
+        if (isPilotActor(candidate)) return candidate;
+        if (candidate.value && candidate.value !== candidate) {
+            const nested = resolvePilotCandidate(candidate.value);
+            if (nested) return nested;
+        }
+        if (candidate.id && game.actors?.get(candidate.id)) {
+            const actor = game.actors.get(candidate.id);
+            if (isPilotActor(actor)) return actor;
+        }
+        if (candidate.uuid && typeof fromUuidSync === 'function') {
+            try {
+                const actor = fromUuidSync(candidate.uuid);
+                if (isPilotActor(actor)) return actor;
+            } catch (_error) {
+                /* unresolved uuid */
+            }
+        }
+        return null;
+    }
+
+    if (typeof candidate === 'string') {
+        const direct = game.actors?.get(candidate);
+        if (isPilotActor(direct)) return direct;
+        if (candidate.startsWith('Actor.')) {
+            const actor = game.actors?.get(candidate.split('.').pop());
+            if (isPilotActor(actor)) return actor;
+        }
+        if (typeof fromUuidSync === 'function') {
+            try {
+                const actor = fromUuidSync(candidate);
+                if (isPilotActor(actor)) return actor;
+            } catch (_error) {
+                /* unresolved uuid */
+            }
+        }
+    }
+    return null;
+}
+
+function resolvePilotFromMech(actor) {
+    if (!actor || !isMechActor(actor)) return null;
+    const pilotLink = actor.system?.pilot;
+    const candidates = [
+        pilotLink?.value,
+        pilotLink?.document,
+        pilotLink?.actor,
+        pilotLink?.id,
+        pilotLink?.uuid,
+        pilotLink
+    ];
+    for (const candidate of candidates) {
+        const resolved = resolvePilotCandidate(candidate);
+        if (resolved) return resolved;
+    }
+    return null;
+}
+
+function getSpeakerNameParts(actor, speaker = null) {
+    if (!actor) return null;
+    const alias = String(speaker?.alias || '').trim();
+
+    if (isMechActor(actor)) {
+        const pilot = resolvePilotFromMech(actor);
+        const displayName = String(actor.name || alias || '').trim();
+        const callsign = String(pilot?.system?.callsign || '').trim();
+        const rubyText = callsign && callsign !== displayName ? callsign : '';
+        if (!displayName) return null;
+        return { name: displayName, callsign: rubyText, pilot, actor };
+    }
+
+    const pilot = isPilotActor(actor) ? actor : null;
+    if (!pilot) return null;
+    const name = String(pilot.name || '').trim();
+    const callsign = String(pilot.system?.callsign || '').trim();
+    const displayName = name || alias || callsign;
+    const rubyText = callsign && callsign !== displayName ? callsign : '';
+    if (!displayName) return null;
+    return { name: displayName, callsign: rubyText, pilot };
+}
+
+function createRubyNameElement(name, rubyText) {
+    const ruby = document.createElement('ruby');
+    ruby.classList.add('lichsoma-ruby', 'lichsoma-lancer-speaker-ruby');
+    const rb = document.createElement('rb');
+    rb.textContent = name || '';
+    ruby.appendChild(rb);
+    if (rubyText) {
+        const rt = document.createElement('rt');
+        rt.textContent = rubyText;
+        ruby.appendChild(rt);
+    }
+    return ruby;
+}
+
+function applySenderPresentation({ senderElement, actor, speaker }) {
+    const element = senderElement?.jquery ? senderElement[0] : senderElement;
+    const parts = getSpeakerNameParts(actor, speaker);
+    if (!element || !parts) return false;
+
+    element.textContent = '';
+    if (parts.callsign) element.appendChild(createRubyNameElement(parts.name, parts.callsign));
+    else element.textContent = parts.name;
+    element.dataset.lichsomaLancerNameApplied = 'true';
+    return true;
+}
+
+function getSenderAlias({ speakerData }) {
+    const actor = speakerData?.actor ? game.actors?.get(speakerData.actor) : null;
+    return getSpeakerNameParts(actor, speakerData)?.name || null;
 }
 
 function dirname(path) {
@@ -448,8 +675,9 @@ function sanitizeLancerCssForExport(css) {
     // 내보낸 HTML은 <ol id="chat-log" class="chat-log chat-scroll ..."> 구조를 사용하므로
     // LANCER 원본 CSS의 #chat-log 스코프가 그대로 동작한다.
 
-    // LANCER 원본의 메시지 프레임/헤더/본문 배경 및 padding은
-    // Speaker Selector의 채팅 헤더/본문 스타일과 충돌하므로 제거한다.
+    // LANCER 원본의 outer message frame/header/content rule은 Speaker Selector shell과
+    // 충돌하므로 제거한다. 표준 LANCER 카드가 의존하는 payload substrate/padding은
+    // lancer/export.css에서 structured payload에만 좁게 복구한다.
     out = out
         .replace(/#chat-log\s+\.message\s*,\s*\.chat-popout\s+\.message\s*\{[^{}]*\}/g, '')
         .replace(/#chat-log\s+\.message-header\s*,\s*\.chat-popout\s+\.message-header\s*\{[^{}]*\}/g, '')
@@ -543,7 +771,7 @@ async function fetchLancerLogExportAdditionalCss() {
 
     const moduleExportCss = await fetchTextAsset(LANCER_MODULE_EXPORT_CSS_PATH, { label: 'LANCER module export CSS' });
     if (moduleExportCss?.trim()) {
-        cssParts.push(`/* --- lichsoma-chat-lancer-export.css --- */\n${moduleExportCss}`);
+        cssParts.push(`/* --- lancer/export.css --- */\n${moduleExportCss}`);
     }
 
     return `/* --- LANCER chat export CSS --- */\n${cssParts.join('\n\n')}`;
@@ -555,9 +783,18 @@ export function initializeSystemAdapter() {
     if (initialized || !isLancerSystem()) return;
     initialized = true;
 
+    registerChatSystemModule('lancer', {
+        renderSpeakerOptions,
+        applySenderPresentation,
+        getSenderAlias,
+        exportBodyClasses: () => document.body?.classList?.contains('lancer-simple-fonts') ? ['lancer-simple-fonts'] : []
+    });
+
     const register = () => {
         Hooks.on('lichsoma-speaker-selector.chatLogExportAdditionalCSS', () => fetchLancerLogExportAdditionalCss());
-        Hooks.on('lichsoma-speaker-selector.chatLogExportHTMLTransform', (html) => transformLancerExportIconsToInlineSvg(html));
+        // 각 메시지 배치에 독립적으로 적용해도 결과가 같으므로 대용량 HTML 내보내기에서 전체 DOM 재파싱을 피할 수 있다.
+        transformLancerExportIconsToInlineSvg.lichsomaChatLogExportBatchSafe = true;
+        Hooks.on('lichsoma-speaker-selector.chatLogExportHTMLTransform', transformLancerExportIconsToInlineSvg);
     };
 
     if (game.ready) register();

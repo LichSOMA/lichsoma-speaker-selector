@@ -1,4 +1,4 @@
-import { getMessageAuthorName } from './lichsoma-shared-utils.js';
+import { getMessageAuthorName } from '../../lichsoma-shared-utils.js';
 
 const MODULE_ID = 'lichsoma-speaker-selector';
 const NBSP = '\u00A0';

@@ -1,68 +1,19 @@
 /* ========================================================================== 
- * LichSOMA Speaker Selector — LANCER HTML export priority styles
- * - LANCER system CSS and dynamic icon fallbacks are still collected by JS.
- * - This file contains only the static LichSOMA priority/spacing corrections.
+ * LichSOMA Speaker Selector — LANCER HTML export fidelity styles
+ * - LANCER system CSS and dynamic icon fallbacks are collected by JS.
+ * - Keep only export-specific LANCER layout/icon fixes here.
  * ========================================================================== */
 
-/* --- LichSOMA Speaker Selector priority overrides for LANCER export --- */
-#chat-log.chat-log .chat-message,
-.chat-log .chat-message,
-#chat-log.chat-log .message,
-.chat-log .message {
-  background: none !important;
-  background-color: transparent !important;
-}
 
-#chat-log.chat-log .lichsoma-chat-header,
-.chat-log .lichsoma-chat-header {
-  padding: 0 !important;
-  background: none !important;
-  background-color: transparent !important;
-}
-
-#chat-log.chat-log .message-content,
-.chat-log .message-content,
-#chat-log.chat-log .chat-message .message-content,
-.chat-log .chat-message .message-content {
-  padding: 0 !important;
-  background: none !important;
-  background-color: transparent !important;
-}
-
-body.lichsoma-fvtt13-chat #chat-log.chat-scroll,
-body.lichsoma-fvtt13-chat .chat-log.chat-scroll {
-  --lichsoma-chat-line-gap: 5px;
-  --lichsoma-chat-message-gap: 0px;
-}
-
-body.lichsoma-fvtt13-chat #chat-log.chat-scroll .chat-message,
-body.lichsoma-fvtt13-chat .chat-log.chat-scroll .chat-message {
-  margin: 0 1px var(--lichsoma-chat-message-gap) 5px !important;
-}
-
-body.lichsoma-fvtt13-chat #chat-log.chat-scroll .chat-message.whisper,
-body.lichsoma-fvtt13-chat .chat-log.chat-scroll .chat-message.whisper,
-body.lichsoma-fvtt13-chat #chat-log.chat-scroll .message.whisper,
-body.lichsoma-fvtt13-chat .chat-log.chat-scroll .message.whisper {
-  border: none !important;
-  box-shadow: none !important;
-}
-
-body.lichsoma-fvtt13-chat #chat-log.chat-scroll .chat-message .message-content,
-body.lichsoma-fvtt13-chat .chat-log.chat-scroll .chat-message .message-content {
-  line-height: calc(1em + var(--lichsoma-chat-line-gap)) !important;
-}
-
-body.lichsoma-fvtt13-chat #chat-log.chat-scroll .chat-message .message-content > p,
-body.lichsoma-fvtt13-chat .chat-log.chat-scroll .chat-message .message-content > p {
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
-  line-height: inherit !important;
-}
-
-body.lichsoma-chat-log-export.system-lancer #chat-log.chat-scroll .chat-message .message-content > :is([class^="lancer-"], [class*=" lancer-"]),
-body.lichsoma-chat-log-export.system-lancer .chat-log.chat-scroll .chat-message .message-content > :is([class^="lancer-"], [class*=" lancer-"]) {
-  line-height: normal !important;
+/*
+ * LANCER native chat uses a light message surface underneath semi-transparent cards.
+ * The export sanitizer intentionally removes the native outer message frame, so restore
+ * that surface and the native content inset only for standard LANCER structured payloads.
+ */
+body.lichsoma-chat-log-export.system-lancer
+.chat-message > .message-content:has(> .card .lancer-header) {
+  background-color: var(--lancer-light-app-bg, #e1e1e1);
+  padding: 0.2em 0.4em 0.4em !important;
 }
 
 body.lichsoma-chat-log-export.system-lancer .lancer-dice-roll .dice-formula.flexrow {

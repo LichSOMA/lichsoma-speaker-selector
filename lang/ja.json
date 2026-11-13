@@ -1,6 +1,22 @@
 {
   "SPEAKERSELECTOR": {
     "Settings": {
+      "Theme": {
+        "Name": "テーマ",
+        "Hint": "チャット、サイドバー、設定、シーン操作とSpeaker Selector専用画面の配色とフォントを選びます。一般ウィンドウ・ダイアログは背景とヘッダー・本文の文字コントラストのみ適用し、内部コントロールとフォントは維持します。シート、DX3rd専用画面とTaskbarのファイル選択画面は独自テーマを維持します。指定フォントとユーザー色は保存されます。",
+        "DarkSimple": "シンプルダーク",
+        "SimpleLight": "シンプルライト",
+        "RetroTerminal": "ターミナルグリーン",
+        "TerminalRed": "ターミナルレッド"
+      },
+      "Dx3rdLightCardPatch": {
+        "Name": "DX3rd-FVTT チャットカードのライト補正パッチ",
+        "Hint": "シンプルライトでDX3rdのアイテム・情報・通知・判定・ダメージ・戦闘・シーン案内カードのコントラストを補正します。成功・失敗・警告の意味と操作機能を維持し、HTMLログにも反映します。無効にするとシステム標準の配色を使用します。"
+      },
+      "Dx3rdTerminalCardPatch": {
+        "Name": "DX3rd-FVTT ターミナルテーマ補正パッチ",
+        "Hint": "DX3rdチャットカードと展開したダイス結果をターミナルグリーン・レッドの単色系に統一し、HTMLログにも反映します。命中・失敗の文言や増減の符号は維持し、処理済みボタンはハイライトで区別します。無効にするとシステム標準の表示を使用します。"
+      },
       "ShowPortrait": {
         "Name": "ポートレートを表示",
         "Hint": "チャットメッセージにアクターのポートレートを表示します。"
@@ -99,7 +115,7 @@
       },
       "ChatLogExportUseBase64": {
         "Name": "画像をBase64で保存",
-        "Hint": "HTML出力時、500KB以下の画像をBase64として埋め込みます。同じ画像は最終Data URLを基準に1度だけ保存し、500KBを超える画像は絶対URLを維持します。"
+        "Hint": "元のファイルサイズが1枚5MiB以下の画像をBase64で埋め込みます。同じ画像は一度だけ保存します。超過・読み込み失敗の画像は元のURLを維持し、通知を表示します。"
       },
       "ChatLogExportCustomCSS": {
         "Name": "チャットログ出力カスタムCSS",
@@ -110,6 +126,10 @@
       "ChatLogExportShowDiceTooltip": {
         "Name": "ダイスツールチップを表示",
         "Hint": "有効にすると、チャットログ出力時にダイスツールチップ（ロール詳細）を表示します。"
+      },
+      "ChatLogExportHideTimestamps": {
+        "Name": "HTML出力時にチャットのタイムスタンプを非表示",
+        "Hint": "有効にすると、HTMLチャットログで各チャットメッセージのタイムスタンプを非表示にします。ログ自体の出力時刻は常に表示されます。"
       },
       "ChatUtilsForIC": {
         "Name": "ICモードでトークン未選択時はOOC送信",
@@ -215,11 +235,13 @@
       "Success": "チャットログHTMLを保存しました。（{count}件）",
       "Error": {
         "ExportFailed": "チャットログの保存中にエラーが発生しました。",
-        "FlushBackupFailed": "HTMLバックアップを保存できなかったため、チャットログの削除を中止しました。"
+        "FlushBackupFailed": "HTMLバックアップを完成できなかったため、チャットログの削除を中止しました。",
+        "ImageRestoreFailed": "一部の埋め込み画像を表示できませんでした。"
       },
       "Warning": {
         "Empty": "保存するチャットメッセージがありません。",
-        "CountMismatch": "メッセージ数が一致しません。（{rendered}/{total}件）"
+        "CountMismatch": "メッセージ数が一致しません。（{rendered}/{total}件）",
+        "ImagesNotEmbedded": "HTMLは保存しましたが、画像{count}件を埋め込めませんでした（5MiB超過{oversized}件）。該当画像は元のURLを維持しています。"
       },
       "Button": {
         "Title": "チャットログをHTML出力",
@@ -296,6 +318,21 @@
       "CSSCode": "CSSコード",
       "Save": "保存",
       "Cancel": "キャンセル"
+    },
+    "Ordem": {
+      "Font": {
+        "Header": {
+          "Name": "OP — チャットカード見出しフォント",
+          "Edit": "OP見出しフォント設定",
+          "Hint": "OPカード名と判定タイトル用の個人設定です。ウェブフォントCSSの .lichsoma-op-font-settings に font-family を指定します。本文・シート・発言者・汎用ダイスと独立し、空欄はOPテーマの標準フォントを使います。"
+        },
+        "Body": {
+          "Name": "OP — チャットカード本文フォント",
+          "Edit": "OP本文フォント設定",
+          "Hint": "OPの説明・タグ・表・ボタン・判定結果用の個人設定です。ウェブフォントCSSの .lichsoma-op-font-settings に font-family を指定します。見出し・シート・通常チャットの設定は継承しません。"
+        },
+        "Saved": "OPチャットカードのフォント設定を保存しました。"
+      }
     }
   }
 }

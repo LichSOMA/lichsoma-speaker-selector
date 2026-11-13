@@ -1,0 +1,216 @@
+/* Foundry light uses image-valued --sidebar-background and --background.
+ * Framed applications share the background; owned surfaces also skin controls. */
+body.lichsoma-speaker-theme-dark-simple {
+    --speaker-surface-bg: rgba(11, 10, 19, 0.9);
+    --speaker-surface-header: rgba(11, 10, 19, 0.98);
+    --speaker-surface-control: #29252e;
+    --speaker-surface-text: #e8e5df;
+    --speaker-surface-muted: #aba398;
+    --speaker-surface-border: #45424c;
+    --speaker-surface-hover: #302b36;
+    --speaker-surface-accent: #b59b76;
+    --speaker-surface-scheme: dark;
+}
+
+body.lichsoma-speaker-theme-simple-light {
+    --speaker-surface-bg: rgba(205, 209, 214, 0.95);
+    --speaker-surface-header: var(--speaker-light-control);
+    --speaker-surface-control: var(--speaker-light-control);
+    --speaker-surface-text: var(--speaker-light-text);
+    --speaker-surface-muted: var(--speaker-light-muted);
+    --speaker-surface-border: var(--speaker-light-border);
+    --speaker-surface-hover: var(--speaker-light-hover);
+    --speaker-surface-accent: #526d8c;
+    --speaker-surface-scheme: light;
+}
+body.lichsoma-speaker-theme-retro-terminal {
+    --speaker-surface-bg: var(--speaker-terminal-window-bg);
+    --speaker-surface-header: rgb(var(--speaker-terminal-header-rgb, 5 16 13) / 0.95);
+    --speaker-surface-control: var(--speaker-terminal-control-bg);
+    --speaker-surface-text: var(--speaker-terminal-fg);
+    --speaker-surface-muted: var(--speaker-terminal-muted);
+    --speaker-surface-border: var(--speaker-terminal-border);
+    --speaker-surface-hover: var(--speaker-terminal-control-hover);
+    --speaker-surface-accent: var(--speaker-terminal-highlight);
+    --speaker-surface-scheme: dark;
+}
+body.lichsoma-speaker-theme-terminal-red {
+    --speaker-surface-bg: var(--speaker-terminal-window-bg);
+    --speaker-surface-header: rgba(22, 8, 8, 0.95);
+    --speaker-surface-control: var(--speaker-terminal-control-bg);
+    --speaker-surface-text: var(--speaker-terminal-fg);
+    --speaker-surface-muted: var(--speaker-terminal-muted);
+    --speaker-surface-border: var(--speaker-terminal-border);
+    --speaker-surface-hover: var(--speaker-terminal-control-hover);
+    --speaker-surface-accent: var(--speaker-terminal-highlight);
+    --speaker-surface-scheme: dark;
+}
+
+/* Directory rows retain the core separator geometry token, with a quiet
+ * single line from the active palette instead of Foundry light's 2px groove. */
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(.sidebar-tab:not(#chat), .sidebar-popout):not(:where(.sheet, .sheet *)) {
+    --sidebar-separator: 1px solid var(--speaker-surface-border);
+}
+
+/* FVTT 14 paints ApplicationV2 on the root via --background. Require a window
+ * header so unframed applications (HUD, chat tray, scene controls) stay clear.
+ * Only window surfaces/text change here: preserve fonts and native controls. */
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(.application:has(> .window-header), .window-app):not(:where(
+    .sheet, .sheet *, .dx3rd-fvtt, .dx3rd-fvtt *, .dx3rd-system-window, .dx3rd-system-window *,
+    .lichsoma-taskbar-filepicker, .lichsoma-taskbar-filepicker *,
+    .lichsoma-retro-pc-com-terminal-window, .lichsoma-retro-pc-com-terminal-window *,
+    .lichsoma-retro-pc-com-webfont-css-editor, .lichsoma-retro-pc-com-webfont-css-editor *,
+    .lichsoma-retro-pc-com-terminal-link-window, .lichsoma-retro-pc-com-terminal-link-window *,
+    .lichsoma-retro-pc-com-service-administration, .lichsoma-retro-pc-com-service-administration *)) {
+    --background: var(--speaker-surface-bg);
+    --background-color: var(--speaker-surface-bg);
+    --color-header-background: var(--speaker-surface-header);
+    --color-text-primary: var(--speaker-surface-text);
+    --color-text-secondary: var(--speaker-surface-muted);
+    --color-text-emphatic: var(--speaker-surface-text);
+    --color-form-label: var(--speaker-surface-text);
+    --color-form-label-hover: var(--speaker-surface-accent);
+    --color-form-hint: var(--speaker-surface-muted);
+    --color-form-hint-hover: var(--speaker-surface-text);
+    background: var(--speaker-surface-bg);
+    color: var(--speaker-surface-text);
+
+    & > .window-header {
+        background: var(--speaker-surface-header);
+        color: var(--speaker-surface-text);
+        & .window-title { color: var(--speaker-surface-text); }
+        & button.header-control { --button-text-color: var(--speaker-surface-text); }
+    }
+    & > .window-content {
+        /* Core V14 content is already transparent; preserve module content art. */
+        color: var(--speaker-surface-text);
+    }
+}
+
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(.sidebar-tab:not(#chat), .sidebar-popout,
+    :where(#settings-config, #client-settings), .settings-config,
+    .lichsoma-actor-grid-setting-app, .lichsoma-chat-sender-edit-app,
+    .lichsoma-emotion-selector-app, .lichsoma-emotion-manager-app,
+    .lichsoma-css-editor, .lichsoma-chat-log-archive-window):not(:where(.sheet, .sheet *)) {
+    --sidebar-background: var(--speaker-surface-bg);
+    --background: var(--speaker-surface-bg);
+    --background-color: var(--speaker-surface-bg);
+    --color-header-background: var(--speaker-surface-header);
+    --color-border: var(--speaker-surface-border);
+    --color-fieldset-border: var(--speaker-surface-border);
+    --color-tabs-border: var(--speaker-surface-border);
+    --color-form-label: var(--speaker-surface-text);
+    --color-form-label-hover: var(--speaker-surface-accent);
+    --color-form-hint: var(--speaker-surface-muted);
+    --color-form-hint-hover: var(--speaker-surface-text);
+    background: var(--speaker-surface-bg);
+    color: var(--speaker-surface-text);
+    color-scheme: var(--speaker-surface-scheme);
+
+    /* Descendant theme classes can reintroduce core color tokens locally. */
+    &, & :is(.themed, input, select, textarea, button, a.button):not(:where(.sheet, .sheet *)) {
+        --color-text-primary: var(--speaker-surface-text);
+        --color-text-secondary: var(--speaker-surface-muted);
+        --color-text-emphatic: var(--speaker-surface-text);
+        --color-text-light-heading: var(--speaker-surface-text);
+        --color-text-light-highlight: var(--speaker-surface-accent);
+        --color-text-light-primary: var(--speaker-surface-text);
+        --color-text-dark-primary: var(--speaker-surface-text);
+        --color-text-dark-secondary: var(--speaker-surface-muted);
+        --color-text-hyperlink: var(--speaker-surface-accent);
+        --color-border-light-primary: var(--speaker-surface-border);
+        --color-border-dark-primary: var(--speaker-surface-border);
+        --color-scheme: var(--speaker-surface-scheme);
+        --button-background-color: var(--speaker-surface-control);
+        --button-text-color: var(--speaker-surface-text);
+        --button-border-color: var(--speaker-surface-border);
+        --button-hover-background-color: var(--speaker-surface-hover);
+        --button-hover-text-color: var(--speaker-surface-accent);
+        --input-background-color: var(--speaker-surface-control);
+        --input-text-color: var(--speaker-surface-text);
+        --input-focus-text-color: var(--speaker-surface-text);
+        --input-border-color: var(--speaker-surface-border);
+        --color-select-option-bg: var(--speaker-surface-control);
+    }
+    & > :is(.window-header, .lichsoma-grid-window-header):not(:where(.sheet, .sheet *)) {
+        background: var(--speaker-surface-header);
+        color: var(--speaker-surface-text);
+    }
+    & > .window-content:not(:where(.sheet, .sheet *)) {
+        /* Paint once on the window, rather than stacking translucent fills. */
+        background: transparent;
+        color: var(--speaker-surface-text);
+    }
+    & .window-title:not(:where(.sheet, .sheet *)) {
+        color: var(--speaker-surface-text);
+    }
+    & :is(input:not([type="checkbox"], [type="radio"], [type="color"], [type="range"]), select, textarea):not(:where(.sheet, .sheet *)) {
+        background-color: var(--speaker-surface-control);
+        color: var(--speaker-surface-text);
+    }
+}
+
+/* One viewport overlay per terminal window. Chat and independently themed
+ * sheets/file pickers stay outside this surface; Retro Com already owns CRT. */
+body:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(.application:has(> .window-header), .window-app):not(:where(
+    .sheet, .sheet *, .dx3rd-fvtt, .dx3rd-fvtt *, .dx3rd-system-window, .dx3rd-system-window *,
+    .lichsoma-taskbar-filepicker, .lichsoma-taskbar-filepicker *,
+    #chat, .chat-popout, #chat-notifications, .lichsoma-chat-log-archive-window,
+    .lichsoma-retro-pc-com-terminal-window, .lichsoma-retro-pc-com-service-administration,
+    .lichsoma-retro-pc-com-webfont-css-editor, .lichsoma-retro-pc-com-terminal-link-window)) {
+    isolation: isolate;
+
+    &::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        pointer-events: none;
+        border-radius: inherit;
+        background: repeating-linear-gradient(to bottom,
+            rgba(255, 255, 255, 0.025) 0,
+            rgba(255, 255, 255, 0.025) 1px, transparent 1px, transparent 4px);
+        box-shadow: inset 0 0 70px rgba(0, 0, 0, 0.74);
+    }
+}
+
+/* Settings categories are text navigation, not filled action buttons. Keep the
+ * content pane outside this rule even when it also has data-category/active. */
+body:is(.lichsoma-speaker-theme-dark-simple, .lichsoma-speaker-theme-simple-light, .lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red)
+:is(#settings-config, #client-settings, .settings-config)
+:is(aside.sidebar, [data-application-part="sidebar"])
+:is(.category-tab, .category, [data-category], a[data-tab], button[data-tab]) {
+    /* Terminal action buttons use an important hover fill; navigation opts out. */
+    background: transparent !important;
+    box-shadow: none;
+    outline: none;
+    border-top-color: transparent;
+    border-inline-color: transparent;
+    border-bottom-color: var(--speaker-surface-border);
+    color: var(--speaker-surface-muted);
+
+    &:is(.active, .selected, [aria-selected="true"], :hover) {
+        background: transparent !important;
+        color: var(--speaker-surface-accent);
+        text-shadow: 0 0 4px color-mix(in srgb, var(--speaker-surface-accent) 35%, transparent);
+    }
+    &:is(.active, .selected, [aria-selected="true"]) {
+        font-weight: 700;
+    }
+    & > :is(a, button) {
+        background: transparent !important;
+        box-shadow: none;
+        outline: none;
+        color: inherit;
+        font-weight: inherit;
+        text-shadow: inherit;
+    }
+    &:focus-visible, & > :is(a, button):focus-visible {
+        outline: 1px solid var(--speaker-surface-accent);
+        outline-offset: -2px;
+    }
+}

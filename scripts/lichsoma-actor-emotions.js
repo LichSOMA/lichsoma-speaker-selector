@@ -401,9 +401,7 @@ export class ActorEmotions {
             speakerSelector._updateSpeakerDropdown();
         }
 
-        // 다른 모듈/렌더러가 감정 변경에 반응할 수 있도록 알림.
-        // dnd5e avatar 연동은 메시지 생성 시 flags.portraitSrc를 통해 확정되지만,
-        // 이 이벤트는 향후 실시간 UI 갱신이나 프리뷰 갱신에도 사용할 수 있다.
+        // 다른 모듈/시스템 어댑터가 감정 변경에 반응할 수 있도록 알림.
         document.dispatchEvent(new CustomEvent('lichsoma-speaker-selector:emotionChanged', {
             detail: {
                 actorId,
@@ -476,9 +474,8 @@ export class ActorEmotions {
             flags.emotionId = this._currentEmotion;
             flags.emotionName = this._currentEmotionName;
 
-            // dnd5e native header는 LichSOMA 포트레잇 컨테이너를 추가하지 않고
-            // 원본 avatar img의 src만 교체하므로, 메시지 생성 단계에서 portraitSrc도 같이 남겨둔다.
-            // 감정을 선택한 경우에는 기본 액터/토큰 이미지보다 감정 포트레잇이 우선해야 한다.
+            // native-header 어댑터도 동일한 저장 경로를 사용할 수 있도록 portraitSrc를 같이 남긴다.
+            // 감정을 선택한 경우 기본 액터/토큰 이미지보다 감정 포트레잇이 우선한다.
             flags.portraitSrc = this._currentEmotionPortrait;
         }
     }

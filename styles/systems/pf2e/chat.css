@@ -1,0 +1,15 @@
+/* ==========================================================================
+ * LichSOMA Speaker Selector — Pathfinder 2e in-game compatibility
+ * - PF2e v14 chat payloads are system-owned, while Speaker Selector owns the
+ *   transparent outer chat shell and portrait/header presentation.
+ * - Restore only a theme-aware payload surface. Do not recolor PF2e traits,
+ *   degree-of-success, damage, or dice UI.
+ * ========================================================================== */
+
+body.system-pf2e .chat-message > .message-content.lichsoma-system-payload {
+    background-color: var(--color-light-1, rgba(245, 242, 234, 0.96));
+}
+
+body.system-pf2e.theme-dark .chat-message > .message-content.lichsoma-system-payload {
+    background-color: var(--color-cool-5-90, rgba(30, 32, 38, 0.96));
+}

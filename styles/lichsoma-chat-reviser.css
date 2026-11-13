@@ -1,8 +1,8 @@
 /* 채팅 메시지 수정 오버레이 */
 .lichsoma-chat-reviser-overlay {
     position: absolute;
-    background: var(--color-cool-5, #0b0a13);
-    border: 2px solid var(--border-color, var(--color-cool-4));
+    background: transparent;
+    border: 1px solid var(--speaker-editor-border, #45424c);
     border-radius: 4px;
     z-index: 1000;
     pointer-events: auto;
@@ -17,13 +17,13 @@
     flex: 1;
     width: 100%;
     height: 100%;
-    padding: var(--chat-message-spacing);
+    padding: var(--speaker-editor-padding, 8px);
     margin: 0;
     border: none;
     background: transparent;
-    color: #fff;
+    color: var(--speaker-editor-text, #e8e5df);
     font-size: 14px;
-    line-height: 1.4;
+    line-height: 1.5;
     font-family: inherit;
     resize: none;
     outline: none;
@@ -32,28 +32,23 @@
     box-sizing: border-box;
 }
 
-/* 편집 중인 메시지 하이라이트 */
-.chat-scroll .chat-log.plain.theme-light .chat-message.lichsoma-editing-message {
-    transition: background-color 0.2s ease, outline 0.2s ease, box-shadow 0.2s ease;
+/* Highlight the original message body while it is being revised. */
+.chat-message.lichsoma-editing-message .message-content {
+    color: var(--speaker-editing-message-color, #ffd700) !important;
 }
 
-.chat-scroll .chat-log.plain.theme-light .chat-message.lichsoma-editing-message .message-content {
-    color: #ffd700 !important;
-}
-
-
-/* FVTT v13: message edit overlay must remain dark even if core light-theme variables are inherited. */
+/* FVTT v13 layout compatibility; palette comes from the selected module theme. */
 body.lichsoma-fvtt13-chat .lichsoma-chat-reviser-overlay {
-    background: var(--color-cool-5, #0b0a13) !important;
-    border-color: var(--color-cool-4, rgba(255, 255, 255, 0.25)) !important;
-    color: #ffffff !important;
-    color-scheme: dark;
+    background: transparent !important;
+    border-color: var(--speaker-editor-border, #45424c) !important;
+    color: var(--speaker-editor-text, #e8e5df) !important;
+    color-scheme: var(--speaker-editor-scheme, dark);
 }
 
 body.lichsoma-fvtt13-chat .lichsoma-chat-reviser-content {
-    background: var(--color-cool-5, #0b0a13) !important;
-    color: #ffffff !important;
-    caret-color: #ffffff !important;
+    background: transparent !important;
+    color: var(--speaker-editor-text, #e8e5df) !important;
+    caret-color: var(--speaker-editor-text, #e8e5df) !important;
     line-height: calc(1em + 6px) !important;
 }
 

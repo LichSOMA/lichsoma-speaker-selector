@@ -1,37 +1,21 @@
 import {
   escapeCssString,
-  extractWebfontPresentation,
-  uint8ArrayToBase64
+  extractWebfontPresentation
 } from './lichsoma-shared-utils.js';
-import {
-  applyDnd5eTitleAlias,
-  isDnd5eMessageElement
-} from './lichsoma-dnd5e-header.js';
-
 import { ChatSystemBridge } from './lichsoma-chat-system-registry.js';
+import { renderSystemChatMessage } from './lichsoma-chat-message-render.js';
 import { withChatRenderContext } from './lichsoma-chat-render-pipeline.js';
 import { SpeakerSelector } from './lichsoma-speaker-selector.js';
+import { getChatTheme, getChatThemeClass } from './lichsoma-chat-theme.js';
+import { createExportImagePipeline, normalizeExportImageUrl, buildExportImageRestoreScript } from './lichsoma-chat-export-images.js';
 // LichSOMA Speaker Selector - Chat Log Export
 // 채팅 로그를 HTML로 저장하는 기능
 (function() {
   'use strict';
 
-  const MAX_EMBEDDED_IMAGE_BYTES = 500 * 1024;
-  const IMAGE_REGISTRY_ID = 'lichsoma-image-registry';
   let chatExportObserver = null;
   let observedChatExportContainer = null;
   let chatLogExportInProgress = false;
-  
-  // 문자열을 간단한 해시로 변환하는 함수
-  function simpleHash(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // 32bit 정수로 변환
-    }
-    return Math.abs(hash).toString(36);
-  }
   
   function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -47,253 +31,6 @@ import { SpeakerSelector } from './lichsoma-speaker-selector.js';
   }
 
 
-  function getSettingSafe(key, fallback = '') {
-    try {
-      return game.settings.get('lichsoma-speaker-selector', key) ?? fallback;
-    } catch (e) {
-      return fallback;
-    }
-  }
-
-  function getHookCallback(hookEntry) {
-    if (typeof hookEntry === 'function') return hookEntry;
-    if (typeof hookEntry?.fn === 'function') return hookEntry.fn;
-    if (typeof hookEntry?.callback === 'function') return hookEntry.callback;
-    return null;
-  }
-
-  async function runHookEntry(hookEntry, ...args) {
-    const fn = getHookCallback(hookEntry);
-    if (!fn) return undefined;
-    const result = fn(...args);
-    if (result && typeof result.then === 'function') return await result;
-    return result;
-  }
-
-  function buildChatLogExportWebfontCSS() {
-    const settings = {
-      header: getSettingSafe('chatHeaderWebfontCSS', ''),
-      dnd5eTitle: getSettingSafe('dnd5eTitleWebfontCSS', ''),
-      dnd5eSubtitle: getSettingSafe('dnd5eSubtitleWebfontCSS', ''),
-      message: getSettingSafe('chatMessageWebfontCSS', ''),
-      dice: getSettingSafe('chatDiceWebfontCSS', ''),
-      narrator: getSettingSafe('narratorWebfontCSS', '')
-    };
-
-    const parts = [];
-    const uniqueCSS = [...new Set(Object.values(settings).map(css => String(css ?? '').trim()).filter(Boolean))];
-    if (uniqueCSS.length) {
-      parts.push(`/* Shared in-game/export webfonts */\n${uniqueCSS.join('\n\n')}`);
-    }
-
-    const profiles = Object.fromEntries(
-      Object.entries(settings).map(([key, css]) => [key, extractWebfontPresentation(css)])
-    );
-    const rules = [];
-    const declarationsFor = (profile, defaults = {}, { family = true } = {}) => {
-      const declarations = [];
-      if (family && profile?.family) declarations.push(`font-family: "${escapeCssString(profile.family)}", sans-serif`);
-      const weight = profile?.weight || defaults.weight || '';
-      const style = profile?.style || defaults.style || '';
-      if (weight) declarations.push(`font-weight: ${weight}`);
-      if (style) declarations.push(`font-style: ${style}`);
-      if (profile?.variationSettings) declarations.push(`font-variation-settings: ${profile.variationSettings}`);
-      return declarations;
-    };
-    const addRule = (selectors, declarations) => {
-      if (!declarations.length) return;
-      rules.push(`${selectors} {\n  ${declarations.map(value => `${value} !important`).join(';\n  ')};\n}`);
-    };
-
-    const headerFamilySelectors = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header > .message-sender,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header > h4.message-sender,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header .message-sender,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .lichsoma-chat-header,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .lichsoma-chat-header :where(span, strong, em, ruby, rb, rt)`;
-    const headerStyleSelectors = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header > .message-sender,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-header > h4.message-sender,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .lichsoma-chat-header .message-sender`;
-    addRule(headerFamilySelectors, declarationsFor(profiles.header, {}, { family: true }).filter(value => value.startsWith('font-family:')));
-    addRule(headerStyleSelectors, declarationsFor(profiles.header, { weight: '900', style: 'normal' }, { family: false }));
-
-    addRule(
-      `body.lichsoma-chat-log-export.system-dnd5e .chat-log.chat-log .chat-message .message-header .name-stacked .title`,
-      declarationsFor(profiles.dnd5eTitle)
-    );
-    addRule(
-      `body.lichsoma-chat-log-export.system-dnd5e .chat-log.chat-log .chat-message .message-header .name-stacked .subtitle`,
-      declarationsFor(profiles.dnd5eSubtitle)
-    );
-
-    const messageFamilySelectors = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content :where(p, h1, h2, h3, h4, h5, h6, div, span, strong, em, b, i:not([class^="fa-"]):not([class*=" fa-"]):not([class^="cci-"]):not([class*=" cci-"]), li, ul, ol, table, thead, tbody, tr, th, td, blockquote, ruby, rb, rt, section, article)`;
-    const messageStyleSelector = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content`;
-    addRule(messageFamilySelectors, declarationsFor(profiles.message, {}, { family: true }).filter(value => value.startsWith('font-family:')));
-    addRule(messageStyleSelector, declarationsFor(profiles.message, { weight: '500', style: 'normal' }, { family: false }));
-
-    addRule(
-      `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .dice-roll,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .dice-roll :where(.dice-formula, .dice-total, .dice-tooltip, .dice-tooltip *, .dice-result)`,
-      declarationsFor(profiles.dice)
-    );
-
-    const narratorFamilySelectors = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content .narrator-card,
-body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content .narrator-card :where(p, h1, h2, h3, h4, h5, h6, div, span, strong, em, b, i, li, ul, ol, blockquote, ruby, rb, rt)`;
-    const narratorStyleSelector = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .message-content .narrator-card`;
-    addRule(narratorFamilySelectors, declarationsFor(profiles.narrator, {}, { family: true }).filter(value => value.startsWith('font-family:')));
-    addRule(narratorStyleSelector, declarationsFor(profiles.narrator, { weight: '500', style: 'italic' }, { family: false }));
-
-    if (rules.length) parts.push(`/* Shared webfont application */\n${rules.join('\n\n')}`);
-    return parts.length ? `\n\n/* HTML 내보내기 웹폰트 */\n${parts.join('\n\n')}` : '';
-  }
-
-  function buildCainAlterExportFontPriorityCSS() {
-    if (game.system?.id !== 'cain-alter') return '';
-
-    const builder = game.cainAlter?.buildChatExportFontPriorityCSS;
-    if (typeof builder !== 'function') return '';
-
-    try {
-      const css = builder();
-      if (!css || typeof css !== 'string' || !css.trim()) return '';
-      return `\n\n/* Cain Alter HTML export font priority */\n${css.trim()}`;
-    } catch (error) {
-      console.warn('[lichsoma-speaker-selector] Cain Alter export font priority CSS failed:', error);
-      return '';
-    }
-  }
-
-  /** ChatMerge._isOnlyHrMessage 와 동일: ProseMirror의 `<p><hr></p>` 등도 구분선 전용으로 처리 */
-  function isOnlyHrMessageContent(messageEl) {
-    const messageContent = messageEl.querySelector('.message-content');
-    if (!messageContent) return false;
-    const htmlContent = messageContent.innerHTML || '';
-    const withoutHr = htmlContent.replace(/<hr\s*\/?>/gi, '');
-
-    // 텍스트가 없어도 "콘텐츠"가 있으면 hr-only가 아님 (이미지/임베드/비디오 등)
-    // - 기존 구현은 태그를 전부 제거해서 <img>만 있는 메시지를 hr-only로 오판했다.
-    try {
-      const tmp = document.createElement('div');
-      tmp.innerHTML = withoutHr;
-      const hasNonTextContent = !!tmp.querySelector(
-        'img, video, audio, iframe, embed, object, canvas, picture, svg, source'
-      );
-      if (hasNonTextContent) return false;
-    } catch (e) {
-      // DOM 파싱 실패 시 기존 텍스트 판정으로 fallback
-    }
-
-    const textOnly = withoutHr.replace(/<[^>]+>/g, '').replace(/\s+/g, '');
-    return textOnly === '';
-  }
-
-
-  function hasNarratorCard(messageEl) {
-    return !!messageEl?.querySelector?.('.message-content .narrator-card');
-  }
-
-  function isMessengerMessage(message) {
-    const type = message?.flags?.['lichsoma-fvtt-smartphone']?.type;
-    return type === 'messenger-message' || type === 'sns-dm-message';
-  }
-
-  function isDnd5eExportMessage(messageEl) {
-    return isDnd5eMessageElement(messageEl);
-  }
-
-  function collapseDnd5eExportChatCards(messageEl) {
-    if (!isDnd5eExportMessage(messageEl)) return;
-
-    messageEl.querySelectorAll?.('.chat-card .description.collapsible').forEach((description) => {
-      description.classList.add('collapsed');
-      description.setAttribute('aria-expanded', 'false');
-
-      const summary = description.querySelector('.summary');
-      summary?.setAttribute('aria-expanded', 'false');
-
-      const details = description.querySelector('.details');
-      details?.setAttribute('aria-hidden', 'true');
-    });
-  }
-
-
-
-  function getExportBodyClasses() {
-    const classes = ['lichsoma-chat-log-export'];
-
-    const systemId = game.system?.id || '';
-    if (systemId) classes.push(`system-${systemId}`);
-
-    const generation = Number(game.release?.generation ?? game.version?.split?.('.')?.[0] ?? 0);
-    if (generation && generation <= 13) {
-      classes.push('lichsoma-fvtt13-chat');
-    } else if (generation >= 14) {
-      classes.push('lichsoma-fvtt14-chat');
-    }
-
-    try {
-      for (const cls of document.body?.classList || []) {
-        if (/^theme-/.test(cls) || cls === 'lancer-simple-fonts') {
-          classes.push(cls);
-        }
-      }
-    } catch (e) {
-      // body class 수집 실패 시 기본 class만 사용한다.
-    }
-
-    return Array.from(new Set(classes.filter(Boolean))).join(' ');
-  }
-
-  function applyDnd5eExportNameStackedTitleAlias(message, messageEl) {
-    if (!isDnd5eExportMessage(messageEl)) return;
-    applyDnd5eTitleAlias(message, messageEl);
-  }
-
-  function getDnd5eExportAvatarPortraitSrc(message, messageEl) {
-    if (!message) return null;
-
-    const flags = message.flags?.['lichsoma-speaker-selector'] || {};
-
-    // 감정 포트레잇이 있으면 export HTML의 dnd5e 원본 avatar도 반드시 감정 포트레잇을 사용한다.
-    if (flags.emotionPortrait) return flags.emotionPortrait;
-    if (flags.portraitSrc) return flags.portraitSrc;
-
-    const renderedAvatar = messageEl?.querySelector?.('.message-header .message-sender .avatar img');
-    const renderedSrc = renderedAvatar?.getAttribute?.('src');
-    if (renderedSrc) return renderedSrc;
-
-    return null;
-  }
-
-  function applyDnd5eExportAvatarPortrait(message, messageEl) {
-    if (!isDnd5eExportMessage(messageEl)) return;
-
-    const avatar = messageEl.querySelector?.('.message-header .message-sender .avatar');
-    const img = avatar?.querySelector?.('img');
-    if (!avatar || !img) return;
-
-    const portraitSrc = getDnd5eExportAvatarPortraitSrc(message, messageEl);
-    if (!portraitSrc) return;
-
-    if (!img.dataset.lichsomaOriginalSrc) {
-      img.dataset.lichsomaOriginalSrc = img.getAttribute('src') || '';
-    }
-
-    img.setAttribute('src', portraitSrc);
-    img.dataset.lichsomaPortraitSrc = portraitSrc;
-    avatar.dataset.lichsomaPortraitSrc = portraitSrc;
-
-    const alias = getDnd5eExportTitleAlias(message);
-    if (alias) img.setAttribute('alt', alias);
-  }
-
-  /**
-   * ChatMerge._getMergeMeta와 같은 목적의 내보내기용 머지 메타.
-   * - token/actor 플래그가 있으면 해당 기준
-   * - actor/token이 없는 FVTT v14 Public as User 계열 메시지는 user 기준
-   * - portraitSrc는 저장 플래그를 우선하고, 없으면 렌더된 포트레잇 img에서 fallback
-   */
   function getExportMergeMeta(message, messageEl) {
     const flags = message?.flags?.['lichsoma-speaker-selector'] || {};
     const speaker = message?.speaker || {};
@@ -301,11 +38,11 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
     const userId = flags.userId || message?.author?.id || null;
 
     const portraitImg = messageEl?.querySelector?.('.lichsoma-chat-portrait');
-    const dnd5eAvatarImg = messageEl?.querySelector?.('.message-header .message-sender .avatar img');
+    const systemPortraitSrc = ChatSystemBridge.export.mergePortraitSrc(message, messageEl);
     const portraitSrc = flags.emotionPortrait
       || flags.portraitSrc
       || portraitImg?.getAttribute?.('src')
-      || dnd5eAvatarImg?.getAttribute?.('src')
+      || systemPortraitSrc
       || null;
 
     const alwaysUseActor = game.settings.get('lichsoma-speaker-selector', 'alwaysUseActor') === true;
@@ -369,197 +106,147 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
       currentMeta.mergeSpeakerType === previousMeta.mergeSpeakerType;
   }
   
-  function normalizeImageUrl(imageUrl, localHost) {
-    if (!imageUrl || typeof imageUrl !== 'string') return '';
-    const src = imageUrl.trim();
-    if (!src) return '';
-    
-    // 이미 Base64인 경우 그대로 사용
-    if (src.startsWith('data:')) return src;
-    
-    // protocol-relative URL
-    if (src.startsWith('//')) return `${window.location.protocol}${src}`;
-    
-    // absolute http(s)
-    if (src.startsWith('http://') || src.startsWith('https://')) return src;
-    
-    // 상대 경로 -> Foundry origin 기준 절대 URL
-    return src.startsWith('/') ? `${localHost}${src}` : `${localHost}/${src}`;
-  }
-  
-  async function fetchWithRetry(url, { retries = 3, timeoutMs = 20000, backoffMs = 500 } = {}) {
-    let lastErr = null;
-    for (let attempt = 0; attempt < retries; attempt++) {
-      const controller = new AbortController();
-      const t = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const res = await fetch(url, {
-          credentials: 'same-origin',
-          signal: controller.signal
-        });
-        clearTimeout(t);
-        return res;
-      } catch (err) {
-        clearTimeout(t);
-        lastErr = err;
-        // 지수 백오프 + 약간의 지터
-        const delay = backoffMs * Math.pow(2, attempt) + Math.floor(Math.random() * 200);
-        await sleep(delay);
-      }
-    }
-    throw lastErr;
-  }
-  
-  function isSvgResponse(imageUrl, response) {
-    const contentType = response?.headers?.get?.('content-type') || '';
-    if (/image\/svg\+xml/i.test(contentType)) return true;
-
+  function getSettingSafe(key, fallback = '') {
     try {
-      const path = new URL(normalizeImageUrl(imageUrl, window.location.origin)).pathname;
-      return /\.svg$/i.test(path);
+      return game.settings.get('lichsoma-speaker-selector', key) ?? fallback;
     } catch (e) {
-      return /\.svg(?:[?#]|$)/i.test(String(imageUrl || ''));
+      return fallback;
     }
   }
 
-  function svgTextToBase64DataUrl(svgText) {
-    const bytes = new TextEncoder().encode(svgText || '');
-    return `data:image/svg+xml;base64,${uint8ArrayToBase64(bytes)}`;
+  function getHookCallback(hookEntry) {
+    if (typeof hookEntry === 'function') return hookEntry;
+    if (typeof hookEntry?.fn === 'function') return hookEntry.fn;
+    if (typeof hookEntry?.callback === 'function') return hookEntry.callback;
+    return null;
   }
 
-  function estimateDataUrlByteSize(dataUrl) {
-    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return 0;
+  async function runHookEntry(hookEntry, ...args) {
+    const fn = getHookCallback(hookEntry);
+    if (!fn) return undefined;
+    const result = fn(...args);
+    if (result && typeof result.then === 'function') return await result;
+    return result;
+  }
 
-    const commaIndex = dataUrl.indexOf(',');
-    if (commaIndex < 0) return 0;
+  function buildChatLogExportWebfontCSS() {
+    const settings = {
+      header: getSettingSafe('chatHeaderWebfontCSS', ''),
+      message: getSettingSafe('chatMessageWebfontCSS', ''),
+      dice: getSettingSafe('chatDiceWebfontCSS', ''),
+      narrator: getSettingSafe('narratorWebfontCSS', '')
+    };
 
-    const metadata = dataUrl.slice(0, commaIndex);
-    const payload = dataUrl.slice(commaIndex + 1);
-
-    if (/;base64(?:;|$)/i.test(metadata)) {
-      const compact = payload.replace(/\s+/g, '');
-      const padding = compact.endsWith('==') ? 2 : compact.endsWith('=') ? 1 : 0;
-      return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
+    const parts = [];
+    const uniqueCSS = [...new Set(Object.values(settings).map(css => String(css ?? '').trim()).filter(Boolean))];
+    if (uniqueCSS.length) {
+      parts.push(`/* Shared in-game/export webfonts */\n${uniqueCSS.join('\n\n')}`);
     }
 
+    const profiles = Object.fromEntries(
+      Object.entries(settings).map(([key, css]) => [key, extractWebfontPresentation(css)])
+    );
+    const rules = [];
+    const declarationsFor = (profile, defaults = {}, { family = true } = {}) => {
+      const declarations = [];
+      if (family && profile?.family) declarations.push(`font-family: "${escapeCssString(profile.family)}", sans-serif`);
+      const weight = profile?.weight || defaults.weight || '';
+      const style = profile?.style || defaults.style || '';
+      if (weight) declarations.push(`font-weight: ${weight}`);
+      if (style) declarations.push(`font-style: ${style}`);
+      if (profile?.variationSettings) declarations.push(`font-variation-settings: ${profile.variationSettings}`);
+      return declarations;
+    };
+    const addRule = (selectors, declarations, { important = true } = {}) => {
+      if (!declarations.length) return;
+      const suffix = important ? ' !important' : '';
+      rules.push(`${selectors} {\n  ${declarations.map(value => `${value}${suffix}`).join(';\n  ')};\n}`);
+    };
+
+    const headerSelectors = `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message .lichsoma-chat-header .message-sender,
+body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-message.lichsoma-export-fallback > .message-header .message-sender`;
+    addRule(headerSelectors, declarationsFor(profiles.header, {}, { family: true }).filter(value => value.startsWith('font-family:')));
+    addRule(headerSelectors, declarationsFor(profiles.header, { weight: '900', style: 'normal' }, { family: false }));
+
+    addRule(
+      `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log :is(.lichsoma-simple-text-payload, .lichsoma-export-fallback) > .message-content`,
+      declarationsFor(profiles.message, { weight: '500', style: 'normal' })
+    );
+
+    addRule(
+      `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .dice-roll.lichsoma-core-dice :where(.dice-formula, .dice-total, .dice-tooltip, .dice-flavor)`,
+      declarationsFor(profiles.dice),
+      { important: false }
+    );
+
+    addRule(
+      `body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .lichsoma-narrator-card .narrator-card`,
+      declarationsFor(profiles.narrator, { weight: '500', style: 'italic' })
+    );
+
+    if (rules.length) parts.push(`/* Shared webfont application */\n${rules.join('\n\n')}`);
+    return parts.length ? `\n\n/* HTML 내보내기 웹폰트 */\n${parts.join('\n\n')}` : '';
+  }
+
+  /** ChatMerge._isOnlyHrMessage 와 동일: ProseMirror의 `<p><hr></p>` 등도 구분선 전용으로 처리 */
+  function isOnlyHrMessageContent(messageEl) {
+    const messageContent = messageEl.querySelector('.message-content');
+    if (!messageContent) return false;
+    const htmlContent = messageContent.innerHTML || '';
+    const withoutHr = htmlContent.replace(/<hr\s*\/?>/gi, '');
+
+    // 텍스트가 없어도 "콘텐츠"가 있으면 hr-only가 아님 (이미지/임베드/비디오 등)
+    // - 기존 구현은 태그를 전부 제거해서 <img>만 있는 메시지를 hr-only로 오판했다.
     try {
-      return new TextEncoder().encode(decodeURIComponent(payload)).byteLength;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = withoutHr;
+      const hasNonTextContent = !!tmp.querySelector(
+        'img, video, audio, iframe, embed, object, canvas, picture, svg, source'
+      );
+      if (hasNonTextContent) return false;
     } catch (e) {
-      return new TextEncoder().encode(payload).byteLength;
+      // DOM 파싱 실패 시 기존 텍스트 판정으로 fallback
     }
+
+    const textOnly = withoutHr.replace(/<[^>]+>/g, '').replace(/\s+/g, '');
+    return textOnly === '';
   }
 
-  function readBlobAsDataUrl(blob) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+
+  function hasNarratorCard(messageEl) {
+    return !!messageEl?.querySelector?.('.message-content .narrator-card');
   }
 
-  // 500KB 이하 이미지만 내보내기용 Data URL로 변환한다.
-  // 초과 이미지는 HTML에 중복 Base64를 넣지 않고 절대 URL을 유지한다.
-  async function imageUrlToEmbeddedRecord(imageUrl, localHost, maxBytes = MAX_EMBEDDED_IMAGE_BYTES) {
+  function isMessengerMessage(message) {
+    const type = message?.flags?.['lichsoma-fvtt-smartphone']?.type;
+    return type === 'messenger-message' || type === 'sns-dm-message';
+  }
+
+  function getExportBodyClasses(theme = getChatTheme()) {
+    const classes = ['lichsoma-chat-log-export', getChatThemeClass(theme)];
+
+    const systemId = game.system?.id || '';
+    if (systemId) classes.push(`system-${systemId}`);
+
+    const generation = Number(game.release?.generation ?? game.version?.split?.('.')?.[0] ?? 0);
+    if (generation && generation <= 13) {
+      classes.push('lichsoma-fvtt13-chat');
+    } else if (generation >= 14) {
+      classes.push('lichsoma-fvtt14-chat');
+    }
+
     try {
-      if (imageUrl.startsWith('data:')) {
-        return {
-          dataUrl: imageUrl,
-          byteSize: estimateDataUrlByteSize(imageUrl),
-          absoluteUrl: imageUrl
-        };
+      for (const cls of document.body?.classList || []) {
+        if (/^theme-/.test(cls)) classes.push(cls);
       }
-
-      const fullUrl = normalizeImageUrl(imageUrl, localHost);
-      if (!fullUrl) {
-        return { dataUrl: '', byteSize: 0, absoluteUrl: imageUrl };
-      }
-
-      const response = await fetchWithRetry(fullUrl, { retries: 4, timeoutMs: 25000, backoffMs: 600 });
-      if (!response.ok) {
-        console.warn(`이미지 로드 실패: ${fullUrl}`);
-        return { dataUrl: '', byteSize: 0, absoluteUrl: fullUrl };
-      }
-
-      const contentLength = Number(response.headers?.get?.('content-length'));
-      if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-        try {
-          await response.body?.cancel?.();
-        } catch (e) {
-          // 이미 완료되었거나 취소를 지원하지 않는 응답은 그대로 둔다.
-        }
-        return {
-          dataUrl: '',
-          byteSize: contentLength,
-          absoluteUrl: fullUrl
-        };
-      }
-
-      if (isSvgResponse(fullUrl, response)) {
-        const svgText = await response.text();
-        const byteSize = new TextEncoder().encode(svgText).byteLength;
-        if (byteSize > maxBytes) {
-          return {
-            dataUrl: '',
-            byteSize,
-            absoluteUrl: fullUrl
-          };
-        }
-
-        return {
-          dataUrl: svgTextToBase64DataUrl(svgText),
-          byteSize,
-          absoluteUrl: fullUrl
-        };
-      }
-
-      const blob = await response.blob();
-      if (blob.size > maxBytes) {
-        return {
-          dataUrl: '',
-          byteSize: blob.size,
-          absoluteUrl: fullUrl
-        };
-      }
-
-      return {
-        dataUrl: await readBlobAsDataUrl(blob),
-        byteSize: blob.size,
-        absoluteUrl: fullUrl
-      };
-    } catch (error) {
-      console.warn(`Base64 변환 실패: ${imageUrl}`, error);
-      return {
-        dataUrl: '',
-        byteSize: 0,
-        absoluteUrl: normalizeImageUrl(imageUrl, localHost) || imageUrl
-      };
-    }
-  }
-
-  function getOrCreateImageRegistryKey(dataUrl, registry, reverseRegistry) {
-    const existingKey = reverseRegistry.get(dataUrl);
-    if (existingKey) return existingKey;
-
-    const baseKey = simpleHash(dataUrl) || 'image';
-    let key = baseKey;
-    let suffix = 2;
-    while (registry.has(key) && registry.get(key) !== dataUrl) {
-      key = `${baseKey}-${suffix++}`;
+    } catch (e) {
+      // body class 수집 실패 시 기본 class만 사용한다.
     }
 
-    registry.set(key, dataUrl);
-    reverseRegistry.set(dataUrl, key);
-    return key;
+    classes.push(...ChatSystemBridge.export.bodyClasses());
+    return Array.from(new Set(classes.filter(Boolean))).join(' ');
   }
 
-  function serializeImageRegistry(registry) {
-    return JSON.stringify(Object.fromEntries(registry))
-      .replace(/</g, '\\u003c')
-      .replace(/\u2028/g, '\\u2028')
-      .replace(/\u2029/g, '\\u2029');
-  }
-  
   // game.messages의 ChatMessage 문서를 기준으로 내보내기용 HTML을 새로 렌더링한다.
   // 기존 방식처럼 현재 사이드바의 .chat-log DOM, 스크롤 위치, 가상 렌더링 상태에 의존하지 않는다.
   function escapeHTML(value) {
@@ -623,6 +310,38 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
     return messageEl;
   }
 
+  function formatExportMessageTimestamp(timestamp) {
+    if (timestamp === null || timestamp === undefined || timestamp === '') return '';
+    const date = new Date(Number(timestamp));
+    if (!Number.isFinite(date.getTime())) return '';
+
+    const pad2 = value => String(value).padStart(2, '0');
+    const year = pad2(date.getFullYear() % 100);
+    const month = pad2(date.getMonth() + 1);
+    const day = pad2(date.getDate());
+    const hour = pad2(date.getHours());
+    const minute = pad2(date.getMinutes());
+    return `${year}.${month}.${day}.${hour}.${minute}`;
+  }
+
+  function applyExportMessageTimestamp(message, messageElement) {
+    if (!(messageElement instanceof HTMLElement)) return;
+
+    const timestamp = message?.timestamp;
+    const formatted = formatExportMessageTimestamp(timestamp);
+    if (!formatted) return;
+
+    const timestampElements = messageElement.querySelectorAll('.message-timestamp');
+    for (const timestampElement of timestampElements) {
+      timestampElement.textContent = formatted;
+      try {
+        timestampElement.setAttribute('datetime', new Date(Number(timestamp)).toISOString());
+      } catch (_error) {
+        // Invalid values are already filtered by formatExportMessageTimestamp().
+      }
+    }
+  }
+
   function renderFallbackChatMessageElement(message) {
     const li = document.createElement('li');
     li.className = 'chat-message message flexcol lichsoma-export-fallback';
@@ -630,9 +349,7 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
 
     const alias = message?.speaker?.alias || message?.alias || message?.author?.name || 'Unknown';
     const content = message?.content ?? '';
-    const timestamp = message?.timestamp
-      ? new Date(message.timestamp).toLocaleString()
-      : '';
+    const timestamp = formatExportMessageTimestamp(message?.timestamp);
 
     li.innerHTML = `
       <header class="message-header flexrow">
@@ -644,19 +361,20 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
       <div class="message-content">${content}</div>
     `;
 
+    applyExportMessageTimestamp(message, li);
     return li;
   }
 
   async function renderChatMessageForExport(message) {
     try {
-      if (typeof message?.renderHTML !== 'function') {
+      if (typeof message?.renderHTML !== 'function' && typeof message?.getHTML !== 'function') {
         return renderFallbackChatMessageElement(message);
       }
 
       // Isolate this render from all live-ChatLog-only processors. The context is
       // associated with this specific ChatMessage object, so live messages which render
       // concurrently are not affected.
-      const rendered = await withChatRenderContext(message, { mode: 'export' }, () => message.renderHTML({
+      const rendered = await withChatRenderContext(message, { mode: 'export' }, () => renderSystemChatMessage(message, {
         canDelete: false,
         canClose: false
       }));
@@ -673,6 +391,9 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
         console.warn('[lichsoma-speaker-selector] Export presentation preparation failed:', message?.id, error);
       }
 
+      // Foundry renders relative labels such as "2 hours ago" in message headers.
+      // Standalone logs use a stable local absolute timestamp instead.
+      applyExportMessageTimestamp(message, element);
       return element;
     } catch (error) {
       console.warn('[lichsoma-speaker-selector] ChatMessage.renderHTML() 실패, fallback HTML 사용:', message?.id, error);
@@ -680,8 +401,9 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
     }
   }
 
-  async function buildChatLogDOMFromMessages() {
-    const messages = getSortedChatMessages();
+  const CHAT_EXPORT_BATCH_SIZE = 200;
+
+  async function buildChatLogBatch(messages, globalStartIndex = 0) {
     const container = document.createElement('div');
     let count = 0;
 
@@ -693,276 +415,227 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
         count += 1;
       }
 
-      // Large logs can contain several thousand messages. Yield periodically so the
-      // browser can service rendering/input and does not look permanently frozen.
-      if ((index + 1) % 50 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+      // 대용량 로그에서도 UI가 완전히 멈춰 보이지 않도록 주기적으로 이벤트 루프에 양보한다.
+      if ((globalStartIndex + index + 1) % 50 === 0) await sleep(0);
     }
 
-    return {
-      container,
-      count,
-      total: messages.length
+    return { container, count };
+  }
+
+  function applyExportMergeState(logContainer, previousState = null) {
+    let prevMeta = previousState?.meta ?? null;
+    let prevMessage = previousState?.message ?? null;
+    let prevElement = previousState?.element ?? null;
+    const messageElements = logContainer.querySelectorAll('.chat-message');
+
+    const clearPrevious = () => {
+      prevMeta = null;
+      prevMessage = null;
+      prevElement = null;
     };
+
+    const setPrevious = (message, element, meta) => {
+      if (!isValidExportMergeMeta(meta)) {
+        clearPrevious();
+        return;
+      }
+      prevMeta = meta;
+      prevMessage = message;
+      prevElement = element;
+    };
+
+    for (const messageEl of messageElements) {
+      const messageId = messageEl.getAttribute('data-message-id');
+      if (!messageId) {
+        messageEl.classList.remove('lichsoma-merged');
+        clearPrevious();
+        continue;
+      }
+
+      const message = game.messages.get(messageId);
+      if (!message) {
+        messageEl.classList.remove('lichsoma-merged');
+        clearPrevious();
+        continue;
+      }
+
+      const currentMeta = getExportMergeMeta(message, messageEl);
+
+      // 자신의 메시지인지 확인하고 클래스 추가
+      const isOwnMessage = currentMeta.userId === game.user.id;
+      messageEl.classList.toggle('lichsoma-own-message', isOwnMessage);
+
+      // <hr> 전용 메시지: 머지하지 않고 이후 체인 끊기
+      // 이미지/비디오 등 비텍스트 콘텐츠만 있는 메시지는 hr-only가 아니므로 머지 대상이 될 수 있다.
+      if (isOnlyHrMessageContent(messageEl)) {
+        messageEl.classList.add('lichsoma-hr-only');
+        messageEl.classList.remove('lichsoma-merged');
+        clearPrevious();
+        continue;
+      }
+      messageEl.classList.remove('lichsoma-hr-only');
+
+      // 메신저 메시지 (lichsoma-fvtt-smartphone): 머지 체인 끊기
+      if (isMessengerMessage(message)) {
+        messageEl.classList.add('lichsoma-messenger-message');
+        messageEl.classList.remove('lichsoma-merged');
+        clearPrevious();
+        continue;
+      }
+      messageEl.classList.remove('lichsoma-messenger-message');
+
+      // narrator-card 확인: 문자열 검색 대신 DOM query 사용
+      if (hasNarratorCard(messageEl)) {
+        messageEl.classList.add('lichsoma-narrator-card');
+        messageEl.classList.remove('lichsoma-merged');
+        clearPrevious();
+        continue;
+      }
+      messageEl.classList.remove('lichsoma-narrator-card');
+
+      // 시스템별 내보내기 머지 제외 규칙은 live merge와 동일하게 역할을 구분한다.
+      // current 규칙은 현재 메시지에, previous 규칙은 실제 직전 메시지에 적용한다.
+      const excludedCurrent = chatSystemExportExcludeCurrent(message, messageEl);
+      const excludedPrevious = !!(
+        prevMessage &&
+        prevElement &&
+        chatSystemExportExcludePrevious(prevMessage, prevElement)
+      );
+
+      const shouldMerge = !excludedCurrent &&
+        !excludedPrevious &&
+        canExportMerge(currentMeta, prevMeta);
+      messageEl.classList.toggle('lichsoma-merged', shouldMerge);
+
+      // 역할별 제외 규칙은 현재 메시지가 다음 메시지의 `previous` 후보가 되는 것까지
+      // 막지 않는다. 다음 반복에서 exportExcludePrevious가 이 메시지를 다시 판정한다.
+      setPrevious(message, messageEl, currentMeta);
+    }
+
+    return prevMessage && prevElement && prevMeta
+      ? { message: prevMessage, element: prevElement, meta: prevMeta }
+      : null;
+  }
+
+  async function runWithConcurrencyLimit(items, limit, worker) {
+    const queue = Array.from(items);
+    let nextIndex = 0;
+    const workerCount = Math.min(Math.max(1, limit), Math.max(1, queue.length));
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (nextIndex < queue.length) {
+        const item = queue[nextIndex++];
+        try {
+          await worker(item);
+        } catch (e) {
+          // worker 내부에서 로그/폴백 처리한다.
+        }
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  function normalizeImageCssLength(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    return /^-?\d+(?:\.\d+)?$/.test(text) ? `${text}px` : text;
+  }
+
+  function preserveImageDimensions(img) {
+    const originalWidth = img.getAttribute('width') || img.style.width || (img.offsetWidth > 0 ? `${img.offsetWidth}px` : null);
+    const originalHeight = img.getAttribute('height') || img.style.height || (img.offsetHeight > 0 ? `${img.offsetHeight}px` : null);
+    const widthStyle = normalizeImageCssLength(originalWidth);
+    const heightStyle = normalizeImageCssLength(originalHeight);
+
+    if (originalWidth) {
+      img.setAttribute('data-width', originalWidth);
+      if (!img.style.width && widthStyle) img.style.width = widthStyle;
+    }
+    if (originalHeight) {
+      img.setAttribute('data-height', originalHeight);
+      if (!img.style.height && heightStyle) img.style.height = heightStyle;
+    }
+  }
+
+  async function applyHtmlTransformHooks(html, hookFunctions, context = {}, label = 'HTML 변환') {
+    let transformed = html;
+    for (const hookFn of hookFunctions) {
+      try {
+        const result = await runHookEntry(hookFn, transformed, context);
+        if (result && typeof result === 'string') transformed = result;
+      } catch (error) {
+        console.warn(`확장 모듈 ${label} 훅 실행 오류:`, error);
+      }
+    }
+    return transformed;
+  }
+
+  function splitChatMessagesByLi(html, startIndex = 0) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const liElements = Array.from(tempDiv.querySelectorAll('li.chat-message'));
+
+    if (liElements.length === 0) return { html, count: 0 };
+
+    const parts = [];
+    liElements.forEach((li, index) => {
+      const messageId = li.getAttribute('data-message-id') || '';
+      const messageIndex = startIndex + index + 1;
+      parts.push(`            <!-- ========== 메시지 ${messageIndex} (ID: ${messageId}) ========== -->`);
+      parts.push(`            ${li.outerHTML}`);
+      parts.push(`            <!-- ========== 메시지 ${messageIndex} 끝 ========== -->`);
+    });
+
+    return { html: parts.join('\n'), count: liElements.length };
   }
 
   // 채팅 로그 HTML로 저장하는 함수
-  async function exportChatLogAsHTML({ notifyFailure = true } = {}) {
-    // A several-thousand-message export is intentionally long-running. Prevent a second
-    // click (or a flush-backup request) from starting another full render in parallel.
+  async function exportChatLogAsHTML({ notifyFailure = true, requireEmbeddedImages = false } = {}) {
+    const exportTheme = getChatTheme();
+    // 수천~수만 건의 내보내기는 오래 걸릴 수 있으므로 동시에 두 번째 작업이 시작되지 않게 막는다.
     if (chatLogExportInProgress) return false;
     chatLogExportInProgress = true;
 
     try {
-      // game.messages의 ChatMessage 문서를 기준으로 내보내기용 HTML을 새로 렌더링한다.
       const totalMessageCount = game.messages.size;
       if (totalMessageCount === 0) {
         ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Warning.Empty'));
         return false;
       }
 
-      const renderedLog = await buildChatLogDOMFromMessages();
-      const logContainer = renderedLog.container;
-
-      if (!logContainer || renderedLog.count === 0) {
+      // 현재 사이드바 DOM이나 스크롤 상태를 보지 않고 game.messages 문서를 직접 사용한다.
+      const messagesToExport = getSortedChatMessages();
+      if (messagesToExport.length === 0) {
         ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Warning.Empty'));
         return false;
       }
-
-      if (renderedLog.count < renderedLog.total) {
-        ui.notifications.warn(game.i18n.format('SPEAKERSELECTOR.ChatLogExport.Warning.CountMismatch', {
-          rendered: renderedLog.count,
-          total: renderedLog.total
-        }));
-      }
-
-      // 챗 머지 처리: 이미 detached DOM으로 렌더된 메시지를 그대로 사용한다.
-      // 전체 HTML 문자열을 만들었다가 다시 parse하던 구형 경로를 제거한다.
-      const messages = logContainer.querySelectorAll('.chat-message');
-
-      let prevMeta = null;
-
-      messages.forEach((messageEl) => {
-        const messageId = messageEl.getAttribute('data-message-id');
-        if (!messageId) {
-          messageEl.classList.remove('lichsoma-merged');
-          prevMeta = null;
-          return;
-        }
-
-        const message = game.messages.get(messageId);
-        if (!message) {
-          messageEl.classList.remove('lichsoma-merged');
-          prevMeta = null;
-          return;
-        }
-
-        // dnd5e HTML 내보내기에서도 셀렉터가 저장한 senderAlias / speaker.alias를 name-stacked title에 반영한다.
-        applyDnd5eExportNameStackedTitleAlias(message, messageEl);
-
-        // dnd5e HTML 내보내기에서도 감정 포트레잇/portraitSrc를 원본 avatar img에 반영한다.
-        applyDnd5eExportAvatarPortrait(message, messageEl);
-
-        // dnd5e HTML 내보내기에서는 접을 수 있는 chat-card를 기본적으로 닫힌 상태로 만든다.
-        collapseDnd5eExportChatCards(messageEl);
-
-        const currentMeta = getExportMergeMeta(message, messageEl);
-
-        // 자신의 메시지인지 확인하고 클래스 추가
-        const isOwnMessage = currentMeta.userId === game.user.id;
-        messageEl.classList.toggle('lichsoma-own-message', isOwnMessage);
-
-        // <hr> 전용 메시지: 머지하지 않고 이후 체인 끊기
-        // 이미지/비디오 등 비텍스트 콘텐츠만 있는 메시지는 hr-only가 아니므로 머지 대상이 될 수 있다.
-        if (isOnlyHrMessageContent(messageEl)) {
-          messageEl.classList.add('lichsoma-hr-only');
-          messageEl.classList.remove('lichsoma-merged');
-          prevMeta = null;
-          return;
-        }
-        messageEl.classList.remove('lichsoma-hr-only');
-
-        // 메신저 메시지 (lichsoma-fvtt-smartphone): 머지 체인 끊기
-        if (isMessengerMessage(message)) {
-          messageEl.classList.add('lichsoma-messenger-message');
-          messageEl.classList.remove('lichsoma-merged');
-          prevMeta = null;
-          return;
-        }
-        messageEl.classList.remove('lichsoma-messenger-message');
-
-        // 시스템별 내보내기 머지 제외
-        if (
-          chatSystemExportExcludeCurrent(message, messageEl) ||
-          chatSystemExportExcludePrevious(message, messageEl)
-        ) {
-          messageEl.classList.remove('lichsoma-merged');
-          prevMeta = null;
-          return;
-        }
-
-        // narrator-card 확인: 문자열 검색 대신 DOM query 사용
-        if (hasNarratorCard(messageEl)) {
-          messageEl.classList.add('lichsoma-narrator-card');
-          messageEl.classList.remove('lichsoma-merged');
-          prevMeta = null;
-          return;
-        }
-        messageEl.classList.remove('lichsoma-narrator-card');
-
-        const shouldMerge = canExportMerge(currentMeta, prevMeta);
-        messageEl.classList.toggle('lichsoma-merged', shouldMerge);
-        prevMeta = isValidExportMergeMeta(currentMeta) ? currentMeta : null;
-      });
 
       // 설정 확인
       const useBase64 = game.settings.get('lichsoma-speaker-selector', 'chatLogExportUseBase64') || false;
       let basePath = game.settings.get('lichsoma-speaker-selector', 'chatLogExportBasePath') || '';
       const localHost = window.location.origin;
-      
-      // basePath가 공란일 경우 FoundryVTT 유저 데이터 경로 + /Data 사용
+
+      // basePath가 공란일 경우 현재 Foundry VTT origin을 사용한다.
       if (!basePath || basePath.trim() === '') {
         basePath = localHost;
       }
-      
-      // Base64 변환이 활성화된 경우 500KB 이하 이미지를 단일 레지스트리로 통합한다.
-      const imageRegistry = new Map();
-      let imageRegistryJSON = '{}';
-      if (useBase64) {
-        const images = Array.from(logContainer.querySelectorAll('img[src]'));
 
-        // URL별 Promise를 캐시해 같은 파일을 중복 fetch/변환하지 않는다.
-        const imageResultCache = new Map();
-        // 최종 Data URL 기준으로 하나의 레지스트리 키만 생성한다.
-        const reverseImageRegistry = new Map();
-        const MAX_CONCURRENT_IMAGE_FETCHES = 6;
-
-        async function runWithConcurrencyLimit(items, limit, worker) {
-          const queue = Array.from(items);
-          let nextIndex = 0;
-          const workers = Array.from({ length: Math.min(Math.max(1, limit), Math.max(1, queue.length)) }, async () => {
-            while (nextIndex < queue.length) {
-              const item = queue[nextIndex++];
-              try {
-                await worker(item);
-              } catch (e) {
-                // worker 내부에서 로그/폴백 처리한다.
-              }
-            }
-          });
-          await Promise.all(workers);
-        }
-
-        function normalizeImageCssLength(value) {
-          const text = String(value ?? '').trim();
-          if (!text) return '';
-          return /^-?\d+(?:\.\d+)?$/.test(text) ? `${text}px` : text;
-        }
-
-        function preserveImageDimensions(img) {
-          const originalWidth = img.getAttribute('width') || img.style.width || (img.offsetWidth > 0 ? `${img.offsetWidth}px` : null);
-          const originalHeight = img.getAttribute('height') || img.style.height || (img.offsetHeight > 0 ? `${img.offsetHeight}px` : null);
-          const widthStyle = normalizeImageCssLength(originalWidth);
-          const heightStyle = normalizeImageCssLength(originalHeight);
-
-          if (originalWidth) {
-            img.setAttribute('data-width', originalWidth);
-            if (!img.style.width && widthStyle) img.style.width = widthStyle;
-          }
-          if (originalHeight) {
-            img.setAttribute('data-height', originalHeight);
-            if (!img.style.height && heightStyle) img.style.height = heightStyle;
-          }
-        }
-
-        async function getImageRecord(src) {
-          const cacheKey = src.startsWith('data:') ? src : normalizeImageUrl(src, localHost);
-          if (!imageResultCache.has(cacheKey)) {
-            imageResultCache.set(
-              cacheKey,
-              imageUrlToEmbeddedRecord(src, localHost, MAX_EMBEDDED_IMAGE_BYTES)
-            );
-          }
-          return await imageResultCache.get(cacheKey);
-        }
-
-        // Group repeated portrait/card URLs first. Thousands of chat messages often reuse
-        // the same few images, so convert each unique source only once and then apply the
-        // resulting registry key to every matching <img>.
-        const imagesBySource = new Map();
-        for (const img of images) {
-          const src = img.getAttribute('src');
-          if (!src) continue;
-          if (!imagesBySource.has(src)) imagesBySource.set(src, []);
-          imagesBySource.get(src).push(img);
-        }
-
-        const processImageGroup = async ([src, groupedImages]) => {
-          try {
-            const record = await getImageRecord(src);
-            let imageKey = null;
-            if (record?.dataUrl && typeof record.dataUrl === 'string' && record.dataUrl.startsWith('data:')) {
-              imageKey = getOrCreateImageRegistryKey(record.dataUrl, imageRegistry, reverseImageRegistry);
-            }
-
-            for (const img of groupedImages) {
-              preserveImageDimensions(img);
-
-              if (!imageKey) {
-                const absoluteUrl = normalizeImageUrl(src, basePath || localHost) || record?.absoluteUrl;
-                if (absoluteUrl) img.setAttribute('src', absoluteUrl);
-                continue;
-              }
-
-              // All embedded images use the same registry-key -> <img src> restoration path.
-              img.setAttribute('data-lichsoma-image-src-key', imageKey);
-              img.removeAttribute('src');
-
-              const exportHeader = img.closest('.message-header, .lichsoma-chat-header, .item-header');
-              if (exportHeader) {
-                // Standalone logs do not need preview/source metadata or fallback alt text
-                // once the image is successfully embedded.
-                img.removeAttribute('alt');
-                exportHeader.querySelectorAll('[data-lichsoma-portrait-src]').forEach((el) => {
-                  el.removeAttribute('data-lichsoma-portrait-src');
-                });
-                exportHeader.querySelectorAll('[data-lichsoma-original-src]').forEach((el) => {
-                  el.removeAttribute('data-lichsoma-original-src');
-                });
-                const portraitContainer = img.closest('.lichsoma-chat-portrait-container');
-                portraitContainer?.removeAttribute('data-preview-attached');
-              }
-            }
-          } catch (error) {
-            console.warn(`이미지 Base64 변환 실패: ${src}`, error);
-            const absoluteUrl = normalizeImageUrl(src, basePath || localHost);
-            for (const img of groupedImages) {
-              if (absoluteUrl) img.setAttribute('src', absoluteUrl);
-            }
-          }
-        };
-
-        await runWithConcurrencyLimit(imagesBySource.entries(), MAX_CONCURRENT_IMAGE_FETCHES, processImageGroup);
-        imageRegistryJSON = serializeImageRegistry(imageRegistry);
-      } else {
-        // Base64가 꺼져 있어도 detached DOM에서 이미지 URL만 정규화한다.
-        for (const img of logContainer.querySelectorAll('img[src]')) {
-          const srcPath = img.getAttribute('src') || '';
-          if (!srcPath || srcPath.startsWith('http') || srcPath.startsWith('//') || srcPath.includes(localHost) || srcPath.startsWith('data:')) continue;
-          const fullPath = srcPath.startsWith('/') ? srcPath : '/' + srcPath;
-          img.setAttribute('src', `${basePath}${fullPath}`);
+      const imagePipeline = createExportImagePipeline({ baseUrl: localHost, preserveDimensions: preserveImageDimensions });
+      async function processImagesInBatch(container) {
+        if (useBase64) return imagePipeline.process(container);
+        for (const img of container.querySelectorAll('img[src]')) {
+          const url = normalizeExportImageUrl(img.getAttribute('src'), basePath);
+          if (url) img.setAttribute('src', url);
         }
       }
 
-      // Serialize once after all per-message DOM work and image processing are complete.
-      let chatLogHTML = logContainer.innerHTML;
-      
       // FoundryVTT의 CSS 변수에서 색상 가져오기
       const computedStyle = getComputedStyle(document.documentElement);
       const backgroundColor = computedStyle.getPropertyValue('--color-cool-5').trim() || '#1e1e1e';
       const textColor = computedStyle.getPropertyValue('--color-text-primary').trim() || '#ffffff';
       const borderColor = computedStyle.getPropertyValue('--color-primary').trim() || '#4a90e2';
       const secondaryTextColor = computedStyle.getPropertyValue('--color-text-secondary').trim() || '#c9c9c9';
-      
+      const hideMessageTimestamps = getSettingSafe('chatLogExportHideTimestamps', true) !== false;
+
       // CSS 파일 내용 읽기 (인라인으로 포함)
       let cssContent = '';
       try {
@@ -971,28 +644,23 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
           // 모듈 URL 경로 구성 - CSS는 모듈 내 정적 파일이므로 basePath 무시하고 항상 Foundry VTT 서버 경로 사용
           const cssPath = `modules/lichsoma-speaker-selector/styles/lichsoma-chat-log-export.css`;
           const fullCssPath = `${localHost}${cssPath.startsWith('/') ? cssPath : '/' + cssPath}`;
-          
+
           const response = await fetch(fullCssPath);
           if (response.ok) {
             cssContent = await response.text();
-            
-            // 주사위 툴팁 표시 설정 확인
+
+            // 명시적으로 숨기기를 선택한 경우에만 전체 tooltip을 감춘다.
+            // 기본 CSS는 tooltip 가시성을 소유하지 않아 시스템 export 스타일을 보존한다.
             const showDiceTooltip = game.settings.get('lichsoma-speaker-selector', 'chatLogExportShowDiceTooltip') || false;
             if (!showDiceTooltip) {
-              // 설정이 false이면 .dice-tooltip { display: none; } 추가
-              // 이미 CSS에 있는 경우를 대비해 제거 후 추가
-              cssContent = cssContent.replace(/\.dice-tooltip\s*\{[^}]*display:\s*none[^}]*\}/g, '');
-              cssContent += '\n\n.dice-tooltip {\n  display: none;\n}';
-            } else {
-              // 설정이 true이면 .dice-tooltip { display: none; } 제거
-              cssContent = cssContent.replace(/\.dice-tooltip\s*\{[^}]*display:\s*none[^}]*\}/g, '');
+              cssContent += '\n\n.dice-tooltip { display: none !important; }';
             }
           }
         }
       } catch (e) {
         // CSS 파일 로드 실패 (무시)
       }
-      
+
       // 커스텀 CSS 가져오기
       let customCSS = '';
       try {
@@ -1005,14 +673,18 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
       }
 
       const exportWebfontCSS = buildChatLogExportWebfontCSS();
-      const cainAlterExportFontPriorityCSS = buildCainAlterExportFontPriorityCSS();
-      
+      let themeCSS = '';
+      if (exportTheme !== 'dark-simple') {
+        const response = await fetch('modules/lichsoma-speaker-selector/styles/lichsoma-chat-theme.css');
+        if (!response.ok) throw new Error('Chat theme stylesheet could not be loaded.');
+        themeCSS = await response.text();
+      }
+
       // 확장 모듈 CSS 수집
-      let extensionCSS = '';
+      let extensionStyles = '';
       try {
-        // 모든 등록된 훅 함수 호출하여 결과 수집
         const hookFunctions = Hooks.events['lichsoma-speaker-selector.chatLogExportAdditionalCSS'] || [];
-        
+
         if (hookFunctions.length > 0) {
           const cssPromises = hookFunctions.map(async (hookFn) => {
             try {
@@ -1023,72 +695,133 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
               return '';
             }
           });
-          
+
           const cssResults = await Promise.all(cssPromises);
-          extensionCSS = cssResults.filter(css => css && typeof css === 'string' && css.trim()).join('\n\n');
-          
-          if (extensionCSS.trim()) {
-            extensionCSS = `\n\n/* 확장 모듈 CSS */\n${extensionCSS}`;
-          }
+          // Each extension gets a style block so its leading @import remains valid.
+          extensionStyles = cssResults.filter(css => css && typeof css === 'string' && css.trim())
+            .map(css => `<style>\n${css.replace(/<\/style/gi, '<\\/style')}\n</style>`).join('\n');
         }
       } catch (e) {
         console.warn('확장 모듈 CSS 로드 실패:', e);
-        // 확장 모듈 CSS 로드 실패 (무시)
       }
-      
-      // 확장 모듈 HTML 변환 적용
-      try {
-        // 모든 등록된 훅 함수 호출하여 HTML 변환
-        const htmlHookFunctions = Hooks.events['lichsoma-speaker-selector.chatLogExportHTMLTransform'] || [];
-        
-        if (htmlHookFunctions.length > 0) {
-          // 각 훅 함수를 순차적으로 적용 (이전 결과를 다음 훅에 전달)
-          for (const hookFn of htmlHookFunctions) {
-            try {
-              const result = await runHookEntry(hookFn, chatLogHTML);
-              if (result && typeof result === 'string') {
-                chatLogHTML = result;
-              }
-              // 결과가 없거나 유효하지 않은 경우 기존 HTML 유지
-            } catch (error) {
-              console.warn('확장 모듈 HTML 변환 훅 실행 오류:', error);
-              // 오류 발생 시 기존 HTML 유지
-            }
-          }
+
+      // Speaker Selector가 소유하는 최종 export 헤더 정책.
+      // 시스템별 추가 CSS 뒤에 배치해 메타데이터의 크기/정렬과 타임스탬프 가시성을 일관되게 유지한다.
+      const exportHeaderPolicyCSS = `
+
+/* Speaker Selector export header metadata policy */
+.chat-log .chat-message .message-header .message-metadata {
+  margin-left: auto;
+  align-self: flex-end;
+  align-items: flex-end;
+  justify-content: flex-end;
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: right;
+}
+${hideMessageTimestamps ? `.chat-log .chat-message .message-timestamp { display: none !important; }` : ''}
+`;
+
+      // 기존 HTML 변환 훅 API는 그대로 유지한다. 등록된 변환이 모두 배치 안전하다고 명시된 경우에만
+      // 200개 단위로 실행하고, 알 수 없는 외부 변환이 하나라도 있으면 기존처럼 전체 HTML에 순차 적용한다.
+      const htmlTransformHooks = Hooks.events['lichsoma-speaker-selector.chatLogExportHTMLTransform'] || [];
+      const allHtmlTransformsBatchSafe = htmlTransformHooks.length > 0 && htmlTransformHooks.every((hookEntry) => {
+        const callback = getHookCallback(hookEntry);
+        return callback?.lichsomaChatLogExportBatchSafe === true;
+      });
+      const chunkHtmlHookFunctions = allHtmlTransformsBatchSafe ? htmlTransformHooks : [];
+      const legacyHtmlHookFunctions = allHtmlTransformsBatchSafe ? [] : htmlTransformHooks;
+
+      let prevMergeState = null;
+      let renderedCount = 0;
+      let finalMessageCount = 0;
+      const chatBodyParts = [];
+      const legacyRawParts = legacyHtmlHookFunctions.length > 0 ? [] : null;
+      const totalBatches = Math.ceil(messagesToExport.length / CHAT_EXPORT_BATCH_SIZE);
+
+      for (let batchStart = 0, batchIndex = 0; batchStart < messagesToExport.length; batchStart += CHAT_EXPORT_BATCH_SIZE, batchIndex++) {
+        const batchMessages = messagesToExport.slice(batchStart, batchStart + CHAT_EXPORT_BATCH_SIZE);
+        const renderedBatch = await buildChatLogBatch(batchMessages, batchStart);
+        const logContainer = renderedBatch.container;
+        renderedCount += renderedBatch.count;
+
+        // 직전 메시지의 머지 상태는 배치 밖에서 DOM 1개와 함께 유지한다.
+        // 따라서 200번째와 201번째 메시지 사이에서도 current/previous 시스템 규칙을 구분할 수 있다.
+        prevMergeState = applyExportMergeState(logContainer, prevMergeState);
+        await processImagesInBatch(logContainer);
+
+        let batchHTML = logContainer.innerHTML;
+        // 직렬화가 끝난 즉시 원본 배치 DOM을 비워, 후속 HTML 변환/주석 파싱과 DOM이 겹치지 않게 한다.
+        logContainer.replaceChildren();
+
+        if (chunkHtmlHookFunctions.length > 0) {
+          batchHTML = await applyHtmlTransformHooks(
+            batchHTML,
+            chunkHtmlHookFunctions,
+            {
+              batchIndex,
+              batchNumber: batchIndex + 1,
+              totalBatches,
+              batchStart,
+              batchEnd: batchStart + batchMessages.length,
+              totalMessages: messagesToExport.length
+            },
+            '배치 HTML 변환'
+          );
         }
-      } catch (e) {
-        console.warn('확장 모듈 HTML 변환 로드 실패:', e);
-        // 확장 모듈 HTML 변환 실패 (무시)
+
+        if (legacyRawParts) {
+          // 배치 안전성이 확인되지 않은 기존 HTML 변환 훅이 있는 경우에만 raw HTML을 보관한다.
+          legacyRawParts.push(batchHTML);
+        } else {
+          // 주석은 배치 직렬화 시점에 붙인다. 전체 로그를 다시 DOM으로 만들 필요가 없다.
+          const separatedBatch = splitChatMessagesByLi(batchHTML, finalMessageCount);
+          chatBodyParts.push(`${separatedBatch.html}\n`);
+          finalMessageCount += separatedBatch.count;
+        }
+
+        await sleep(0);
       }
-      
-      // 각 <li></li> 단위로 자르고 주석으로 구분
-      function splitChatMessagesByLi(html) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        const liElements = Array.from(tempDiv.querySelectorAll('li.chat-message'));
 
-        if (liElements.length === 0) return { html, count: 0 };
-
-        const parts = [];
-        liElements.forEach((li, index) => {
-          const messageId = li.getAttribute('data-message-id') || '';
-          const messageIndex = index + 1;
-          parts.push(`            <!-- ========== 메시지 ${messageIndex} (ID: ${messageId}) ========== -->`);
-          parts.push(`            ${li.outerHTML}`);
-          parts.push(`            <!-- ========== 메시지 ${messageIndex} 끝 ========== -->`);
-        });
-
-        return { html: parts.join('\n'), count: liElements.length };
+      if (renderedCount === 0) {
+        ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Warning.Empty'));
+        return false;
       }
-      
-      // chatLogHTML을 <li> 단위로 분리하고 주석 추가
-      const separatedChatLog = splitChatMessagesByLi(chatLogHTML);
-      const separatedChatLogHTML = separatedChatLog.html;
-      
-      const exportBodyClasses = getExportBodyClasses();
 
-      // HTML 문서 생성
-      const htmlContent = `
+      if (renderedCount < messagesToExport.length) {
+        ui.notifications.warn(game.i18n.format('SPEAKERSELECTOR.ChatLogExport.Warning.CountMismatch', {
+          rendered: renderedCount,
+          total: messagesToExport.length
+        }));
+      }
+
+      if (legacyRawParts) {
+        // 기존 전체-HTML 변환 훅과의 호환 경로.
+        // 배치 안전 표시가 있는 변환 훅만 존재하면 이 큰 문자열 경로를 사용하지 않는다.
+        let legacyHTML = legacyRawParts.join('\n');
+        legacyHTML = await applyHtmlTransformHooks(
+          legacyHTML,
+          legacyHtmlHookFunctions,
+          { totalMessages: messagesToExport.length, legacyFullDocumentPass: true },
+          'HTML 변환'
+        );
+        const separatedLog = splitChatMessagesByLi(legacyHTML, 0);
+        chatBodyParts.push(`${separatedLog.html}\n`);
+        finalMessageCount = separatedLog.count;
+      }
+
+      const imagePayloadParts = imagePipeline.payloadParts();
+      const imageFailures = imagePipeline.failures;
+      imagePipeline.release();
+      const exportBodyClasses = getExportBodyClasses(exportTheme);
+      const exportTimestamp = new Date().toLocaleString();
+      // The log generation time is document metadata and is always shown.
+      // The setting controls only per-message timestamps.
+      const exportTimestampHTML = `<p class="timestamp">${escapeHTML(exportTimestamp)}</p>`;
+
+      // 본문은 배치별 문자열 조각으로 유지한다.
+      // Blob 조각을 전달해 대용량 이미지와 본문을 하나의 큰 JS 문자열로 복제하지 않는다.
+      const htmlHeader = `
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -1110,78 +843,71 @@ body.lichsoma-chat-log-export.lichsoma-chat-log-export .chat-log.chat-log .chat-
         .chat-log .chat-message.lichsoma-hr-only .message-header {
           display: none !important;
         }
-        .chat-message .message-content .narrator-card {
+        .lichsoma-narrator-card .narrator-card {
           font-style: italic;
           font-weight: 500;
           text-align: center;
         }
-        ${customCSS}${cssContent}${extensionCSS}${exportWebfontCSS}${cainAlterExportFontPriorityCSS}
+        ${customCSS}${cssContent}
+    </style>
+    ${extensionStyles}
+    <style>
+        ${exportHeaderPolicyCSS}${themeCSS}${exportWebfontCSS}
     </style>
 </head>
 <body class="${exportBodyClasses}">
     <div class="chat-outer">
         <h1 class="log-title">Foundry VTT Chat Log</h1>
-        <p class="timestamp">${new Date().toLocaleString()}</p>
+        ${exportTimestampHTML}
         <ol id="chat-log" class="chat-log chat-scroll plain themed theme-light">
-${separatedChatLogHTML}
-        </ol>
-    </div>
-    <script id="${IMAGE_REGISTRY_ID}" type="application/json">${imageRegistryJSON}</script>
-    <script>
-    (() => {
-      const registryElement = document.getElementById('${IMAGE_REGISTRY_ID}');
-      if (!registryElement) return;
+`;
 
-      let registry = {};
-      try {
-        registry = JSON.parse(registryElement.textContent || '{}');
-      } catch (error) {
-        console.error('LichSOMA image registry parse failed.', error);
-        return;
-      }
+      const htmlFooter = `
 
-      document.querySelectorAll('img[data-lichsoma-image-src-key]').forEach((img) => {
-        const key = img.getAttribute('data-lichsoma-image-src-key');
-        const dataUrl = registry[key];
-        if (!dataUrl) return;
-        img.setAttribute('src', dataUrl);
-        img.removeAttribute('data-lichsoma-image-src-key');
-      });
-    })();
-    </script>
 </body>
 </html>`;
-      
-      // 파일명 생성
+
+      // 전체 로그 DOM이나 거대한 문자열을 다시 만들지 않고 HTML 파일을 구성한다.
+      const restoreScript = buildExportImageRestoreScript(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Error.ImageRestoreFailed'));
+      const htmlContent = new Blob([htmlHeader, ...chatBodyParts, '</ol></div>',
+        ...imagePayloadParts, '<script>', restoreScript, '</script>', htmlFooter],
+        { type: 'text/html;charset=utf-8' });
+
       const timestamp = new Date().toISOString().slice(0, 10);
       const fileName = `chat-log-${timestamp}.html`;
-      
-      // Foundry VTT의 saveDataToFile API 사용. Promise를 반환하는 환경에서는 완료까지 대기한다.
+
+      // 기존 Foundry VTT 다운로드 방식을 그대로 사용한다. Promise를 반환하는 환경에서는 완료까지 대기한다.
       let saveResult;
       if (typeof foundry !== 'undefined' && foundry.utils && foundry.utils.saveDataToFile) {
         saveResult = foundry.utils.saveDataToFile(htmlContent, 'text/html', fileName);
       } else if (typeof saveDataToFile !== 'undefined') {
         saveResult = saveDataToFile(htmlContent, 'text/html', fileName);
       } else {
-        // Fallback: Blob 사용
-        const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
+        // 기존 fallback 유지
+        const url = URL.createObjectURL(htmlContent);
         const a = document.createElement('a');
         a.href = url;
         a.download = fileName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
       if (saveResult && typeof saveResult.then === 'function') await saveResult;
-      
-      // HTML transform 훅까지 적용된 최종 메시지 개수
-      const messageCount = separatedChatLog.count || renderedLog.count;
-      
-      ui.notifications.info(game.i18n.format('SPEAKERSELECTOR.ChatLogExport.Success', { count: messageCount }));
+
+      const messageCount = finalMessageCount || renderedCount;
+      if (useBase64 && imageFailures.size) {
+        const oversized = [...imageFailures.values()].filter(reason => reason === 'too-large').length;
+        ui.notifications.warn(game.i18n.format('SPEAKERSELECTOR.ChatLogExport.Warning.ImagesNotEmbedded', {
+          count: imageFailures.size, oversized
+        }));
+        console.warn('[lichsoma-speaker-selector] Images kept as external URLs:', Object.fromEntries(imageFailures));
+        if (requireEmbeddedImages) return false;
+      } else {
+        ui.notifications.info(game.i18n.format('SPEAKERSELECTOR.ChatLogExport.Success', { count: messageCount }));
+      }
       return true;
-      
+
     } catch (error) {
       console.error('[lichsoma-speaker-selector] Chat log HTML export failed:', error);
       if (notifyFailure) ui.notifications.error(game.i18n.localize('SPEAKERSELECTOR.ChatLogExport.Error.ExportFailed'));
@@ -1426,7 +1152,7 @@ ${separatedChatLogHTML}
     button.setAttribute('aria-busy', 'true');
 
     try {
-      const exported = await exportChatLogAsHTML({ notifyFailure: false });
+      const exported = await exportChatLogAsHTML({ notifyFailure: false, requireEmbeddedImages: true });
       if (!exported) {
         ui.notifications.error(localizeOrFallback(
           'SPEAKERSELECTOR.ChatLogExport.Error.FlushBackupFailed',

@@ -1,0 +1,11 @@
+/* ==========================================================================
+ * LichSOMA Speaker Selector — Pathfinder 1e in-game compatibility
+ * - PF1 v11 chat cards use dark foregrounds and translucent dark fills that assume
+ *   Foundry's original light chat-message surface.
+ * - Speaker Selector owns the transparent outer shell, so restore only the payload
+ *   substrate explicitly marked by the PF1 adapter.
+ * ========================================================================== */
+
+body.system-pf1 .chat-message > .message-content.lichsoma-system-payload {
+    background-color: var(--color-light-1, #f0f0e0);
+}

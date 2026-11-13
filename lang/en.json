@@ -1,6 +1,22 @@
 {
   "SPEAKERSELECTOR": {
     "Settings": {
+      "Theme": {
+        "Name": "Theme",
+        "Hint": "Choose colors and fonts for chat, sidebars, settings, scene controls and Speaker Selector windows. General application/dialog backgrounds and header/body text contrast follow this theme while native controls and fonts remain unchanged. Document sheets, DX3rd-owned windows and Taskbar file pickers retain their own theme. Custom webfonts and user colors are preserved.",
+        "DarkSimple": "Simple Dark",
+        "SimpleLight": "Simple Light",
+        "RetroTerminal": "Terminal Green",
+        "TerminalRed": "Terminal Red"
+      },
+      "Dx3rdLightCardPatch": {
+        "Name": "DX3rd-FVTT light chat card patch",
+        "Hint": "Improves contrast for DX3rd item, info, system, judgment, damage, combat and scene cards in Simple Light. Preserves success, failure and warning meanings and card actions, including HTML logs. Disable to use the system's original colors."
+      },
+      "Dx3rdTerminalCardPatch": {
+        "Name": "DX3rd-FVTT terminal chat card patch",
+        "Hint": "Uses a monochrome Terminal Green or Red palette for DX3rd chat cards and expanded dice, including HTML logs. Preserves outcome labels and signed values, and highlights completed buttons. Disable to use system styles."
+      },
       "ShowPortrait": {
         "Name": "Show Portrait",
         "Hint": "Displays the actor portrait in chat messages."
@@ -99,7 +115,7 @@
       },
       "ChatLogExportUseBase64": {
         "Name": "Save Images as Base64",
-        "Hint": "Embeds images up to 500 KB in HTML exports. Identical images are stored once by their final Data URL, while images over 500 KB keep an absolute URL."
+        "Hint": "Embed images up to 5MiB each (original file size) as Base64. Duplicate images are stored once. Oversized or unreadable images keep their original URLs and a warning is shown."
       },
       "ChatLogExportCustomCSS": {
         "Name": "Chat Log Export Custom CSS",
@@ -110,6 +126,10 @@
       "ChatLogExportShowDiceTooltip": {
         "Name": "Show Dice Tooltip",
         "Hint": "When enabled, dice tooltips (detailed roll information) are shown when exporting chat logs."
+      },
+      "ChatLogExportHideTimestamps": {
+        "Name": "Hide Chat Timestamps in HTML Export",
+        "Hint": "When enabled, hides timestamps for individual chat messages in HTML logs. The log export time is always shown."
       },
       "ChatUtilsForIC": {
         "Name": "Send as OOC When No Token Is Selected in IC Mode",
@@ -215,11 +235,13 @@
       "Success": "Chat log HTML has been saved. ({count} messages)",
       "Error": {
         "ExportFailed": "An error occurred while saving the chat log.",
-        "FlushBackupFailed": "Chat log deletion was stopped because the HTML backup could not be saved."
+        "FlushBackupFailed": "Chat log deletion was stopped because the HTML backup could not be completed.",
+        "ImageRestoreFailed": "Some embedded images could not be displayed."
       },
       "Warning": {
         "Empty": "There are no chat messages to save.",
-        "CountMismatch": "Message count does not match. ({rendered}/{total} messages)"
+        "CountMismatch": "Message count does not match. ({rendered}/{total} messages)",
+        "ImagesNotEmbedded": "HTML saved, but {count} image(s) could not be embedded ({oversized} over 5MiB). Those images retain their original URLs."
       },
       "Button": {
         "Title": "Export Chat Log as HTML",
@@ -296,6 +318,21 @@
       "CSSCode": "CSS Code",
       "Save": "Save",
       "Cancel": "Cancel"
+    },
+    "Ordem": {
+      "Font": {
+        "Header": {
+          "Name": "OP — Chat card heading font",
+          "Edit": "Edit OP heading font",
+          "Hint": "Personal font for OP card names and roll titles. Set font-family in .lichsoma-op-font-settings inside webfont CSS. Independent of body, sheet, sender and generic dice fonts. Empty uses the OP theme default."
+        },
+        "Body": {
+          "Name": "OP — Chat card body font",
+          "Edit": "Edit OP body font",
+          "Hint": "Personal font for OP descriptions, tags, tables, buttons and roll results. Set font-family in .lichsoma-op-font-settings inside webfont CSS. Does not inherit heading, sheet or plain-chat settings."
+        },
+        "Saved": "OP chat card fonts saved."
+      }
     }
   }
 }

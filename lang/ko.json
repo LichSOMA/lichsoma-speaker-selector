@@ -1,6 +1,22 @@
 {
   "SPEAKERSELECTOR": {
     "Settings": {
+      "Theme": {
+        "Name": "테마",
+        "Hint": "채팅, 사이드바, 게임 설정창, 장면 컨트롤과 스피커 셀렉터 전용 창의 색상과 글꼴을 선택합니다. 일반 애플리케이션·다이얼로그에는 배경과 헤더·본문 글자 대비만 적용하며 내부 컨트롤·폰트는 유지합니다. 문서 시트, DX3rd 전용 창과 작업표시줄 파일 선택창은 자체 테마를 유지합니다. 지정한 웹폰트와 유저 색상은 보존됩니다.",
+        "DarkSimple": "심플 다크",
+        "SimpleLight": "심플 라이트",
+        "RetroTerminal": "터미널 그린",
+        "TerminalRed": "터미널 레드"
+      },
+      "Dx3rdLightCardPatch": {
+        "Name": "DX3rd-FVTT 채팅 카드 라이트 보정 패치",
+        "Hint": "심플 라이트 테마에서 DX3rd의 아이템·인포·시스템 알림·판정·데미지·전투·장면 안내 카드의 대비를 보정합니다. 성공·실패·경고 색상과 카드 기능은 유지되며 HTML 로그에도 반영됩니다. 끄면 시스템 기본 색상을 사용합니다."
+      },
+      "Dx3rdTerminalCardPatch": {
+        "Name": "DX3rd-FVTT 채팅 카드 터미널 테마 보정 패치",
+        "Hint": "터미널 그린·레드에서 DX3rd 채팅 카드와 펼친 주사위 결과를 테마의 단색 계열로 통일합니다. 명중·실패 문구와 증감 부호는 유지하고 처리된 버튼은 하이라이트로 구분합니다. HTML 로그에도 반영되며 끄면 시스템 기본 카드 스타일을 사용합니다."
+      },
       "ShowPortrait": {
         "Name": "포트레잇 표시",
         "Hint": "채팅 메시지에 액터 포트레잇을 표시합니다."
@@ -99,7 +115,7 @@
       },
       "ChatLogExportUseBase64": {
         "Name": "이미지를 Base64로 저장",
-        "Hint": "HTML 출력 시 500KB 이하 이미지를 Base64로 포함합니다. 동일한 이미지는 최종 Data URL 기준으로 한 번만 저장하며, 500KB를 초과한 이미지는 절대 URL을 유지합니다."
+        "Hint": "HTML 출력 시 원본 크기 5MiB 이하 이미지를 Base64로 포함합니다. 동일한 이미지는 한 번만 저장합니다. 초과하거나 읽지 못한 이미지는 원본 주소를 유지하고 알림을 표시합니다."
       },
       "ChatLogExportCustomCSS": {
         "Name": "채팅 로그 내보내기 커스텀 CSS",
@@ -110,6 +126,10 @@
       "ChatLogExportShowDiceTooltip": {
         "Name": "주사위 툴팁 표시",
         "Hint": "활성화하면 채팅 로그 내보내기 시 주사위 툴팁(상세 롤 정보)을 표시합니다."
+      },
+      "ChatLogExportHideTimestamps": {
+        "Name": "HTML 출력 시 채팅 타임스탬프 숨기기",
+        "Hint": "활성화하면 HTML 채팅 로그에서 각 채팅 메시지의 타임스탬프를 숨깁니다. 로그 자체의 출력 시각은 항상 표시됩니다."
       },
       "ChatUtilsForIC": {
         "Name": "IC 모드에서 토큰 미 선택 시 OOC로 전송",
@@ -215,11 +235,13 @@
       "Success": "채팅 로그 HTML이 저장되었습니다. ({count}개 메시지)",
       "Error": {
         "ExportFailed": "채팅 로그 저장 중 오류가 발생했습니다.",
-        "FlushBackupFailed": "HTML 백업을 저장하지 못해 채팅 로그 삭제를 중단했습니다."
+        "FlushBackupFailed": "HTML 백업을 완성하지 못해 채팅 로그 삭제를 중단했습니다.",
+        "ImageRestoreFailed": "일부 내장 이미지를 표시하지 못했습니다."
       },
       "Warning": {
         "Empty": "저장할 채팅 메시지가 없습니다.",
-        "CountMismatch": "메시지 수가 일치하지 않습니다. ({rendered}/{total}개 메시지)"
+        "CountMismatch": "메시지 수가 일치하지 않습니다. ({rendered}/{total}개 메시지)",
+        "ImagesNotEmbedded": "HTML을 저장했지만 이미지 {count}개를 내장하지 못했습니다(5MiB 초과 {oversized}개). 해당 이미지는 원본 주소로 남았습니다."
       },
       "Button": {
         "Title": "채팅 로그 HTML 출력",
@@ -296,6 +318,21 @@
       "CSSCode": "CSS 코드",
       "Save": "저장",
       "Cancel": "취소"
+    },
+    "Ordem": {
+      "Font": {
+        "Header": {
+          "Name": "OP — 채팅 카드 헤더 폰트",
+          "Edit": "OP 헤더 폰트 설정",
+          "Hint": "OP 카드 이름과 판정 제목의 개인 폰트입니다. 웹폰트 CSS의 .lichsoma-op-font-settings에 font-family를 지정하세요. 본문·시트·발화자·일반 주사위 폰트와 독립적이며 비우면 OP 테마의 기본 글꼴을 사용합니다."
+        },
+        "Body": {
+          "Name": "OP — 채팅 카드 본문 폰트",
+          "Edit": "OP 본문 폰트 설정",
+          "Hint": "OP 설명·태그·표·버튼·판정 결과의 개인 폰트입니다. 웹폰트 CSS의 .lichsoma-op-font-settings에 font-family를 지정하세요. 헤더·시트·일반 대화 폰트를 상속하지 않습니다."
+        },
+        "Saved": "OP 채팅 카드 폰트 설정을 저장했습니다."
+      }
     }
   }
 }

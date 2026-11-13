@@ -4,6 +4,8 @@
  */
 
 import { LichsomaChatDom } from './lichsoma-chat-dom.js';
+import { ChatScrollFade } from './lichsoma-chat-scroll-fade.js';
+import { ChatSurfaceLayout } from './lichsoma-chat-surface-layout.js';
 
 export class ChatUI {
     // 중복 실행 방지 플래그
@@ -118,6 +120,8 @@ export class ChatUI {
     }
 
     static initialize() {
+        ChatScrollFade.initialize();
+        ChatSurfaceLayout.initialize();
         // 초기화만 수행 (사이드바 열기는 setup 훅에서 처리)
         
         // 포트레잇 호버 프리뷰 기능 초기화
@@ -151,7 +155,7 @@ export class ChatUI {
 
     static _getPortraitPreviewTarget(element) {
         const target = element?.closest?.(
-            '.lichsoma-chat-portrait-container, .chat-message.dnd5e2 .message-header .message-sender .avatar'
+            '.lichsoma-chat-portrait-container, [data-lichsoma-portrait-preview="true"]'
         );
         if (!target || LichsomaChatDom.isInChatNotifications(target)) return null;
         if (!LichsomaChatDom.getChatLogForMessage(target)) return null;

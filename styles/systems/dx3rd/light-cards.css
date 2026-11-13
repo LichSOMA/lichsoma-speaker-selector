@@ -1,0 +1,223 @@
+/* Optional Simple Light and terminal patches: live chat and standalone HTML logs.
+ * Scope to DX3rd chat payloads; retain system markup, geometry and handlers. */
+body.system-dx3rd-fvtt.lichsoma-speaker-theme-dark-simple {
+  --dx3rd-die-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M12%201%2023%209%2020%2019%2012%2023%204%2019%201%209Z%22%20fill%3D%22%2329252e%22%20stroke%3D%22%2359535f%22%2F%3E%3Cpath%20d%3D%22m12%201%206%2010-6%2012-6-12Zm-11%208%205%202m12%200%205-2%22%20fill%3D%22none%22%20stroke%3D%22%2359535f%22%2F%3E%3C%2Fsvg%3E");
+  --dx3rd-card-text: #e8e5df;
+  --dx3rd-card-muted: #aba398;
+  --dx3rd-card-surface: #29252e;
+  --dx3rd-card-border: #59535f;
+  --dx3rd-card-error: #ff8585;
+  --dx3rd-card-success: #6ecb91;
+}
+body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch {
+  --dx3rd-die-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M12%201%2023%209%2020%2019%2012%2023%204%2019%201%209Z%22%20fill%3D%22%23d9dce1%22%20stroke%3D%22%23929ba8%22%2F%3E%3Cpath%20d%3D%22m12%201%206%2010-6%2012-6-12Zm-11%208%205%202m12%200%205-2%22%20fill%3D%22none%22%20stroke%3D%22%23929ba8%22%2F%3E%3C%2Fsvg%3E");
+  --dx3rd-card-text: var(--speaker-light-text, #262a32);
+  --dx3rd-card-muted: #505967;
+  --dx3rd-card-surface: var(--speaker-light-control, #d9dce1);
+  --dx3rd-card-border: var(--speaker-light-border, #929ba8);
+  --dx3rd-card-hover: var(--speaker-light-hover, #c3c9d2);
+  --dx3rd-card-error: #9f2525;
+  --dx3rd-card-success: #20613d;
+  --dx3rd-card-warning: #795517;
+  --dx3rd-card-link: #285a91;
+  --dx3rd-card-table-bg: rgba(80, 89, 103, 0.12);
+}
+
+body.system-dx3rd-fvtt.lichsoma-speaker-theme-retro-terminal.lichsoma-dx3rd-terminal-card-patch {
+  --dx3rd-die-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M12%201%2023%209%2020%2019%2012%2023%204%2019%201%209Z%22%20fill%3D%22%2313231d%22%20stroke%3D%22%2336584a%22%2F%3E%3Cpath%20d%3D%22m12%201%206%2010-6%2012-6-12Zm-11%208%205%202m12%200%205-2%22%20fill%3D%22none%22%20stroke%3D%22%2336584a%22%2F%3E%3C%2Fsvg%3E");
+  --dx3rd-card-text: var(--speaker-terminal-fg, #8fffc7);
+  --dx3rd-card-muted: var(--speaker-terminal-muted, #6cb99a);
+  --dx3rd-card-surface: #0d1b15;
+  --dx3rd-card-border: var(--speaker-terminal-border, rgb(var(--speaker-terminal-rgb, 143 255 199) / 0.3));
+  --dx3rd-card-hover: var(--speaker-terminal-control-hover, #244b3a);
+  --dx3rd-card-link: var(--speaker-terminal-highlight, #baffdd);
+  --dx3rd-card-table-bg: rgb(var(--speaker-terminal-rgb, 143 255 199) / 0.08);
+}
+body.system-dx3rd-fvtt.lichsoma-speaker-theme-terminal-red.lichsoma-dx3rd-terminal-card-patch {
+  --dx3rd-die-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M12%201%2023%209%2020%2019%2012%2023%204%2019%201%209Z%22%20fill%3D%22%23291313%22%20stroke%3D%22%23643737%22%2F%3E%3Cpath%20d%3D%22m12%201%206%2010-6%2012-6-12Zm-11%208%205%202m12%200%205-2%22%20fill%3D%22none%22%20stroke%3D%22%23643737%22%2F%3E%3C%2Fsvg%3E");
+  --dx3rd-card-text: var(--speaker-terminal-fg, #ff9b9b);
+  --dx3rd-card-muted: var(--speaker-terminal-muted, #c57878);
+  --dx3rd-card-surface: #210e0e;
+  --dx3rd-card-border: var(--speaker-terminal-border, rgba(255, 155, 155, 0.3));
+  --dx3rd-card-hover: var(--speaker-terminal-control-hover, #512525);
+  --dx3rd-card-link: var(--speaker-terminal-highlight, #ffd0d0);
+  --dx3rd-card-table-bg: rgba(255, 155, 155, 0.08);
+}
+
+/* Terminal results share one phosphor palette. Labels, signs and native dice
+ * decorations retain their meaning; completed actions use the theme highlight. */
+body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch {
+  --dx3rd-card-error: var(--dx3rd-card-text);
+  --dx3rd-card-success: var(--dx3rd-card-text);
+  --dx3rd-card-warning: var(--dx3rd-card-text);
+  --dx3rd-card-state-border: var(--dx3rd-card-border);
+  --dx3rd-card-action-result: var(--dx3rd-card-link);
+}
+
+/* Expanded rolls use the same palette as their collapsed card. Foundry's
+ * default gray SVGs, #999 borders and gradient hr otherwise survive expansion.
+ * Keep the native grid/animation, dice dimensions and state decorations. */
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-dark-simple,
+    body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch,
+    body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch)
+:is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .dice-roll {
+  & :is(.dice-formula, .dice-total) {
+    background: var(--dx3rd-card-surface);
+    color: var(--dx3rd-card-text);
+    border-color: var(--dx3rd-card-border);
+    box-shadow: none;
+  }
+  & .dice-tooltip {
+    color: var(--dx3rd-card-text);
+    text-shadow: none;
+    & :is(.part-header, .part-total) { border-color: var(--dx3rd-card-border); }
+    & .part-flavor { color: var(--dx3rd-card-muted); }
+    & .part-total {
+      background: var(--dx3rd-card-surface);
+      color: var(--dx3rd-card-text);
+      box-shadow: none;
+    }
+    & .dice-rolls .roll:is(.dx3rddiceterm, .ds3rddiceterm):not(.clear) {
+      background-image: var(--dx3rd-die-image);
+      color: var(--dx3rd-card-text);
+      text-shadow: none;
+    }
+    & .dice-rolls .roll:is(.dx3rddiceterm, .ds3rddiceterm).exploded {
+      color: var(--dx3rd-card-success) !important;
+    }
+    & .dice-rolls .roll:is(.fumble, .discarded, .removed) {
+      color: var(--dx3rd-card-error) !important;
+    }
+    & .dice-rolls .clear {
+      color: var(--dx3rd-card-text);
+      border-bottom: 1px solid var(--dx3rd-card-border);
+      /* The system also embeds hr inside chain totals; the row owns the line. */
+      & > hr { display: none; }
+    }
+  }
+  & hr {
+    background: none;
+    border: 0;
+    border-top: 1px solid var(--dx3rd-card-border);
+    box-shadow: none;
+  }
+}
+
+/* Terminal typography and monochrome dice state colors stay local to DX3rd
+ * payloads. Do not change portraits, author colors or dice decorations. */
+body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content {
+  font-family: var(--speaker-terminal-font, ui-monospace, Consolas, monospace);
+  & :is(.dx3rd-box__btn, button[class*="dx3rd-sheet-roll__"]):is(.dx3rd-btn--applied, .dx3rd-btn--failed, .dx3rd-judge-btn--success-applied, .dx3rd-judge-btn--failure-applied) {
+    background: var(--speaker-terminal-control-active, var(--dx3rd-card-hover));
+  }
+}
+body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .dice-roll :is(.roll.dx3rddiceterm.exploded, .roll.ds3rddiceterm.exploded) {
+  color: var(--dx3rd-card-success) !important;
+}
+body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .dice-roll :is(.roll.dx3rddiceterm.fumble, .roll.ds3rddiceterm.discarded, .roll.ds3rddiceterm.removed) {
+  color: var(--dx3rd-card-error) !important;
+}
+
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-box, .dx3rd-info, .dx3rd-system),
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message.dx3rd-sheet-roll-message .message-content {
+  background: var(--dx3rd-card-surface) !important; /* System frames also use !important. */
+  color: var(--dx3rd-card-text);
+  border-color: var(--dx3rd-card-border);
+}
+
+/* Automatic-success rolls already have an outer frame; keep the inner info
+ * block unframed to avoid adding a second surface. */
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message.dx3rd-info-message.dx3rd-sheet-roll-message .message-content .dx3rd-info {
+  background: transparent !important;
+}
+
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content .dx3rd-box :is(.item-name, .item-table th, .item-table td) {
+  color: var(--dx3rd-card-text);
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content .dx3rd-box :is(.item-table th, .item-table td, .dx3rd-box__actions, .item-description, .dx3rd-box__item-icon) {
+  border-color: var(--dx3rd-card-border);
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content .dx3rd-box .item-table th {
+  background: var(--dx3rd-card-table-bg);
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.item-description, .item-name rt, .dx3rd-roll-judgment-label, .dx3rd-roll-damage-summary__text, .dx3rd-open-scene-msg__appear) {
+  color: var(--dx3rd-card-muted);
+}
+
+/* Light cards retain semantic colors; terminals use their monochrome tokens. */
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content .dx3rd-system {
+  color: var(--dx3rd-card-warning);
+  border-color: var(--dx3rd-card-state-border, var(--dx3rd-card-warning));
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-system--hp-damage, .dx3rd-system--enc-up, .dx3rd-system--status-apply, .dx3rd-system--focus-gm, .dx3rd-info--error) {
+  color: var(--dx3rd-card-error);
+  border-color: var(--dx3rd-card-state-border, var(--dx3rd-card-error));
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-system--hp-heal, .dx3rd-system--enc-down, .dx3rd-system--status-remove, .dx3rd-system--focus-player, .dx3rd-info--success) {
+  color: var(--dx3rd-card-success);
+  border-color: var(--dx3rd-card-state-border, var(--dx3rd-card-success));
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content .dx3rd-system--focus-neutral {
+  color: var(--dx3rd-card-muted);
+  border-color: var(--dx3rd-card-border);
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-info, .dx3rd-system) :is(a, a:visited) {
+  color: inherit;
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content .dx3rd-system__portrait {
+  background: var(--dx3rd-card-surface);
+  border-color: var(--dx3rd-card-state-border, currentColor);
+}
+
+/* Payload buttons, including damage/heal, item judgment and spell actions. */
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-box__btn, button[class*="dx3rd-sheet-roll__"]) {
+  background: var(--dx3rd-card-surface);
+  color: var(--dx3rd-card-text);
+  border-color: var(--dx3rd-card-border);
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-box__btn, button[class*="dx3rd-sheet-roll__"]):not(:disabled):is(:hover, :focus-visible) {
+  background: var(--dx3rd-card-hover) !important;
+  color: var(--dx3rd-card-text);
+  border-color: var(--dx3rd-card-muted);
+}
+/* A used action is not a success result: keep its highlight in the theme palette. */
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content .dx3rd-btn--applied {
+  color: var(--dx3rd-card-link) !important;
+  border-color: var(--dx3rd-card-link) !important;
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content .dx3rd-judge-btn--success-applied {
+  color: var(--dx3rd-card-action-result, var(--dx3rd-card-success)) !important;
+  border-color: var(--dx3rd-card-action-result, var(--dx3rd-card-success)) !important;
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-btn--failed, .dx3rd-judge-btn--failure-applied) {
+  color: var(--dx3rd-card-action-result, var(--dx3rd-card-error)) !important;
+  border-color: var(--dx3rd-card-action-result, var(--dx3rd-card-error)) !important;
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-roll-judgment-outcome--success, .dx3rd-damage-hit-label) {
+  color: var(--dx3rd-card-success);
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-roll-judgment-outcome--failure, .dx3rd-damage-miss-label, .dx3rd-chat-lois-emotion--negative) {
+  color: var(--dx3rd-card-error);
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-chat-lois-emotion--positive, .dx3rd-box .item-name:not(.item-name--static):hover) {
+  color: var(--dx3rd-card-link);
+}
+
+/* Dice/results retain critical, fumble and discarded-die semantic styles. */
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dice-roll, .dice-formula, .dice-total, .dice-flavor, .dice-tooltip, .dice-rolls .clear, .dx3rd-sheet-pseudo-roll__box) {
+  color: var(--dx3rd-card-text);
+  --color-text-light-0: var(--dx3rd-card-text);
+  --color-text-light-6: var(--dx3rd-card-border);
+}
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dice-formula, .dice-total, .dx3rd-sheet-pseudo-roll__box) {
+  background: var(--dx3rd-card-surface);
+  border-color: var(--dx3rd-card-border);
+  box-shadow: none;
+}
+
+/* Existing combat integrations use !important for their dark foreground. */
+:is(body.system-dx3rd-fvtt.lichsoma-speaker-theme-simple-light.lichsoma-dx3rd-light-card-patch, body.system-dx3rd-fvtt:is(.lichsoma-speaker-theme-retro-terminal, .lichsoma-speaker-theme-terminal-red).lichsoma-dx3rd-terminal-card-patch) :is(#chat-log, #chat-notifications, .chat-log, .chat-scroll, .chat-popout) .chat-message .message-content :is(.dx3rd-combat-msg, .dx3rd-combat-start-msg, .dx3rd-combat-end-msg, .dx3rd-open-scene-msg__title) {
+  color: var(--dx3rd-card-text) !important;
+  border-color: var(--dx3rd-card-border) !important;
+  text-shadow: none;
+}

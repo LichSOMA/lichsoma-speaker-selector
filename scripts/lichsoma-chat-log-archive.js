@@ -186,9 +186,9 @@ import { SpeakerSelectorCompat } from './lichsoma-speaker-selector-compat.js';
   
   // HTML 파일 읽기
   async function readHtmlFile(filePath) {
+    let url = filePath;
     try {
       // /data/ 없이 직접 경로 사용
-      let url = filePath;
       
       // /로 시작하지 않으면 추가
       if (!url.startsWith('/')) {
@@ -650,6 +650,10 @@ import { SpeakerSelectorCompat } from './lichsoma-speaker-selector-compat.js';
     
     // iframe 생성 및 HTML 내용 설정
     const iframe = document.createElement('iframe');
+    // Keep the search/image scripts, but give the archive an opaque origin.
+    // Do not add allow-same-origin: archived HTML must not access parent.game.
+    iframe.setAttribute('sandbox', 'allow-scripts');
+    iframe.setAttribute('referrerpolicy', 'no-referrer');
     iframe.style.width = '100%';
     iframe.style.height = '100%';
     iframe.style.border = 'none';

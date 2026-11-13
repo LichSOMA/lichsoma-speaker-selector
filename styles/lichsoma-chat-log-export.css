@@ -10,7 +10,6 @@ body {
   font-family: 'Noto Sans KR', sans-serif;
   margin: 20px;
   background: var(--export-bg-color);
-  color: var(--export-text-color);
 }
 
 .chat-outer {
@@ -27,22 +26,9 @@ body {
   margin: 0;
 }
 
-/* Flavor text 안에 포함된 HTML 출력용 chat-message는 일반 메시지의 음수 하단 마진을 쓰지 않는다. */
-.chat-log .flavor-text .chat-message {
-  margin: 0px 1px 0px 5px !important;
-  padding: 0px !important;
-}
-
-/* Foundry 기본 dice-tooltip 박스 스타일 제거 */
-.chat-message .dice-tooltip {
-  background: none !important;
-  background-color: transparent !important;
-  padding: 0px !important;
-  border-radius: 0px !important;
-}
-
 .log-title {
   margin-bottom: 10px;
+  color: var(--export-text-color);
   font-size: 26px;
 }
 
@@ -66,32 +52,29 @@ body {
   display: none !important;
 }
 
-.message-header {
-  margin-top: 6px;
-  color: var(--export-border-color);
-}
-
-.message-metadata {
-  display: none;
-}
-
 .lichsoma-delete-btn {
   display: none !important;
 }
 
-.message-content {
+:is(.lichsoma-plain-message, .lichsoma-narrator-card, .lichsoma-export-fallback) > .message-content {
   color: var(--export-text-color);
   font-size: 15px;
+  line-height: calc(1em + var(--lichsoma-chat-line-gap)) !important;
 }
 
-.message-content p {
-  margin: 0 0;
-  line-height: calc(1em + 6px) !important;
+:where(.lichsoma-simple-text-payload > .message-content),
+.dice-roll.lichsoma-core-dice :where(.dice-formula, .dice-total, .dice-tooltip, .dice-flavor) {
+  color: var(--export-text-color);
 }
 
-.message-content img {
+:is(.lichsoma-plain-message, .lichsoma-narrator-card, .lichsoma-export-fallback) > .message-content p {
+  margin: 0;
+  line-height: inherit;
+}
+
+:is(.lichsoma-plain-message, .lichsoma-narrator-card, .lichsoma-export-fallback) > .message-content img {
   width: 100%;
-  padding: 4px 0px;
+  padding: 4px 0;
   height: auto;
 }
 
@@ -103,7 +86,9 @@ body {
   column-gap: 10px;
   row-gap: 0px;
   font-size: 24px;
+  margin-top: 6px;
   margin-bottom: 0px;
+  color: var(--export-text-color);
 }
 
 .lichsoma-chat-portrait-container {
@@ -150,11 +135,11 @@ body {
   transform: scale(var(--lichsoma-cp-scale, 1));
 }
 
-.message-sender {
-height: 36px;
-line-height: 36px;
-margin-top: 2px;
-margin-bottom: 0px;
+.lichsoma-chat-header .message-sender {
+  height: 36px;
+  line-height: 36px;
+  margin-top: 2px;
+  margin-bottom: 0;
   color: var(--export-text-color);
   filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.1)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.1)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.1));
 }
@@ -183,152 +168,39 @@ margin-bottom: 0px;
   letter-spacing: 0;
 }
 
-/* 주사위 롤 스타일 */
-.dice-roll {
+/* Foundry 기본 주사위 fallback — 시스템 카드에는 적용하지 않음 */
+.lichsoma-generic-dice-message .dice-roll.lichsoma-core-dice {
   display: flex;
   flex-direction: column;
-  gap: 0;
   max-width: 400px;
-  margin: 5px 0px;
+  margin: 5px 0;
 }
 
-.dice-formula {
-background: rgba(115, 115, 115, 0.25);
-border: 1px solid rgba(255, 255, 255, 0.1);
-padding: 4px;
-text-align: center;
-color: var(--export-text-color);
-font-size: 14px;
-font-weight: bold;
-}
-
-.dice-tooltip {
-display: none;
-}
-
-.dice-tooltip .wrapper {
-background: rgba(255, 255, 255, 0.25);
-border: 1px solid rgba(255, 255, 255, 0.1);
-border-top: none;
-font-size: 12px !important;
-font-weight: bold;
-overflow: hidden;
-}
-
-.dice-tooltip .part-header {
-padding: 4px;
-display: flex;
-justify-content: space-between;
-align-items: center;
-}
-
-.dice-tooltip .part-header .part-formula {
-flex: 0 0 auto;
-text-align: left;
-}
-
-.dice-tooltip .part-header .part-total {
-flex: 0 0 auto;
-text-align: right;
-}
-
-.dice-tooltip .dice-rolls {
-list-style: none;
-padding: 4px;
-overflow: hidden;
-}
-
-.dice-tooltip .dice-rolls .roll {
-position: relative;
-min-width: 24px;
-line-height: 24px;
-float: left;
-margin-right: 1px;
-background-repeat: no-repeat;
-background-size: 24px 24px;
-font-weight: bold;
-text-align: center;
-}
-
-.dice-tooltip .dice-rolls .roll.method {
-font-size: 10px;
-background: transparent;
-min-width: auto;
-vertical-align: super;
-}
-
-.dice-tooltip .dice-rolls .roll.clear {
-clear: both;
-float: none;
-display: block;
-width: 100%;
-}
-
-.dice-tooltip .dice-rolls .roll.clear hr {
-border: none;
-border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.dice-result {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.dice-total {
+.lichsoma-generic-dice-message .dice-roll.lichsoma-core-dice :is(.dice-formula, .dice-total) {
   background: rgba(115, 115, 115, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-top: none;
   padding: 4px;
   text-align: center;
   color: var(--export-text-color);
+  font-weight: bold;
+}
+
+.lichsoma-generic-dice-message .dice-roll.lichsoma-core-dice .dice-formula {
+  font-size: 14px;
+}
+
+.lichsoma-generic-dice-message .dice-roll.lichsoma-core-dice .dice-total {
+  border-top: none;
   font-size: 18px;
   line-height: 24px;
-  font-weight: bold;
   margin: 0;
 }
 
-body:not(.system-dx3rd-fvtt) .chat-log .chat-message .message-content .dice-roll {
-  padding-bottom: 4px;
-}
 
-/* LichSOMA export content-link color */
-.content-link,
-a.content-link {
-    --content-link-text-color: #ffc800;
-    color: var(--content-link-text-color) !important;
-}
-
-.content-link i,
-.content-link .fas,
-.content-link .far,
-.content-link .fa-solid,
-.content-link .fa-regular {
-    color: #ffc800 !important;
-}
-
-.content-link svg,
-.content-link svg * {
-    color: #ffc800 !important;
-    fill: #ffc800 !important;
-    stroke: #ffc800 !important;
-}
 /* LichSOMA exported chat spacing normalization
    Keep merged-message spacing equal to normal wrapped-line spacing. */
 .chat-log .chat-message {
-  margin: 0px 1px var(--lichsoma-chat-message-gap) 5px !important;
-}
-
-.chat-log .chat-message .message-content,
-.chat-log .message-content {
-  line-height: calc(1em + var(--lichsoma-chat-line-gap)) !important;
-}
-
-.chat-log .chat-message .message-content > p,
-.chat-log .message-content > p {
-  margin-top: 0 !important;
-  margin-bottom: 0 !important;
-  line-height: inherit !important;
+  margin: 0px 3px var(--lichsoma-chat-message-gap) !important;
 }
 
 .chat-log .chat-message.lichsoma-merged {
@@ -342,16 +214,3 @@ a.content-link {
   display: none !important;
 }
 
-.chat-log .chat-message.lichsoma-merged:not(.dx3rd-sheet-roll-message) .message-content {
-  margin-top: 0 !important;
-  padding-top: 0 !important;
-  padding-bottom: 0 !important;
-}
-
-.chat-log .chat-message.lichsoma-merged .message-content > :first-child:not(.dx3rd-info):not(.dx3rd-system):not(.dx3rd-box):not(.dx3rd-combat-msg):not(.dx3rd-open-scene-msg) {
-  margin-top: 0 !important;
-}
-
-.chat-log .chat-message.lichsoma-merged .message-content > :last-child:not(.dx3rd-box):not(.dx3rd-info):not(.dx3rd-system):not(.dx3rd-combat-msg):not(.dx3rd-open-scene-msg):not(.dice-roll) {
-  margin-bottom: 0 !important;
-}

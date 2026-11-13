@@ -9,10 +9,13 @@ import { registerChatRenderProcessor } from './lichsoma-chat-render-pipeline.js'
 export class ChatReviser {
     static _editingMessageId = null;
     static _overlayElement = null;
+    static _overlayInputElement = null;
     static _overlayTargetElement = null;
     static _positionObserver = null;
     static _resizeObserver = null;
     static _resizeHandler = null;
+    static _lastEditClick = null;
+    static EDIT_DOUBLE_CLICK_WINDOW_MS = 300;
 
     static initialize() {
         // 더블클릭으로 수정 모드 시작
@@ -67,44 +70,90 @@ export class ChatReviser {
         }, { runInExport: false });
     }
 
+    // 클릭 대상이 메시지 편집보다 자체 상호작용을 우선해야 하는 영역인지 확인
+    static _isInteractiveEditTarget(target, messageContent) {
+        if (!(target instanceof Element) || !messageContent?.contains?.(target)) return false;
+
+        return !!target.closest([
+            'a',
+            'button',
+            'input',
+            'select',
+            'textarea',
+            'label',
+            'summary',
+            'details',
+            '[contenteditable="true"]',
+            '[data-action]',
+            '[role="button"]',
+            '.collapsible',
+            '.rollable'
+        ].join(','));
+    }
+
     // 더블클릭 이벤트 핸들러 설정
     static _setupDoubleClickHandler() {
-        // 채팅 메시지 내용 영역 더블클릭 감지
-        $(document).on('dblclick.lichsoma-chat-reviser', '.chat-message .message-content', (ev) => {
-            try {
-                const messageContent = ev.currentTarget;
-                const li = this._getMessageElement(messageContent);
-                if (!li) return;
+        // OS/브라우저의 dblclick 간격 대신 짧은 모듈 전용 간격을 사용한다.
+        // 또한 펼치기/접기, 버튼, 링크 등 자체 상호작용 영역은 편집 트리거에서 제외한다.
+        $(document)
+            .off('.lichsoma-chat-reviser', '.chat-message .message-content')
+            .on('click.lichsoma-chat-reviser', '.chat-message .message-content', (ev) => {
+                try {
+                    const messageContent = ev.currentTarget;
+                    const clickTarget = ev.target instanceof Element ? ev.target : messageContent;
 
-                // overflow 내부의 메시지는 제외
-                if (li.closest('.overflow')) {
-                    return;
+                    if (this._isInteractiveEditTarget(clickTarget, messageContent)) {
+                        this._lastEditClick = null;
+                        return;
+                    }
+
+                    const li = this._getMessageElement(messageContent);
+                    if (!li) return;
+
+                    // overflow 내부의 메시지는 제외
+                    if (li.closest('.overflow')) {
+                        this._lastEditClick = null;
+                        return;
+                    }
+
+                    // 일반 채팅 로그 내부의 메시지만 처리
+                    if (!LichsomaChatDom.isInMainChatLog(li)) {
+                        this._lastEditClick = null;
+                        return;
+                    }
+
+                    const messageId = LichsomaChatDom.getMessageId(li);
+                    if (!messageId) return;
+
+                    const now = globalThis.performance?.now?.() ?? Date.now();
+                    const previous = this._lastEditClick;
+                    const isEditDoubleClick = !!previous
+                        && previous.messageId === messageId
+                        && previous.target === clickTarget
+                        && (now - previous.time) <= this.EDIT_DOUBLE_CLICK_WINDOW_MS;
+
+                    this._lastEditClick = isEditDoubleClick
+                        ? null
+                        : { messageId, target: clickTarget, time: now };
+
+                    if (!isEditDoubleClick) return;
+
+                    const message = game.messages.get(messageId);
+                    if (!message) return;
+
+                    // 권한 체크: 소유자 또는 GM만 수정 가능
+                    const canEdit = game.user.isGM || (message.author?.id === game.user.id);
+                    if (!canEdit) {
+                        ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatReviser.Notifications.EditOwnOnly'));
+                        return;
+                    }
+
+                    // 수정 모드 시작
+                    this._startEditingMode(message);
+                } catch (e) {
+                    // 오류 발생 시 무시
                 }
-
-                // 일반 채팅 로그 내부의 메시지만 처리
-                if (!LichsomaChatDom.isInMainChatLog(li)) {
-                    return;
-                }
-
-                const messageId = LichsomaChatDom.getMessageId(li);
-                if (!messageId) return;
-
-                const message = game.messages.get(messageId);
-                if (!message) return;
-
-                // 권한 체크: 소유자 또는 GM만 수정 가능
-                const canEdit = game.user.isGM || (message.author?.id === game.user.id);
-                if (!canEdit) {
-                    ui.notifications.warn(game.i18n.localize('SPEAKERSELECTOR.ChatReviser.Notifications.EditOwnOnly'));
-                    return;
-                }
-
-                // 수정 모드 시작
-                this._startEditingMode(message);
-            } catch (e) {
-                // 오류 발생 시 무시
-            }
-        });
+            });
     }
 
     // 수정 모드 시작
@@ -156,6 +205,10 @@ export class ChatReviser {
         // Foundry v14 채팅 입력은 ProseMirror로 구성되며 menu-container + editor-container를 포함함.
         // 오버레이는 편집 영역(editor-container)만 덮어야 하므로 타깃을 분리한다.
         const overlayTarget = this._getOverlayTarget(chatInput);
+        // Keep the original input surface; hide only its draft while editing.
+        this._overlayInputElement = chatInput;
+        chatInput.classList.add('lichsoma-chat-input-editing');
+        overlayTarget.classList.add('lichsoma-chat-reviser-source');
 
         // 편집 가능한 contenteditable div 생성
         const contentEditable = document.createElement('div');
@@ -297,6 +350,9 @@ export class ChatReviser {
 
     // 오버레이 제거
     static _removeOverlay() {
+        this._overlayTargetElement?.classList.remove('lichsoma-chat-reviser-source');
+        this._overlayInputElement?.classList.remove('lichsoma-chat-input-editing');
+        this._overlayInputElement = null;
         if (this._overlayElement) {
             this._overlayElement.remove();
             this._overlayElement = null;

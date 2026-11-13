@@ -248,6 +248,21 @@ body.system-dx3rd-fvtt :is(.chat-log .chat-message, form.chat-form) .dx3rd-comba
   border-bottom: 1px solid #ffffff;
 }
 
+/* Speaker Selector standalone export uses a dark shell. Keep combat-process headings readable
+ * even when the source system stylesheet leaves their foreground to inheritance. */
+body.system-dx3rd-fvtt :is(.chat-log .chat-message, form.chat-form)
+  :is(.dx3rd-combat-msg, .dx3rd-combat-start-msg, .dx3rd-combat-end-msg) {
+  color: rgba(245, 245, 245, 0.96) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.78) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+body.system-dx3rd-fvtt :is(.chat-log .chat-message, form.chat-form)
+  :is(.dx3rd-combat-msg, .dx3rd-combat-start-msg, .dx3rd-combat-end-msg)
+  :is(a, a:visited, span, strong, em) {
+  color: inherit !important;
+}
+
 /* 장면 시작/세션 종료 메시지 (전투 진행 메시지 톤과 동일, 클래스만 분리) */
 body.system-dx3rd-fvtt :is(.chat-log .chat-message, form.chat-form) .dx3rd-open-scene-msg {
   margin: 0.25rem 0 0;
@@ -363,16 +378,20 @@ body.system-dx3rd-fvtt :is(.message, form.chat-form) .dx3rd-box .item-name rt {
   width: 100%;
   margin: 0 0 0.35rem;
   border-collapse: collapse;
-  /* 채팅 메시지/입력 폼의 기본 글꼴 크기가 달라도 동일한 높이 유지 */
-  font-size: 0.8rem;
+  /* 판정·공격 요약과 같은 비율로 채팅 본문 글자 크기를 따른다. */
+  font-size: 0.8em;
+  line-height: 1.45;
 }
 
 :is(.message, form.chat-form) .dx3rd-box .item-table th,
 :is(.message, form.chat-form) .dx3rd-box .item-table td {
-  padding: 2px 4px;
+  padding: 2px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-sizing: border-box;
-  min-height: 25px;
+  /* table-cell의 height는 최소 높이로 동작하며 여러 줄이면 자연스럽게 늘어난다. */
+  height: 25px;
+  font-size: inherit;
+  line-height: inherit;
   /* 표 셀은 display:table-cell 유지 — flex 주면 2열 표가 한 줄로 깨짐 */
   vertical-align: middle;
 }
@@ -386,6 +405,7 @@ body.system-dx3rd-fvtt :is(.message, form.chat-form) .dx3rd-box .item-table th {
 }
 
 body.system-dx3rd-fvtt :is(.message, form.chat-form) .dx3rd-box .item-table td {
+  padding-inline: 4px;
   text-align: left;
   color: white;
 }

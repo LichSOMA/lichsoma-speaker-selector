@@ -16,10 +16,13 @@
 #chat.chat-sidebar::before {
     content: '';
     position: absolute;
-    top: 0;
-    width: calc(100% - 16px);
-    height: calc(100% - var(--chat-form-height, 174px) - 8px);
-    border-radius: 4px 0 0 4px;
+    top: 4px;
+    /* Follow the input edges without changing message geometry. */
+    left: var(--lichsoma-chat-surface-left, 16px);
+    right: var(--lichsoma-chat-surface-right, 4px);
+    width: auto;
+    height: calc(100% - var(--chat-form-height, 174px) - 12px);
+    border-radius: 0;
     background: var(--color-cool-5);
     opacity: 0.8;
     pointer-events: none;
@@ -94,6 +97,25 @@
 )
 :is(#chat-message, prose-mirror#chat-message, prose-mirror[name="message"]) .menu-container {
     display: none !important;
+}
+
+/* Fade the scroll viewport only; the chat background, composer and jump button
+ * remain visible. Zero-depth stops are fully opaque at either scroll boundary. */
+:is(#chat.chat-sidebar, .chat-popout) .lichsoma-chat-scroll-fade {
+    --lichsoma-chat-fade-top: 0px;
+    --lichsoma-chat-fade-bottom: 0px;
+    -webkit-mask-image: linear-gradient(to bottom,
+        transparent 0, #000 var(--lichsoma-chat-fade-top),
+        #000 calc(100% - var(--lichsoma-chat-fade-bottom)), transparent 100%);
+    mask-image: linear-gradient(to bottom,
+        transparent 0, #000 var(--lichsoma-chat-fade-top),
+        #000 calc(100% - var(--lichsoma-chat-fade-bottom)), transparent 100%);
+}
+:is(#chat.chat-sidebar, .chat-popout) .lichsoma-chat-scroll-fade.lichsoma-chat-fade-top {
+    --lichsoma-chat-fade-top: min(24px, 20%);
+}
+:is(#chat.chat-sidebar, .chat-popout) .lichsoma-chat-scroll-fade.lichsoma-chat-fade-bottom {
+    --lichsoma-chat-fade-bottom: min(24px, 20%);
 }
 
 /* 채팅 로그 스크롤바 스타일 */

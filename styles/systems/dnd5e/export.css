@@ -392,75 +392,21 @@ body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) .chat
     list-style: none;
 }
 
-/* 내보내기 HTML에는 .chat-scroll이 없을 수 있어 .chat-log 기준 보정도 같이 둔다. */
-body.system-dnd5e .chat-log .chat-message.dnd5e2,
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header {
-    margin: 0px 1px -2px 5px !important;
-}
-
-body.system-dnd5e .chat-log .chat-message .message-content .dice-roll {
-    padding-bottom: 4px;
-}
-
-/* 머지된 dnd5e 메시지는 dnd5e의 카드 외피를 제거해 앞 메시지에 이어 붙은 것처럼 보이게 한다. */
-body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged,
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged {
-    margin-block-start: 0 !important;
-    padding-block-start: 0 !important;
-    padding-block-end: 0 !important;
-    border-color: transparent !important;
-    border-block-end-width: 0 !important;
-    border-radius: 0 !important;
-    background: none !important;
-    box-shadow: none !important;
-}
-
-body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged::before,
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged::before {
-    content: none !important;
+/* Merged D&D messages suppress only repeated native sender/header chrome. */
+body.system-dnd5e .chat-log .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header).lichsoma-merged
+:is(.message-sender, .message-metadata) {
     display: none !important;
 }
 
-body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-header,
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-header {
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-sender,
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-sender {
+body.system-dnd5e .chat-log .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header).lichsoma-merged
+.message-header:not(:has(.flavor-text)) {
     display: none !important;
 }
 
-body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-header:not(:has(.flavor-text)),
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-header:not(:has(.flavor-text)) {
-    display: none !important;
-}
-
-body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-header:has(.flavor-text),
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-header:has(.flavor-text) {
+body.system-dnd5e .chat-log .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header).lichsoma-merged
+.message-header:has(.flavor-text) {
     display: block !important;
 }
-
-body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-header .flavor-text,
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-header .flavor-text {
-    display: block;
-    margin: 0.25rem 0 !important;
-    color: rgba(255, 255, 255, 0.5) !important;
-    font-size: 12px;
-    line-height: 1.1;
-}
-
-body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-content,
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-content {
-    margin-block-start: 0 !important;
-}
-
-body.system-dnd5e .chat-log .chat-message.dnd5e2.lichsoma-merged .message-content > :first-child,
-body.system-dnd5e .chat-log .chat-message.lichsoma-dnd5e-native-header.lichsoma-merged .message-content > :first-child {
-    margin-block-start: 0 !important;
-}
-
 
 body.system-dnd5e .chat-message:is(.dnd5e2, .lichsoma-dnd5e-native-header) effect-application:has(> option):not(:has(> button, > input, > select, > textarea, > a, > span, > div)) {
     display: none;

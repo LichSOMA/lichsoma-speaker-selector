@@ -2,39 +2,46 @@
 .chat-message {
     position: relative;
     padding: 0.25rem 0.5rem 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    border: none !important;
+    background: none !important;
 }
 
-.chat-message .message-metadata {
-    display: none;
+/* Root pseudo-element is part of the Speaker Selector shell, not system payload. */
+.chat-message::before {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
 }
 
+/* Foundry 기본 타임스탬프/삭제 컨트롤은 숨기고 Speaker Selector의 hover 삭제 버튼만 사용한다.
+ * metadata 컨테이너 전체를 숨기지 않아 시스템/모듈이 추가한 다른 헤더 컨트롤은 보존한다. */
+body :is(#chat-log, .chat-log, .chat-scroll, .chat-popout)
+.chat-message .message-timestamp,
+body :is(#chat-log, .chat-log, .chat-scroll, .chat-popout)
+.chat-message :is(.message-delete, [data-action="deleteMessage"]):not(.lichsoma-delete-btn) {
+    display: none !important;
+}
 
-.chat-message .message-content {
+/* Remove core body spacing; system card frames keep their more specific rules. */
+.chat-message > .message-content {
+    padding: 0;
+}
+
+:is(.lichsoma-plain-message, .lichsoma-narrator-card) .message-content {
     color: #ffffff;
     font-weight: 500;
     font-style: normal;
+    line-height: calc(1em + var(--lichsoma-chat-line-gap, 5px)) !important;
+    padding: 0 !important;
+    background: none !important;
 }
 
-/* LichSOMA global content-link color */
-.chat-message .content-link,
-.chat-message a.content-link {
-    --content-link-text-color: #ffc800;
-    color: var(--content-link-text-color) !important;
-}
-
-.chat-message .content-link i,
-.chat-message .content-link .fas,
-.chat-message .content-link .far,
-.chat-message .content-link .fa-solid,
-.chat-message .content-link .fa-regular {
-    color: #ffc800 !important;
-}
-
-.chat-message .content-link svg,
-.chat-message .content-link svg * {
-    color: #ffc800 !important;
-    fill: #ffc800 !important;
-    stroke: #ffc800 !important;
+:where(.lichsoma-simple-text-payload > .message-content),
+.dice-roll.lichsoma-core-dice :where(.dice-formula, .dice-total, .dice-tooltip, .dice-flavor) {
+    color: #ffffff;
 }
 
 .lichsoma-chat-header .message-sender {
@@ -73,62 +80,21 @@
 }
 
 .chat-message .lichsoma-delete-btn:hover {
-    color: #ff3b30;
+    color: var(--lichsoma-delete-hover-color, #ff3b30);
 }
 
-/* 삭제 버튼에 호버한 동안 해당 메시지의 모든 텍스트도 삭제 색상으로 표시한다. */
+/* Delete-hover marks only the body text, including rich text.
+ * No outline: the red text is the deletion target indicator in every theme. */
 body :is(#chat-log, .chat-log, .chat-scroll, .chat-popout)
-:is(
-    .chat-message.chat-message:has(.lichsoma-delete-btn:hover),
-    .chat-message.chat-message:has(.message-delete:hover),
-    .chat-message.chat-message:has([data-action="deleteMessage"]:hover)
-)
-:is(
-    .message-header,
-    .message-header *,
-    .message-content,
-    .message-content *,
-    .flavor-text,
-    .flavor-text *
-) {
-    color: #ff3b30 !important;
-}
-
-body :is(#chat-log, .chat-log, .chat-scroll, .chat-popout)
-:is(
-    .chat-message.chat-message:has(.lichsoma-delete-btn:hover),
-    .chat-message.chat-message:has(.message-delete:hover),
-    .chat-message.chat-message:has([data-action="deleteMessage"]:hover)
-)
-:is(.message-header, .message-content, .flavor-text) svg,
-body :is(#chat-log, .chat-log, .chat-scroll, .chat-popout)
-:is(
-    .chat-message.chat-message:has(.lichsoma-delete-btn:hover),
-    .chat-message.chat-message:has(.message-delete:hover),
-    .chat-message.chat-message:has([data-action="deleteMessage"]:hover)
-)
-:is(.message-header, .message-content, .flavor-text) svg * {
-    color: #ff3b30 !important;
-    fill: currentColor !important;
-    stroke: currentColor !important;
+.chat-message:has(:is(.lichsoma-delete-btn, .message-delete, [data-action="deleteMessage"]):is(:hover, :focus-visible))
+:is(.message-content, .message-content *, .lichsoma-delete-btn, .lichsoma-delete-btn *) {
+    color: var(--lichsoma-delete-hover-color, #ff3b30) !important;
 }
 
 .chat-message .lichsoma-delete-btn i {
     font-size: 12px;
 }
 
-/* 기본 채팅(오버플로우) 메시지 스타일 수정 */
-.overflow .chat-message {
-    border: none !important;
-    background: var(--background-color, var(--color-cool-5)) !important;
-}
-
-/* FVTT v13: overflow의 theme-light가 --background-color를 밝게 덮어쓰므로
-   일반 채팅 로그에는 영향 없이 overflow 카드만 Speaker Selector 테마로 고정한다. */
-body.lichsoma-fvtt13-chat .overflow .chat-message {
-    background: var(--color-cool-5) !important;
-    padding-bottom: 4px !important;
-}
 
 /* 채팅 헤더 스타일 */
 .lichsoma-chat-header {
@@ -214,13 +180,12 @@ body.lichsoma-fvtt13-chat .overflow .chat-message {
 }
 
 /* narrator-card 메시지: 헤더 감춤 */
-:is(.chat-message, .message).lichsoma-narrator-card
-:is(.lichsoma-chat-header, .message-header) {
+.lichsoma-narrator-card > :is(.lichsoma-chat-header, .message-header) {
     display: none !important;
 }
 
 /* narrator-card 스타일 */
-.chat-message .message-content .narrator-card {
+.lichsoma-narrator-card .narrator-card {
     font-weight: 500;
     font-style: italic;
     text-align: center;
@@ -242,25 +207,12 @@ body.lichsoma-fvtt13-chat .overflow .chat-message {
 }
 
 
-:is(.chat-popout) .message {
-    background: #0B0A13 !important;
-}
-
-:is(.chat-popout) .message .message-header {
-    margin-bottom: 0 !important;
-}
-
-:is(.chat-popout) .message .message-header .message-metadata {
-    display: none !important;
-}
-
-.chat-message .message-content img {
-    padding: 4px 0px;
+:is(.lichsoma-plain-message, .lichsoma-narrator-card) .message-content img {
+    padding: 4px 0;
 }
 
 /* Foundry VTT 13 <hr> 스타일 제거 */
-.chat-message .message-content hr,
-.chat-message hr {
+:is(.lichsoma-plain-message, .lichsoma-narrator-card) .message-content hr {
     background: none !important;
     border-top: 1px solid currentColor !important;
     box-shadow: none !important;
@@ -272,7 +224,7 @@ body.lichsoma-fvtt13-chat .overflow .chat-message {
     padding: 0 !important;
 }
 
-/* pf2e 헤더 편집 */
+/* 모듈 헤더 내부의 네이티브 보조 요소 감춤 */
 .lichsoma-chat-header .portrait.token {
     display: none !important;
 }
@@ -281,54 +233,6 @@ body.lichsoma-fvtt13-chat .overflow .chat-message {
     display: none !important;
 }
 
-/* D&D 챗 편집 */
-.chat-message::before {
-   background: none !important;
-   border: none !important;
-   box-shadow: none !important;
-   border-radius: 0px !important;
-}
-
-
-/* Flavor text 안에 포함된 HTML 출력용 chat-message는 일반 메시지의 음수 하단 마진을 쓰지 않는다. */
-.chat-scroll .flavor-text .chat-message {
-    margin: 0px 1px 0px 5px !important;
-    padding: 0px !important;
-}
-
-/* Foundry 기본 dice-tooltip 박스 스타일 제거 */
-.chat-message .dice-tooltip {
-    background: none !important;
-    background-color: transparent !important;
-    padding: 0px !important;
-    border-radius: 0px !important;
-}
-
-
-.chat-scroll .chat-message .message-content p {
-    margin: 0 0;
-    line-height: calc(1em + 5px) !important;
-}
-
-body:not(.system-lancer):not(.system-dx3rd-fvtt) .chat-scroll .chat-message .message-content .dice-roll {
-    padding-bottom: 10px;
-}
-
-.chat-scroll .chat-message .message-content .dice-total {
-    margin-top: 0px;
-}
-
-.chat-scroll .chat-message .message-content .dice-roll .dice-total {
-    font-size: 18px;
-    line-height: 24px;
-}
-
-
-.chat-message:not(.dx3rd-sheet-roll-message) .message-content {
-    padding: 0 !important;
-    background: none !important;
-    background-color: transparent !important;
-}
 
 
 /* LichSOMA chat spacing normalization
@@ -340,20 +244,13 @@ body:not(.system-lancer):not(.system-dx3rd-fvtt) .chat-scroll .chat-message .mes
 }
 
 .chat-scroll .chat-message {
-    margin: 0px 1px var(--lichsoma-chat-message-gap) 5px !important;
-    box-shadow: none !important;
-    outline: none !important;
-    border: none !important;
-    background: none !important;
+    /* Preserve the 6px total gutter while centering chat inside its background. */
+    margin: 0px 3px var(--lichsoma-chat-message-gap) !important;
 }
 
-.chat-scroll .chat-message .message-content {
-    line-height: calc(1em + var(--lichsoma-chat-line-gap)) !important;
-}
 
-.chat-scroll .chat-message .message-content > p {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
+:is(.lichsoma-plain-message, .lichsoma-narrator-card) .message-content p {
+    margin: 0 !important;
     line-height: inherit !important;
 }
 
@@ -366,22 +263,6 @@ body:not(.system-lancer):not(.system-dx3rd-fvtt) .chat-scroll .chat-message .mes
 .chat-scroll .chat-message.lichsoma-merged .lichsoma-chat-header:not(:has(.flavor-text)) {
     display: none !important;
 }
-
-.chat-scroll .chat-message.lichsoma-merged:not(.dx3rd-sheet-roll-message) .message-content {
-    margin-top: 0 !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-}
-
-.chat-scroll .chat-message.lichsoma-merged .message-content > :first-child:not(.dx3rd-info):not(.dx3rd-system):not(.dx3rd-box):not(.dx3rd-combat-msg):not(.dx3rd-open-scene-msg) {
-    margin-top: 0 !important;
-}
-
-.chat-scroll .chat-message.lichsoma-merged .message-content > :last-child:not(.dx3rd-box):not(.dx3rd-info):not(.dx3rd-system):not(.dx3rd-combat-msg):not(.dx3rd-open-scene-msg):not(.dice-roll) {
-    margin-bottom: 0 !important;
-}
-
-
 
 
 /* Long-session performance: allow off-screen older messages to skip layout and paint.

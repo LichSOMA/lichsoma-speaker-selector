@@ -1,0 +1,35 @@
+/* ==========================================================================
+ * LichSOMA Speaker Selector — Pathfinder 1e standalone HTML export
+ * - PF1's chat rules are collected from the installed system stylesheet by adapter.js.
+ * - This file owns only export-shell compatibility and conservative core flex fallbacks.
+ * ========================================================================== */
+
+body.lichsoma-chat-log-export.system-pf1
+.chat-message > .message-content.lichsoma-system-payload {
+    background-color: var(--color-light-1, #f0f0e0);
+}
+
+/* PF1 v11 chat templates use Foundry's flex utility classes. Standalone HTML does not
+ * load Foundry core CSS, so provide only the utilities needed inside PF1 payloads. */
+:where(body.lichsoma-chat-log-export.system-pf1 .message-content.lichsoma-system-payload) .flexrow {
+    display: flex;
+    flex-flow: row wrap;
+}
+
+:where(body.lichsoma-chat-log-export.system-pf1 .message-content.lichsoma-system-payload) .flexcol {
+    display: flex;
+    flex-flow: column nowrap;
+}
+
+:where(body.lichsoma-chat-log-export.system-pf1 .message-content.lichsoma-system-payload) :is(.flexrow, .flexcol) > * {
+    flex: 1;
+}
+
+/* The outer message frame remains Speaker Selector-owned even if a PF1 build contains
+ * a broad chat-message rule in its compiled stylesheet. */
+body.lichsoma-chat-log-export.system-pf1 .chat-log > .chat-message {
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: none !important;
+}
